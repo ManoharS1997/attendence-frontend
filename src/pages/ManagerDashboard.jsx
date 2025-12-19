@@ -1,5 +1,6 @@
 // src/pages/ManagerDashboard.jsx
 import React, { useEffect, useState, useCallback } from "react";
+import ManagerPayslip from "./ManagerPayslip";
 import { useAuth } from "../context/AuthContext";
 import api from "../api";
 import ChangePasswordCard from "../components/ChangePasswordCard";
@@ -290,7 +291,15 @@ export default function ManagerDashboard() {
   // Tabs: dashboard | projects | timesheet | logs
   const [activeTab, setActiveTab] = useState("dashboard");
 
+
+
+
+
+
   const [employees, setEmployees] = useState([]);
+  // ===== SELECTED EMPLOYEE (DERIVED) =====
+
+
   const [attendance, setAttendance] = useState([]);
   const [{ month, year }, setMonthYear] = useState(getCurrentMonth);
   const [summaries, setSummaries] = useState([]);
@@ -298,6 +307,8 @@ export default function ManagerDashboard() {
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
+  // ===== SELECTED EMPLOYEE (SAFE DERIVED VALUE) =====
+
 
   const [projectTasks, setProjectTasks] = useState([]);
   const [editingTaskId, setEditingTaskId] = useState(null);
@@ -374,6 +385,10 @@ export default function ManagerDashboard() {
       logout();
     }
   };
+ 
+
+
+
 
   // -------- LOADERS ----------
 
@@ -1062,6 +1077,15 @@ export default function ManagerDashboard() {
             >
               Timesheet Management
             </button>
+            <button
+  className={
+    activeTab === "payslips" ? "nav-item active" : "nav-item"
+  }
+  onClick={() => setActiveTab("payslips")}
+>
+  Payslip Management
+</button>
+
 
             {/* 4. Logs & Audit */}
             <button
@@ -1522,7 +1546,16 @@ export default function ManagerDashboard() {
             </main>
           )}
 
-          {/* ========== PROJECT MANAGEMENT TAB ========== */}
+        
+          {/* ========== PAYSLIP MANAGEMENT TAB ========== */}
+{/* ========== PAYSLIP MANAGEMENT TAB ========== */}
+ {activeTab === "payslip" && ( 
+  <main className="layout single-column">
+    <ManagerPayslip />
+  </main>
+ )}
+
+
           {activeTab === "projects" && (
             <main className="layout single-column">
               <section className="full-width">
