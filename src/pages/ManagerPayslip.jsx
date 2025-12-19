@@ -23,6 +23,7 @@ export default function ManagerPayslip() {
       fullName: "Manohar",
       email: "manohar142652@gmail.com",
       designation: "Software Engineer",
+      workingDays: 26,
     },
   ]);
 
@@ -51,8 +52,9 @@ export default function ManagerPayslip() {
   });
 
   const [showPreview, setShowPreview] = useState(false);
+  const [pdfDownloaded, setPdfDownloaded] = useState(false);
 
-  /* ================= DERIVED VALUES ================= */
+  /* ================= DERIVED ================= */
   const employee = useMemo(
     () => employees.find((e) => e._id === selectedEmployeeId),
     [employees, selectedEmployeeId]
@@ -76,6 +78,8 @@ export default function ManagerPayslip() {
   const clearForm = () => {
     setSelectedEmployeeId("");
     setEmployeeType("REGULAR");
+    setPdfDownloaded(false);
+    setShowPreview(false);
     setBank({
       bankName: "",
       accountNumber: "",
@@ -93,10 +97,11 @@ export default function ManagerPayslip() {
       professionalTax: 0,
       tds: 0,
     });
-    setShowPreview(false);
   };
 
   const downloadPdf = () => {
+    if (pdfDownloaded) return;
+    setPdfDownloaded(true);
     window.print();
   };
 
@@ -131,7 +136,10 @@ export default function ManagerPayslip() {
             Employee
             <select
               value={selectedEmployeeId}
-              onChange={(e) => setSelectedEmployeeId(e.target.value)}
+              onChange={(e) => {
+                setSelectedEmployeeId(e.target.value);
+                setPdfDownloaded(false);
+              }}
             >
               <option value="">-- Select --</option>
               {employees.map((e) => (
@@ -154,6 +162,15 @@ export default function ManagerPayslip() {
             </select>
           </label>
         </div>
+
+        {employee && (
+          <div style={{ marginTop: 12, fontSize: 14 }}>
+            <p><strong>Name:</strong> {employee.fullName}</p>
+            <p><strong>Email:</strong> {employee.email}</p>
+            <p><strong>Designation:</strong> {employee.designation}</p>
+            <p><strong>Working Days:</strong> {employee.workingDays ?? 26}</p>
+          </div>
+        )}
       </div>
 
       {/* ================= BANK ================= */}
@@ -192,7 +209,7 @@ export default function ManagerPayslip() {
 
         {bank.edited && (
           <p className="helper">
-            Changes apply only to this payslip. Employee master data remains unchanged.
+            Changes apply only to this payslip. Employee master data is not changed.
           </p>
         )}
       </div>
@@ -223,12 +240,21 @@ export default function ManagerPayslip() {
         </button>
         <button
           className="btn primary"
-          onClick={() => setShowPreview(true)}
-          disabled={!employee}
+          onClick={() => {
+            if (!employee) {
+              alert("Please select an employee first");
+              return;
+            }
+            setShowPreview(true);
+          }}
         >
           Preview Payslip
         </button>
-        <button className="btn success" onClick={downloadPdf}>
+        <button
+          className="btn success"
+          onClick={downloadPdf}
+          disabled={!showPreview || pdfDownloaded}
+        >
           Download PDF
         </button>
       </div>
@@ -252,6 +278,7 @@ export default function ManagerPayslip() {
               <p><strong>Email:</strong> {employee.email}</p>
               <p><strong>Designation:</strong> {employee.designation}</p>
               <p><strong>Employee Type:</strong> {employeeType}</p>
+              <p><strong>Working Days:</strong> {employee.workingDays ?? 26}</p>
             </div>
 
             <div className="payslip-tables">
@@ -287,7 +314,9 @@ export default function ManagerPayslip() {
             </div>
 
             <div className="payslip-footer">
-              This is a system generated payslip. No signature required.
+              <p><strong>{COMPANY.name}</strong></p>
+              <p style={{ fontSize: 12 }}>{COMPANY.address}</p>
+              <p>This is a system generated payslip. No signature required.</p>
             </div>
 
             <div className="payslip-actions-doc">
@@ -297,7 +326,11 @@ export default function ManagerPayslip() {
               >
                 Close
               </button>
-              <button className="btn success" onClick={downloadPdf}>
+              <button
+                className="btn success"
+                onClick={downloadPdf}
+                disabled={pdfDownloaded}
+              >
                 Download PDF
               </button>
             </div>

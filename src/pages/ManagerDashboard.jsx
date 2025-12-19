@@ -134,9 +134,9 @@ const diffDays = (startStr, endStr) => {
 
     const taken =
       h &&
-      (h.taken === "TAKEN" ||
-        h.takenStatus === "TAKEN" ||
-        h.defaultTaken)
+        (h.taken === "TAKEN" ||
+          h.takenStatus === "TAKEN" ||
+          h.defaultTaken)
         ? "TAKEN"
         : "NOT_TAKEN";
 
@@ -283,7 +283,7 @@ export default function ManagerDashboard() {
     try {
       window.alert(message);
     } catch (err) {
-      
+
       console.error("Manager alert popup error:", err);
     }
   };
@@ -379,13 +379,13 @@ export default function ManagerDashboard() {
       // backend /api/auth/logout should create LOGOUT log
       await api.post("/auth/logout");
     } catch (err) {
-      
+
       console.error("Logout log error:", err?.response || err);
     } finally {
       logout();
     }
   };
- 
+
 
 
 
@@ -433,7 +433,7 @@ export default function ManagerDashboard() {
         const res = await api.get(`/tasks/project/${projectIdToLoad}`);
         setProjectTasks(res.data || []);
       } catch (err) {
-        
+
         console.error("Error loading project tasks", err);
         setProjectTasks([]);
       }
@@ -447,7 +447,7 @@ export default function ManagerDashboard() {
       const res = await api.get("/attendance/requests");
       setPendingRequests(res.data || []);
     } catch (err) {
-      
+
       console.error("Error loading attendance requests", err?.response || err);
       setPendingRequests([]);
     }
@@ -464,12 +464,12 @@ export default function ManagerDashboard() {
         });
         setLogs(res.data || []);
       } catch (err) {
-        
+
         console.error("Error loading logs", err?.response || err);
         setLogs([]);
         setLogsError(
           err?.response?.data?.message ||
-            "Error loading logs for this month (configure /logs API in backend)"
+          "Error loading logs for this month (configure /logs API in backend)"
         );
       } finally {
         setLogsLoading(false);
@@ -588,13 +588,13 @@ export default function ManagerDashboard() {
   // holidays are system-calculated and not editable.
   const editLeaveConfig = async (emp) => {
     const totalLeaveEntitlement = Number(
-      
+
       prompt("Total Leave Entitlement", emp.totalLeaveEntitlement ?? 16)
     );
     if (Number.isNaN(totalLeaveEntitlement)) return;
 
     const carryForward2025 = Number(
-      
+
       prompt("2025 Carry Forward Leaves", emp.carryForward2025 ?? 0)
     );
     if (Number.isNaN(carryForward2025)) return;
@@ -627,11 +627,11 @@ export default function ManagerDashboard() {
           : "Leave / attendance request rejected."
       );
     } catch (err) {
-      
+
       console.error("Error deciding leave request", err?.response || err);
       addAlert(
         err?.response?.data?.message ||
-          "Error applying decision on leave / attendance request"
+        "Error applying decision on leave / attendance request"
       );
     }
   };
@@ -657,7 +657,7 @@ export default function ManagerDashboard() {
       setResetEmail("");
       setResetNewPassword("");
     } catch (err) {
-      
+
       console.error("Manager reset password error:", err);
       const msg =
         err.response?.data?.message ||
@@ -729,7 +729,7 @@ export default function ManagerDashboard() {
         month
       });
     } catch (err) {
-      
+
       console.error("Failed to save holiday taken/not-taken", err);
     }
   };
@@ -855,7 +855,7 @@ export default function ManagerDashboard() {
       }));
       loadProjectTasks(selectedProjectId);
     } catch (err) {
-      
+
       console.error("Error saving task", err);
       addAlert(err.response?.data?.message || "Error saving task");
     }
@@ -889,7 +889,7 @@ export default function ManagerDashboard() {
       await api.patch(`/tasks/${id}`, payload);
       loadProjectTasks();
     } catch (err) {
-      
+
       console.error("Error updating task", err);
       addAlert(err.response?.data?.message || "Error updating task");
     }
@@ -1078,13 +1078,13 @@ export default function ManagerDashboard() {
               Timesheet Management
             </button>
             <button
-  className={
-    activeTab === "payslips" ? "nav-item active" : "nav-item"
-  }
-  onClick={() => setActiveTab("payslips")}
->
-  Payslip Management
-</button>
+              className={
+                activeTab === "payslips" ? "nav-item active" : "nav-item"
+              }
+              onClick={() => setActiveTab("payslips")}
+            >
+              Payslip Management
+            </button>
 
 
             {/* 4. Logs & Audit */}
@@ -1113,7 +1113,7 @@ export default function ManagerDashboard() {
                     try {
                       window.alert("No alerts yet");
                     } catch (err) {
-                      
+
                       console.error(
                         "Manager alert history popup error:",
                         err
@@ -1124,7 +1124,7 @@ export default function ManagerDashboard() {
                   try {
                     window.alert(alerts.join("\n\n"));
                   } catch (err) {
-                    
+
                     console.error("Manager alert history popup error:", err);
                   }
                 }}
@@ -1173,8 +1173,8 @@ export default function ManagerDashboard() {
                   todayHolidayInfo.tone === "danger"
                     ? "rgba(255,77,79,0.18)"
                     : todayHolidayInfo.tone === "warning"
-                    ? "rgba(250,173,20,0.18)"
-                    : "rgba(64,169,255,0.18)",
+                      ? "rgba(250,173,20,0.18)"
+                      : "rgba(64,169,255,0.18)",
                 color: "#fff",
                 fontSize: 13
               }}
@@ -1546,14 +1546,16 @@ export default function ManagerDashboard() {
             </main>
           )}
 
-        
           {/* ========== PAYSLIP MANAGEMENT TAB ========== */}
-{/* ========== PAYSLIP MANAGEMENT TAB ========== */}
- {activeTab === "payslip" && ( 
-  <main className="layout single-column">
-    <ManagerPayslip />
-  </main>
- )}
+          {activeTab === "payslips" && (
+            <main className="layout single-column">
+              <ManagerPayslip />
+            </main>
+          )}
+
+           {/* <main className="layout single-column">
+              <ManagerPayslip />
+            </main> */}
 
 
           {activeTab === "projects" && (
@@ -1863,8 +1865,8 @@ export default function ManagerDashboard() {
                                   (isSunday
                                     ? "Sunday"
                                     : isSecondSaturday
-                                    ? "2nd Saturday"
-                                    : "");
+                                      ? "2nd Saturday"
+                                      : "");
 
                                 return (
                                   <td
@@ -1948,8 +1950,8 @@ export default function ManagerDashboard() {
                                     {isMandatory
                                       ? "Mandatory"
                                       : isOptional
-                                      ? "Optional"
-                                      : "-"}
+                                        ? "Optional"
+                                        : "-"}
                                   </td>
                                   <td>
                                     {isMandatory ? (
