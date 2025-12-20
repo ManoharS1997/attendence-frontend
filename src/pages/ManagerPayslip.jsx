@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import '../styles/managerPayslip.css';
+import '../../styles/managerPayslip.css';
 import { 
   Calendar, 
   User, 
@@ -20,6 +20,9 @@ import {
   ChevronDown
 } from 'lucide-react';
 
+// Import company logo
+import companyLogo from "../assets/Company Logo.PNG";
+
 // Components
 import BankDetailsForm from '../components/payslips/BankDetailsForm';
 import SalaryBreakup from '../components/payslips/SalaryBreakup';
@@ -32,9 +35,6 @@ import {
   getEmployeePayslips,
   getHolidays
 } from '../utils/api';
-
-// Import company logo
-import CompanyLogo from '../assets/CompanyLogo.png';
 
 const ManagerPayslip = () => {
   const [loading, setLoading] = useState(false);
@@ -77,7 +77,6 @@ const ManagerPayslip = () => {
     const year = today.getFullYear();
     setSelectedMonth(month);
     setSelectedYear(year.toString());
-    calculateWorkingDays(month, year);
   }, []);
 
   // Load employees
@@ -94,68 +93,76 @@ const ManagerPayslip = () => {
     fetchEmployeesData();
   }, []);
 
-  // Calculate working days function
-  const calculateWorkingDays = useCallback(async (month, year) => {
-    if (!month || !year) return;
+  // Calculate working days function - CORRECTED
+  const calculateWorkingDays = useCallback((yearNum, monthNum, holidaysData) => {
+    const totalDaysInMonth = new Date(yearNum, monthNum, 0).getDate();
     
-    try {
-      // Fetch holidays
-      const holidaysData = await getHolidays(month, year);
-      setHolidays(holidaysData);
+    // Start with total days
+    let workingDaysCount = totalDaysInMonth;
+    
+    // Deduct weekends (Sundays and 2nd/4th Saturdays)
+    for (let day = 1; day <= totalDaysInMonth; day++) {
+      const date = new Date(yearNum, monthNum - 1, day);
+      const dayOfWeek = date.getDay();
       
-      const yearNum = parseInt(year);
-      const monthNum = parseInt(month);
-      const totalDaysInMonth = new Date(yearNum, monthNum, 0).getDate();
-      
-      let workingDaysCount = 0;
-      
-      // Count working days (Monday to Friday, excluding holidays)
-      for (let day = 1; day <= totalDaysInMonth; day++) {
-        const date = new Date(yearNum, monthNum - 1, day);
-        const dayOfWeek = date.getDay(); // 0=Sunday, 1=Monday, 6=Saturday
-        
-        // Skip Sundays
-        if (dayOfWeek === 0) continue;
-        
-        // Check if Saturday (handle 2nd and 4th Saturday holidays)
-        if (dayOfWeek === 6) {
-          const weekOfMonth = Math.ceil(day / 7);
-          // 2nd and 4th Saturdays are holidays
-          if (weekOfMonth === 2 || weekOfMonth === 4) {
-            continue;
-          }
-        }
-        
-        // Check if it's a holiday
-        const dateStr = `${String(day).padStart(2, '0')}-${month}-${year}`;
-        const isHoliday = holidaysData.some(h => 
-          h.date === dateStr && h.status === 'TAKEN'
-        );
-        
-        if (!isHoliday) {
-          workingDaysCount++;
+      // Sunday - always holiday
+      if (dayOfWeek === 0) {
+        workingDaysCount--;
+      }
+      // Saturday - check if 2nd or 4th Saturday
+      else if (dayOfWeek === 6) {
+        const weekOfMonth = Math.ceil(day / 7);
+        // 2nd and 4th Saturdays are holidays
+        if (weekOfMonth === 2 || weekOfMonth === 4) {
+          workingDaysCount--;
         }
       }
-      
-      setWorkingDays(workingDaysCount);
-      
-    } catch (err) {
-      console.error('Failed to calculate working days:', err);
-      // Fallback calculation
-      const yearNum = parseInt(year);
-      const monthNum = parseInt(month);
-      const totalDaysInMonth = new Date(yearNum, monthNum, 0).getDate();
-      const approximateWorkingDays = Math.floor(totalDaysInMonth * 0.70);
-      setWorkingDays(approximateWorkingDays);
     }
+    
+    // Deduct only TAKEN holidays (not NOT_TAKEN)
+    holidaysData.forEach(holiday => {
+      if (holiday.status === 'TAKEN') {
+        workingDaysCount--;
+      }
+    });
+    
+    // Ensure minimum 0 working days
+    if (workingDaysCount < 0) workingDaysCount = 0;
+    
+    return workingDaysCount;
   }, []);
 
-  // Load working days when month/year changes
-  useEffect(() => {
+  // Fetch holidays and calculate working days
+  const fetchHolidaysAndWorkingDays = useCallback(async () => {
     if (selectedMonth && selectedYear) {
-      calculateWorkingDays(selectedMonth, selectedYear);
+      try {
+        // Fetch holidays
+        const holidaysData = await getHolidays(selectedMonth, selectedYear);
+        setHolidays(holidaysData);
+        
+        // Calculate working days
+        const yearNum = parseInt(selectedYear);
+        const monthNum = parseInt(selectedMonth);
+        
+        const calculatedWorkingDays = calculateWorkingDays(yearNum, monthNum, holidaysData);
+        setWorkingDays(calculatedWorkingDays);
+        
+      } catch (err) {
+        console.error('Failed to fetch holidays:', err);
+        // Calculate approximate working days
+        const yearNum = parseInt(selectedYear);
+        const monthNum = parseInt(selectedMonth);
+        const totalDaysInMonth = new Date(yearNum, monthNum, 0).getDate();
+        const approximateWorkingDays = Math.floor(totalDaysInMonth * 0.70); // Approx 70% working days
+        setWorkingDays(approximateWorkingDays);
+      }
     }
   }, [selectedMonth, selectedYear, calculateWorkingDays]);
+
+  // Load holidays and working days when month/year changes
+  useEffect(() => {
+    fetchHolidaysAndWorkingDays();
+  }, [fetchHolidaysAndWorkingDays]);
 
   const handleEmployeeSelect = (employee) => {
     setSelectedEmployee(employee);
@@ -258,24 +265,13 @@ const ManagerPayslip = () => {
         }
       };
 
-      const newPayslip = await generatePayslip(payslipData);
+      const result = await generatePayslip(payslipData);
       
       toast.success('Payslip generated successfully! Sent to employee and admin.');
       
-      // Add to generated payslips list
-      setGeneratedPayslips(prev => [
-        {
-          ...newPayslip,
-          _id: newPayslip._id || Date.now().toString(),
-          month: parseInt(selectedMonth),
-          year: parseInt(selectedYear),
-          salary: {
-            ...salaryStructure,
-            netPay: salaryStructure.netPay
-          }
-        },
-        ...prev
-      ]);
+      // Refresh payslip list
+      const updatedPayslips = await getEmployeePayslips(selectedEmployee._id);
+      setGeneratedPayslips(updatedPayslips);
       
       // Enable preview
       setShowPreview(true);
@@ -288,9 +284,13 @@ const ManagerPayslip = () => {
     }
   };
 
-  const handleDownloadPayslip = async (payslipId) => {
+  const handleDownloadPayslip = async (payslipId, employeeName, employeeId) => {
     try {
       await downloadPayslipPDF(payslipId);
+      
+      // Log download activity
+      console.log(`Payslip downloaded: ${employeeName} (${employeeId})`);
+      
     } catch (err) {
       console.error('Failed to download payslip:', err);
       toast.error('Failed to download payslip');
@@ -449,21 +449,10 @@ const ManagerPayslip = () => {
         </div>
         
         <div className="payslip-document">
-          {/* Company Header */}
+          {/* Company Header with Logo */}
           <div className="company-header-preview">
             <div className="company-logo-container">
-              <img 
-                src={CompanyLogo} 
-                alt="Company Logo" 
-                className="company-logo-img"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  e.target.nextElementSibling.style.display = 'flex';
-                }}
-              />
-              <div className="company-logo-fallback">
-                <span className="logo-text">NOW IT SERVICES</span>
-              </div>
+              <img src={companyLogo} alt="Company Logo" className="company-logo-img" />
             </div>
             <div className="company-name-large">NOW IT SERVICES PVT LTD</div>
             <div className="payslip-title-large">SALARY SLIP</div>
@@ -600,7 +589,7 @@ const ManagerPayslip = () => {
             </div>
           </div>
 
-          {/* Footer */}
+          {/* Footer with Company Address */}
           <div className="payslip-footer-preview">
             <div className="company-footer">
               <p><strong>NOW IT SERVICES PVT LTD</strong></p>
@@ -642,7 +631,11 @@ const ManagerPayslip = () => {
             className="btn-download"
             onClick={() => {
               if (generatedPayslips.length > 0) {
-                handleDownloadPayslip(generatedPayslips[0]._id);
+                handleDownloadPayslip(
+                  generatedPayslips[0]._id,
+                  selectedEmployee.fullName,
+                  selectedEmployee.employeeId
+                );
               } else {
                 toast.info('Please generate payslip first to download');
               }
@@ -719,7 +712,7 @@ const ManagerPayslip = () => {
               <div className="holiday-notice">
                 <div className="holiday-notice-icon">🎄</div>
                 <div className="holiday-notice-content">
-                  <strong>December Calculation:</strong> Working days calculated based on actual calendar
+                  <strong>December Calculation:</strong> 31 days - weekends - taken holidays = {workingDays} working days
                   {holidays.find(h => h.date?.includes('25-12')) && (
                     <div className="christmas-info">
                       Christmas (25th): {holidays.find(h => h.date?.includes('25-12'))?.status === 'TAKEN' ? 'TAKEN - Working day deducted' : 'NOT TAKEN - Working day not deducted'}
@@ -851,8 +844,8 @@ const ManagerPayslip = () => {
         <div className="generated-payslips card">
           <h3>Generated Payslips</h3>
           <div className="payslips-list">
-            {generatedPayslips.map((payslip, index) => (
-              <div key={payslip._id || index} className="payslip-item">
+            {generatedPayslips.map(payslip => (
+              <div key={payslip._id} className="payslip-item">
                 <div className="payslip-info">
                   <div className="payslip-month">
                     {months.find(m => m.value === String(payslip.month).padStart(2, '0'))?.label} {payslip.year}
@@ -864,19 +857,17 @@ const ManagerPayslip = () => {
                     ₹{payslip.salary?.netPay?.toLocaleString() || '0'}
                   </div>
                 </div>
-                <div className="payslip-actions">
-                  <button 
-                    className="btn-download-small"
-                    onClick={() => handleDownloadPayslip(payslip._id || index)}
-                  >
-                    <Download size={16} />
-                    Download
-                  </button>
-                  <div className="payslip-details">
-                    <span className="employee-id">{selectedEmployee?.employeeId || 'EMP001'}</span>
-                    <span className="employee-email">{selectedEmployee?.email}</span>
-                  </div>
-                </div>
+                <button 
+                  className="btn-download-small"
+                  onClick={() => handleDownloadPayslip(
+                    payslip._id,
+                    selectedEmployee.fullName,
+                    selectedEmployee.employeeId
+                  )}
+                >
+                  <Download size={16} />
+                  Download
+                </button>
               </div>
             ))}
           </div>
