@@ -57,6 +57,20 @@ export const getHolidays = async (month, year) => {
   }
 };
 
+// Update holiday taken status
+export const updateHolidayTakenStatus = async (holidayId, status) => {
+  try {
+    const response = await api.post('/holidays/taken', {
+      dateKey: holidayId,
+      value: status
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error updating holiday status:', error);
+    throw error;
+  }
+};
+
 export const generatePayslip = async (payslipData) => {
   try {
     const response = await api.post('/payslips', payslipData);

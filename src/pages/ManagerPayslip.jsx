@@ -14,7 +14,6 @@ import {
   FileText,
   Save,
   X,
-  Edit2,
   History,
   Send,
   ChevronDown
@@ -31,19 +30,28 @@ import SalaryBreakup from '../components/payslips/SalaryBreakup';
 import { 
   getEmployees, 
   generatePayslip, 
-  downloadPayslipPDF,
   getEmployeePayslips,
-  getHolidays
+  getHolidays,
+  updateHolidayTakenStatus
 } from '../utils/api';
+
+// Get API URL from environment or use default
+const API_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:5000/api' 
+  : '/api';
 
 const ManagerPayslip = () => {
   const [loading, setLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [workingDays, setWorkingDays] = useState(0);
+  const [nonWorkingDays, setNonWorkingDays] = useState(0);
+  const [totalDaysInMonth, setTotalDaysInMonth] = useState(0);
+  const [weekendsCount, setWeekendsCount] = useState(0);
   const [bankDetails, setBankDetails] = useState({
     bankName: '',
     accountNumber: '',
@@ -93,71 +101,124 @@ const ManagerPayslip = () => {
     fetchEmployeesData();
   }, []);
 
-  // Calculate working days function - CORRECTED
-  const calculateWorkingDays = useCallback((yearNum, monthNum, holidaysData) => {
-    const totalDaysInMonth = new Date(yearNum, monthNum, 0).getDate();
+  // Calculate weekends (Sundays + 2nd Saturdays) for any month
+  const calculateWeekendsForMonth = useCallback((yearNum, monthNum) => {
+    const totalDays = new Date(yearNum, monthNum, 0).getDate();
+    let weekends = 0;
     
-    // Start with total days
-    let workingDaysCount = totalDaysInMonth;
-    
-    // Deduct weekends (Sundays and 2nd/4th Saturdays)
-    for (let day = 1; day <= totalDaysInMonth; day++) {
+    for (let day = 1; day <= totalDays; day++) {
       const date = new Date(yearNum, monthNum - 1, day);
       const dayOfWeek = date.getDay();
       
       // Sunday - always holiday
       if (dayOfWeek === 0) {
-        workingDaysCount--;
+        weekends++;
       }
-      // Saturday - check if 2nd or 4th Saturday
+      // Saturday - check if 2nd Saturday (always holiday)
       else if (dayOfWeek === 6) {
         const weekOfMonth = Math.ceil(day / 7);
-        // 2nd and 4th Saturdays are holidays
-        if (weekOfMonth === 2 || weekOfMonth === 4) {
-          workingDaysCount--;
+        if (weekOfMonth === 2) { // 2nd Saturday
+          weekends++;
         }
       }
     }
     
-    // Deduct only TAKEN holidays (not NOT_TAKEN)
+    return weekends;
+  }, []);
+
+  // Calculate working days and non-working days
+  const calculateMonthDetails = useCallback((yearNum, monthNum, holidaysData) => {
+    // Get total days in month
+    const totalDays = new Date(yearNum, monthNum, 0).getDate();
+    setTotalDaysInMonth(totalDays);
+    
+    // Calculate weekends (Sundays + 2nd Saturdays)
+    const weekends = calculateWeekendsForMonth(yearNum, monthNum);
+    setWeekendsCount(weekends);
+    
+    let workingDaysCount = totalDays - weekends;
+    
+    // Count TAKEN optional holidays and MANDATORY holidays
+    let takenOptionalHolidays = 0;
+    let mandatoryHolidays = 0;
+    let optionalHolidaysList = [];
+    
     holidaysData.forEach(holiday => {
-      if (holiday.status === 'TAKEN') {
+      if (holiday.type === 'MANDATORY') {
+        // Mandatory holidays always reduce working days
         workingDaysCount--;
+        mandatoryHolidays++;
+      } else if (holiday.type === 'OPTIONAL' && holiday.status === 'TAKEN') {
+        // Optional holidays only reduce working days if TAKEN
+        workingDaysCount--;
+        takenOptionalHolidays++;
+        optionalHolidaysList.push({
+          date: holiday.date,
+          occasion: holiday.occasion,
+          type: holiday.type
+        });
       }
     });
     
     // Ensure minimum 0 working days
     if (workingDaysCount < 0) workingDaysCount = 0;
     
-    return workingDaysCount;
-  }, []);
+    // Calculate non-working days
+    const nonWorkingDaysCount = totalDays - workingDaysCount;
+    
+    return {
+      workingDays: workingDaysCount,
+      nonWorkingDays: nonWorkingDaysCount,
+      weekends,
+      takenOptionalHolidays,
+      mandatoryHolidays,
+      optionalHolidaysList,
+      totalDays
+    };
+  }, [calculateWeekendsForMonth]);
 
   // Fetch holidays and calculate working days
   const fetchHolidaysAndWorkingDays = useCallback(async () => {
     if (selectedMonth && selectedYear) {
       try {
-        // Fetch holidays
+        // Fetch holidays for the selected month
         const holidaysData = await getHolidays(selectedMonth, selectedYear);
         setHolidays(holidaysData);
         
-        // Calculate working days
+        // Calculate month details
         const yearNum = parseInt(selectedYear);
         const monthNum = parseInt(selectedMonth);
         
-        const calculatedWorkingDays = calculateWorkingDays(yearNum, monthNum, holidaysData);
-        setWorkingDays(calculatedWorkingDays);
+        const monthDetails = calculateMonthDetails(yearNum, monthNum, holidaysData);
+        setWorkingDays(monthDetails.workingDays);
+        setNonWorkingDays(monthDetails.nonWorkingDays);
+        setWeekendsCount(monthDetails.weekends);
+        
+        // Log calculation for debugging
+        console.log(`${selectedMonth}/${selectedYear}:`, {
+          totalDays: monthDetails.totalDays,
+          weekends: monthDetails.weekends,
+          mandatoryHolidays: monthDetails.mandatoryHolidays,
+          takenOptionalHolidays: monthDetails.takenOptionalHolidays,
+          workingDays: monthDetails.workingDays
+        });
         
       } catch (err) {
         console.error('Failed to fetch holidays:', err);
         // Calculate approximate working days
         const yearNum = parseInt(selectedYear);
         const monthNum = parseInt(selectedMonth);
-        const totalDaysInMonth = new Date(yearNum, monthNum, 0).getDate();
-        const approximateWorkingDays = Math.floor(totalDaysInMonth * 0.70); // Approx 70% working days
+        const totalDays = new Date(yearNum, monthNum, 0).getDate();
+        const weekends = calculateWeekendsForMonth(yearNum, monthNum);
+        const approximateWorkingDays = totalDays - weekends;
+        
         setWorkingDays(approximateWorkingDays);
+        setNonWorkingDays(totalDays - approximateWorkingDays);
+        setWeekendsCount(weekends);
+        setTotalDaysInMonth(totalDays);
       }
     }
-  }, [selectedMonth, selectedYear, calculateWorkingDays]);
+  }, [selectedMonth, selectedYear, calculateMonthDetails, calculateWeekendsForMonth]);
 
   // Load holidays and working days when month/year changes
   useEffect(() => {
@@ -187,6 +248,32 @@ const ManagerPayslip = () => {
         branch: employee.branch || '',
         history: []
       });
+    }
+  };
+
+  // Handle holiday status change (TAKEN/NOT_TAKEN)
+  const handleHolidayStatusChange = async (holidayId, newStatus) => {
+    try {
+      await updateHolidayTakenStatus(holidayId, newStatus);
+      
+      // Update local state
+      const updatedHolidays = holidays.map(holiday => 
+        holiday._id === holidayId ? { ...holiday, status: newStatus } : holiday
+      );
+      setHolidays(updatedHolidays);
+      
+      // Recalculate working days
+      const yearNum = parseInt(selectedYear);
+      const monthNum = parseInt(selectedMonth);
+      const monthDetails = calculateMonthDetails(yearNum, monthNum, updatedHolidays);
+      setWorkingDays(monthDetails.workingDays);
+      setNonWorkingDays(monthDetails.nonWorkingDays);
+      setWeekendsCount(monthDetails.weekends);
+      
+      toast.success(`Holiday status updated to ${newStatus}`);
+    } catch (err) {
+      console.error('Failed to update holiday status:', err);
+      toast.error('Failed to update holiday status');
     }
   };
 
@@ -237,6 +324,20 @@ const ManagerPayslip = () => {
            salaryStructure.basic > 0;
   };
 
+  // Check if Download button should be enabled - SIMPLIFIED
+  const isDownloadButtonEnabled = () => {
+    // Check if any payslip exists for the selected employee
+    if (generatedPayslips.length === 0) return false;
+    
+    // Find if there's a payslip for the selected month and year
+    const hasPayslipForPeriod = generatedPayslips.some(payslip => 
+      payslip.month === parseInt(selectedMonth) && 
+      payslip.year === parseInt(selectedYear)
+    );
+    
+    return hasPayslipForPeriod;
+  };
+
   const handleGeneratePayslip = async () => {
     if (!isGenerateButtonEnabled()) {
       toast.error('Please fill all required details including salary');
@@ -265,7 +366,7 @@ const ManagerPayslip = () => {
         }
       };
 
-      const result = await generatePayslip(payslipData);
+      await generatePayslip(payslipData);
       
       toast.success('Payslip generated successfully! Sent to employee and admin.');
       
@@ -284,16 +385,57 @@ const ManagerPayslip = () => {
     }
   };
 
-  const handleDownloadPayslip = async (payslipId, employeeName, employeeId) => {
+  const handleDownloadPayslip = async (payslipId) => {
+    if (!payslipId) {
+      toast.error('No payslip available to download');
+      return;
+    }
+
+    setDownloading(true);
+    
     try {
-      await downloadPayslipPDF(payslipId);
+      // Get token from localStorage
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      // Direct download without redirection
+      const response = await fetch(`${API_URL}/payslips/${payslipId}/download`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to download payslip');
+      }
+
+      // Get the blob data
+      const blob = await response.blob();
       
-      // Log download activity
-      console.log(`Payslip downloaded: ${employeeName} (${employeeId})`);
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `payslip-${selectedEmployee?.fullName}-${selectedMonth}-${selectedYear}.pdf`;
+      
+      // Trigger download
+      document.body.appendChild(link);
+      link.click();
+      
+      // Clean up
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Payslip downloaded successfully');
       
     } catch (err) {
       console.error('Failed to download payslip:', err);
       toast.error('Failed to download payslip');
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -412,19 +554,31 @@ const ManagerPayslip = () => {
   const getHolidayInfo = () => {
     const takenHolidays = holidays.filter(h => h.status === 'TAKEN');
     const notTakenHolidays = holidays.filter(h => h.status === 'NOT_TAKEN');
-    
-    if (takenHolidays.length === 0 && notTakenHolidays.length === 0) {
-      return null;
-    }
+    const mandatoryHolidays = holidays.filter(h => h.type === 'MANDATORY');
     
     return {
       taken: takenHolidays.length,
       notTaken: notTakenHolidays.length,
+      mandatory: mandatoryHolidays.length,
       total: holidays.length
     };
   };
 
   const holidayInfo = getHolidayInfo();
+
+  // Get example calculation text based on selected month
+  const getMonthCalculationExample = () => {
+    if (!selectedMonth || !selectedYear) return '';
+    
+    const yearNum = parseInt(selectedYear);
+    const monthNum = parseInt(selectedMonth);
+    const totalDays = new Date(yearNum, monthNum, 0).getDate();
+    const weekends = weekendsCount;
+    const mandatoryHolidays = holidayInfo.mandatory || 0;
+    const takenOptional = holidayInfo.taken || 0;
+    
+    return `${totalDays} total days - ${weekends} weekends - ${mandatoryHolidays} mandatory holidays - ${takenOptional} optional holidays taken = ${workingDays} working days`;
+  };
 
   // Render preview in new section
   const renderPreview = () => {
@@ -630,20 +784,34 @@ const ManagerPayslip = () => {
           <button 
             className="btn-download"
             onClick={() => {
-              if (generatedPayslips.length > 0) {
-                handleDownloadPayslip(
-                  generatedPayslips[0]._id,
-                  selectedEmployee.fullName,
-                  selectedEmployee.employeeId
+              if (isDownloadButtonEnabled()) {
+                // Find the payslip for current month/year
+                const currentPayslip = generatedPayslips.find(payslip => 
+                  payslip.month === parseInt(selectedMonth) && 
+                  payslip.year === parseInt(selectedYear)
                 );
+                if (currentPayslip) {
+                  handleDownloadPayslip(currentPayslip._id);
+                } else {
+                  toast.info('No payslip found for selected period');
+                }
               } else {
                 toast.info('Please generate payslip first to download');
               }
             }}
-            disabled={!selectedEmployee || generatedPayslips.length === 0}
+            disabled={!selectedEmployee || !isDownloadButtonEnabled() || downloading}
           >
-            <Download size={18} />
-            Download PDF
+            {downloading ? (
+              <>
+                <div className="spinner small"></div>
+                Downloading...
+              </>
+            ) : (
+              <>
+                <Download size={18} />
+                Download PDF
+              </>
+            )}
           </button>
           <button className="btn-clear" onClick={handleClearForm}>
             <X size={18} />
@@ -698,26 +866,122 @@ const ManagerPayslip = () => {
                 <div className="working-days-display">
                   <span className="days-count">{workingDays}</span>
                   <span className="days-label">days</span>
-                  {holidayInfo && (
-                    <span className="holidays-info">
-                      ({holidayInfo.taken} holidays taken)
+                  <div className="days-breakdown">
+                    <span className="breakdown-text">
+                      ({totalDaysInMonth} total - {nonWorkingDays} non-working)
                     </span>
-                  )}
+                  </div>
                 </div>
               </div>
             </div>
             
-            {/* December Holiday Notice */}
+            {/* Working Days Calculation */}
+            <div className="calculation-display">
+              <h4>Calculation:</h4>
+              <div className="calculation-formula">
+                {getMonthCalculationExample()}
+              </div>
+            </div>
+            
+            {/* Working Days Breakdown */}
+            <div className="working-days-breakdown">
+              <h4>Days Breakdown for {months.find(m => m.value === selectedMonth)?.label} {selectedYear}</h4>
+              <div className="breakdown-grid">
+                <div className="breakdown-item">
+                  <span className="breakdown-label">Total Days:</span>
+                  <span className="breakdown-value">{totalDaysInMonth}</span>
+                </div>
+                <div className="breakdown-item">
+                  <span className="breakdown-label">Weekends (Sundays + 2nd Sat):</span>
+                  <span className="breakdown-value blue">{weekendsCount}</span>
+                </div>
+                <div className="breakdown-item">
+                  <span className="breakdown-label">Mandatory Holidays:</span>
+                  <span className="breakdown-value purple">{holidayInfo.mandatory || 0}</span>
+                </div>
+                <div className="breakdown-item">
+                  <span className="breakdown-label">Optional Holidays Taken:</span>
+                  <span className="breakdown-value orange">{holidayInfo.taken || 0}</span>
+                </div>
+                <div className="breakdown-item">
+                  <span className="breakdown-label">Working Days:</span>
+                  <span className="breakdown-value green">{workingDays}</span>
+                </div>
+                <div className="breakdown-item">
+                  <span className="breakdown-label">Non-Working Days:</span>
+                  <span className="breakdown-value red">{nonWorkingDays}</span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Holidays List */}
+            {holidays.length > 0 && (
+              <div className="holidays-list">
+                <h4>Holidays for {months.find(m => m.value === selectedMonth)?.label}</h4>
+                <div className="holidays-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Occasion</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {holidays.map(holiday => (
+                        <tr key={holiday._id}>
+                          <td>{holiday.date}</td>
+                          <td>{holiday.occasion}</td>
+                          <td>
+                            <span className={`holiday-type ${holiday.type?.toLowerCase()}`}>
+                              {holiday.type}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`holiday-status ${holiday.status?.toLowerCase()}`}>
+                              {holiday.status}
+                            </span>
+                          </td>
+                          <td>
+                            {holiday.type === 'OPTIONAL' && (
+                              <select 
+                                className="status-select"
+                                value={holiday.status}
+                                onChange={(e) => handleHolidayStatusChange(holiday._id, e.target.value)}
+                              >
+                                <option value="TAKEN">Mark as TAKEN</option>
+                                <option value="NOT_TAKEN">Mark as NOT TAKEN</option>
+                              </select>
+                            )}
+                            {holiday.type !== 'OPTIONAL' && (
+                              <span className="fixed-status">Fixed</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            
+            {/* Month-specific examples */}
             {selectedMonth === '12' && (
               <div className="holiday-notice">
                 <div className="holiday-notice-icon">🎄</div>
                 <div className="holiday-notice-content">
-                  <strong>December Calculation:</strong> 31 days - weekends - taken holidays = {workingDays} working days
-                  {holidays.find(h => h.date?.includes('25-12')) && (
-                    <div className="christmas-info">
-                      Christmas (25th): {holidays.find(h => h.date?.includes('25-12'))?.status === 'TAKEN' ? 'TAKEN - Working day deducted' : 'NOT TAKEN - Working day not deducted'}
-                    </div>
-                  )}
+                  <strong>December Example:</strong> 31 days - 5 weekends - 0 mandatory holidays - 1 optional (Christmas) = 25 working days
+                </div>
+              </div>
+            )}
+            
+            {selectedMonth === '08' && (
+              <div className="holiday-notice">
+                <div className="holiday-notice-icon">🇮🇳</div>
+                <div className="holiday-notice-content">
+                  <strong>August Example:</strong> 31 days - 5 weekends - 1 mandatory holiday (Independence Day) - 0 optional = 25 working days
                 </div>
               </div>
             )}
@@ -842,13 +1106,25 @@ const ManagerPayslip = () => {
       {/* Generated Payslips List */}
       {!showPreview && generatedPayslips.length > 0 && (
         <div className="generated-payslips card">
-          <h3>Generated Payslips</h3>
+          <div className="payslips-header">
+            <h3>Generated Payslips</h3>
+            <div className="download-status">
+              {isDownloadButtonEnabled() ? (
+                <span className="download-available">✓ PDF Available for {selectedMonth}/{selectedYear}</span>
+              ) : (
+                <span className="download-unavailable">No PDF for {selectedMonth}/{selectedYear}</span>
+              )}
+            </div>
+          </div>
           <div className="payslips-list">
             {generatedPayslips.map(payslip => (
               <div key={payslip._id} className="payslip-item">
                 <div className="payslip-info">
                   <div className="payslip-month">
                     {months.find(m => m.value === String(payslip.month).padStart(2, '0'))?.label} {payslip.year}
+                    {payslip.month === parseInt(selectedMonth) && payslip.year === parseInt(selectedYear) && (
+                      <span className="current-period-badge">Current</span>
+                    )}
                   </div>
                   <div className="payslip-employee">
                     {selectedEmployee?.fullName} • {selectedEmployee?.designation}
@@ -856,16 +1132,20 @@ const ManagerPayslip = () => {
                   <div className="payslip-amount">
                     ₹{payslip.salary?.netPay?.toLocaleString() || '0'}
                   </div>
+                  <div className="payslip-days">
+                    {payslip.salary?.workingDays || workingDays} working days
+                  </div>
                 </div>
                 <button 
                   className="btn-download-small"
-                  onClick={() => handleDownloadPayslip(
-                    payslip._id,
-                    selectedEmployee.fullName,
-                    selectedEmployee.employeeId
-                  )}
+                  onClick={() => handleDownloadPayslip(payslip._id)}
+                  disabled={downloading}
                 >
-                  <Download size={16} />
+                  {downloading ? (
+                    <div className="spinner tiny"></div>
+                  ) : (
+                    <Download size={16} />
+                  )}
                   Download
                 </button>
               </div>

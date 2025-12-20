@@ -1074,3 +1074,234 @@
     align-items: center;
   }
 }
+/* Add to existing managerPayslip.css */
+
+/* Working days breakdown */
+.working-days-breakdown {
+  margin-top: 20px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.working-days-breakdown h4 {
+  margin-bottom: 15px;
+  color: #333;
+  font-size: 16px;
+}
+
+.breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.breakdown-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+}
+
+.breakdown-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.breakdown-value {
+  font-weight: bold;
+}
+
+.breakdown-value.green {
+  color: #28a745;
+}
+
+.breakdown-value.red {
+  color: #dc3545;
+}
+
+.breakdown-value.orange {
+  color: #fd7e14;
+}
+
+.breakdown-value.blue {
+  color: #007bff;
+}
+
+/* Days breakdown */
+.days-breakdown {
+  margin-top: 5px;
+  font-size: 12px;
+  color: #666;
+}
+
+/* Holidays list */
+.holidays-list {
+  margin-top: 20px;
+}
+
+.holidays-table {
+  overflow-x: auto;
+  margin-top: 10px;
+}
+
+.holidays-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.holidays-table th {
+  background: #f8f9fa;
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #495057;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.holidays-table td {
+  padding: 12px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.holiday-type {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.holiday-type.mandatory {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.holiday-type.optional {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.holiday-type.weekend {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.holiday-status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.holiday-status.taken {
+  background: #d4edda;
+  color: #155724;
+}
+
+.holiday-status.not_taken {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.status-select {
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid #ced4da;
+  background: white;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.status-select:focus {
+  outline: none;
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.fixed-status {
+  color: #6c757d;
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* Spinner styles */
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+}
+
+.spinner.small {
+  width: 14px;
+  height: 14px;
+  border-width: 1.5px;
+}
+
+.spinner.tiny {
+  width: 12px;
+  height: 12px;
+  border-width: 1px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Working days display */
+.working-days-display {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.days-count {
+  font-size: 24px;
+  font-weight: bold;
+  color: #28a745;
+}
+
+.days-label {
+  font-size: 14px;
+  color: #666;
+}
+
+.holidays-info {
+  font-size: 12px;
+  color: #fd7e14;
+}
+
+/* Download button states */
+.btn-download:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-download-small:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Christmas notice */
+.christmas-info {
+  margin-top: 5px;
+  padding: 8px;
+  background: #fff3cd;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #856404;
+}
+
+/* Payslip item days */
+.payslip-days {
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+}
