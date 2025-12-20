@@ -1,7 +1,7 @@
 // src/pages/EmployeeDashboard.jsx
 import React, { useEffect, useState, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
-import api from "../api";
+import api from "../utils/api";
 import ChangePasswordCard from "../components/ChangePasswordCard";
 import logo from "../assets/Company Logo.png";
 import { buildHolidayCalendar } from "../utils/holidays";

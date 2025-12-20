@@ -1,6 +1,6 @@
 // src/components/ChangePasswordCard.jsx
 import React, { useState } from "react";
-import api from "../api";
+import api from "../utils/api";
 
 export default function ChangePasswordCard() {
   const [currentPassword, setCurrentPassword] = useState("");

@@ -1,7 +1,7 @@
 // src/pages/AdminDashboard.jsx
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
-import api from "../api";
+import api from "../utils/api";
 import ChangePasswordCard from "../components/ChangePasswordCard";
 import logo from "../assets/Company Logo.png";
 import { calculateProjectHours } from "../utils/hours";
