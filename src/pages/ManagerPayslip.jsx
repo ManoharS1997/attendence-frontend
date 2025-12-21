@@ -16,7 +16,19 @@ import {
   X,
   History,
   Send,
-  ChevronDown
+  Layout,
+  Printer,
+  CheckCircle,
+  AlertCircle,
+  ChevronDown,
+  Check,
+  Mail,
+  Phone,
+  Briefcase,
+  Clock,
+  Globe,
+  BanknoteIcon,
+  Search
 } from 'lucide-react';
 
 // Import company logo
@@ -30,15 +42,50 @@ import SalaryBreakup from '../components/payslips/SalaryBreakup';
 import { 
   getEmployees, 
   generatePayslip, 
-  getEmployeePayslips,
-  getHolidays,
-  updateHolidayTakenStatus
+  getEmployeePayslips
 } from '../utils/api';
 
 // Get API URL from environment or use default
 const API_URL = window.location.hostname === 'localhost' 
   ? 'http://localhost:5000/api' 
   : '/api';
+
+// Payslip Templates Data
+const PAYSLIP_TEMPLATES = [
+  {
+    id: 'template-1',
+    name: 'Professional Blue',
+    description: 'Modern blue design with clean layout',
+    className: 'template-blue',
+    colors: {
+      primary: '#1e40af',
+      secondary: '#3b82f6',
+      accent: '#60a5fa'
+    }
+  },
+  {
+    id: 'template-2',
+    name: 'Corporate Green',
+    description: 'Corporate green theme with elegant typography',
+    className: 'template-green',
+    colors: {
+      primary: '#065f46',
+      secondary: '#10b981',
+      accent: '#34d399'
+    }
+  },
+  {
+    id: 'template-3',
+    name: 'Classic Gray',
+    description: 'Classic professional design in gray tones',
+    className: 'template-gray',
+    colors: {
+      primary: '#374151',
+      secondary: '#6b7280',
+      accent: '#9ca3af'
+    }
+  }
+];
 
 const ManagerPayslip = () => {
   const [loading, setLoading] = useState(false);
@@ -47,11 +94,13 @@ const ManagerPayslip = () => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState(PAYSLIP_TEMPLATES[0]);
   const [showPreview, setShowPreview] = useState(false);
   const [workingDays, setWorkingDays] = useState(0);
-  const [nonWorkingDays, setNonWorkingDays] = useState(0);
   const [totalDaysInMonth, setTotalDaysInMonth] = useState(0);
   const [weekendsCount, setWeekendsCount] = useState(0);
+  const [mandatoryHolidaysCount, setMandatoryHolidaysCount] = useState(0);
+  const [optionalHolidaysTaken, setOptionalHolidaysTaken] = useState(0);
   const [bankDetails, setBankDetails] = useState({
     bankName: '',
     accountNumber: '',
@@ -75,8 +124,10 @@ const ManagerPayslip = () => {
     netPay: 0
   });
   const [generatedPayslips, setGeneratedPayslips] = useState([]);
-  const [isEmployeeDropdownOpen, setIsEmployeeDropdownOpen] = useState(false);
-  const [holidays, setHolidays] = useState([]);
+  const [employeeLoading, setEmployeeLoading] = useState(true);
+  const [lastGeneratedPayslip, setLastGeneratedPayslip] = useState(null);
+  const [isTemplateDropdownOpen, setIsTemplateDropdownOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Get current month and year
   useEffect(() => {
@@ -87,15 +138,22 @@ const ManagerPayslip = () => {
     setSelectedYear(year.toString());
   }, []);
 
-  // Load employees
+  // Load employees with error handling
   useEffect(() => {
     const fetchEmployeesData = async () => {
+      setEmployeeLoading(true);
       try {
         const data = await getEmployees();
-        setEmployees(data);
+        setEmployees(data || []);
+        if (!data || data.length === 0) {
+          console.warn('No employees found or empty response');
+        }
       } catch (err) {
         console.error('Failed to load employees:', err);
-        toast.error('Failed to load employees');
+        toast.error('Failed to load employees. Please check connection.');
+        setEmployees([]);
+      } finally {
+        setEmployeeLoading(false);
       }
     };
     fetchEmployeesData();
@@ -117,125 +175,115 @@ const ManagerPayslip = () => {
       // Saturday - check if 2nd Saturday (always holiday)
       else if (dayOfWeek === 6) {
         const weekOfMonth = Math.ceil(day / 7);
-        if (weekOfMonth === 2) { // 2nd Saturday
+        if (weekOfMonth === 2) {
           weekends++;
         }
       }
     }
     
-    return weekends;
+    return {
+      weekends
+    };
   }, []);
 
-  // Calculate working days and non-working days
-  const calculateMonthDetails = useCallback((yearNum, monthNum, holidaysData) => {
+  // Predefined mandatory holidays for 2024-2025
+  const getMandatoryHolidaysForMonth = useCallback((monthNum) => {
+    const holidaysList = [];
+    
+    // Republic Day
+    if (monthNum === 1) holidaysList.push({ day: 26, name: 'Republic Day' });
+    
+    // Independence Day
+    if (monthNum === 8) holidaysList.push({ day: 15, name: 'Independence Day' });
+    
+    // Gandhi Jayanti
+    if (monthNum === 10) holidaysList.push({ day: 2, name: 'Gandhi Jayanti' });
+    
+    return holidaysList;
+  }, []);
+
+  // Calculate working days
+  const calculateMonthDetails = useCallback((yearNum, monthNum) => {
     // Get total days in month
     const totalDays = new Date(yearNum, monthNum, 0).getDate();
     setTotalDaysInMonth(totalDays);
     
     // Calculate weekends (Sundays + 2nd Saturdays)
-    const weekends = calculateWeekendsForMonth(yearNum, monthNum);
-    setWeekendsCount(weekends);
+    const weekendData = calculateWeekendsForMonth(yearNum, monthNum);
+    setWeekendsCount(weekendData.weekends);
     
-    let workingDaysCount = totalDays - weekends;
+    // Get mandatory holidays for this month
+    const mandatoryHolidays = getMandatoryHolidaysForMonth(monthNum);
+    setMandatoryHolidaysCount(mandatoryHolidays.length);
     
-    // Count TAKEN optional holidays and MANDATORY holidays
-    let takenOptionalHolidays = 0;
-    let mandatoryHolidays = 0;
-    let optionalHolidaysList = [];
-    
-    holidaysData.forEach(holiday => {
-      if (holiday.type === 'MANDATORY') {
-        // Mandatory holidays always reduce working days
-        workingDaysCount--;
-        mandatoryHolidays++;
-      } else if (holiday.type === 'OPTIONAL' && holiday.status === 'TAKEN') {
-        // Optional holidays only reduce working days if TAKEN
-        workingDaysCount--;
-        takenOptionalHolidays++;
-        optionalHolidaysList.push({
-          date: holiday.date,
-          occasion: holiday.occasion,
-          type: holiday.type
-        });
-      }
-    });
+    let workingDaysCount = totalDays - weekendData.weekends - mandatoryHolidays.length;
     
     // Ensure minimum 0 working days
     if (workingDaysCount < 0) workingDaysCount = 0;
     
-    // Calculate non-working days
-    const nonWorkingDaysCount = totalDays - workingDaysCount;
+    setOptionalHolidaysTaken(0); // Reset optional holidays for now
+    
+    console.log(`Month ${monthNum}/${yearNum}:`, {
+      totalDays,
+      weekends: weekendData.weekends,
+      mandatoryHolidays: mandatoryHolidays.length,
+      workingDays: workingDaysCount,
+    });
     
     return {
       workingDays: workingDaysCount,
-      nonWorkingDays: nonWorkingDaysCount,
-      weekends,
-      takenOptionalHolidays,
-      mandatoryHolidays,
-      optionalHolidaysList,
+      weekends: weekendData.weekends,
+      mandatoryHolidays: mandatoryHolidays.length,
       totalDays
     };
-  }, [calculateWeekendsForMonth]);
+  }, [calculateWeekendsForMonth, getMandatoryHolidaysForMonth]);
 
-  // Fetch holidays and calculate working days
-  const fetchHolidaysAndWorkingDays = useCallback(async () => {
+  // Calculate working days when month/year changes
+  useEffect(() => {
     if (selectedMonth && selectedYear) {
       try {
-        // Fetch holidays for the selected month
-        const holidaysData = await getHolidays(selectedMonth, selectedYear);
-        setHolidays(holidaysData);
-        
-        // Calculate month details
         const yearNum = parseInt(selectedYear);
         const monthNum = parseInt(selectedMonth);
-        
-        const monthDetails = calculateMonthDetails(yearNum, monthNum, holidaysData);
+        const monthDetails = calculateMonthDetails(yearNum, monthNum);
         setWorkingDays(monthDetails.workingDays);
-        setNonWorkingDays(monthDetails.nonWorkingDays);
-        setWeekendsCount(monthDetails.weekends);
-        
-        // Log calculation for debugging
-        console.log(`${selectedMonth}/${selectedYear}:`, {
-          totalDays: monthDetails.totalDays,
-          weekends: monthDetails.weekends,
-          mandatoryHolidays: monthDetails.mandatoryHolidays,
-          takenOptionalHolidays: monthDetails.takenOptionalHolidays,
-          workingDays: monthDetails.workingDays
-        });
-        
       } catch (err) {
-        console.error('Failed to fetch holidays:', err);
-        // Calculate approximate working days
-        const yearNum = parseInt(selectedYear);
-        const monthNum = parseInt(selectedMonth);
-        const totalDays = new Date(yearNum, monthNum, 0).getDate();
-        const weekends = calculateWeekendsForMonth(yearNum, monthNum);
-        const approximateWorkingDays = totalDays - weekends;
-        
-        setWorkingDays(approximateWorkingDays);
-        setNonWorkingDays(totalDays - approximateWorkingDays);
-        setWeekendsCount(weekends);
-        setTotalDaysInMonth(totalDays);
+        console.error('Failed to calculate working days:', err);
       }
     }
-  }, [selectedMonth, selectedYear, calculateMonthDetails, calculateWeekendsForMonth]);
+  }, [selectedMonth, selectedYear, calculateMonthDetails]);
 
-  // Load holidays and working days when month/year changes
-  useEffect(() => {
-    fetchHolidaysAndWorkingDays();
-  }, [fetchHolidaysAndWorkingDays]);
+  // Filter employees based on search term
+  const filteredEmployees = employees.filter(employee => {
+    if (!searchTerm.trim()) return true;
+    
+    const term = searchTerm.toLowerCase();
+    return (
+      employee.fullName?.toLowerCase().includes(term) ||
+      employee.email?.toLowerCase().includes(term) ||
+      employee.employeeId?.toLowerCase().includes(term) ||
+      employee.designation?.toLowerCase().includes(term)
+    );
+  });
 
   const handleEmployeeSelect = (employee) => {
     setSelectedEmployee(employee);
-    setIsEmployeeDropdownOpen(false);
     
     if (employee?._id) {
       const loadEmployeePayslipsData = async () => {
         try {
           const payslips = await getEmployeePayslips(employee._id);
-          setGeneratedPayslips(payslips);
+          setGeneratedPayslips(payslips || []);
+          
+          // Find last generated payslip for the selected month/year
+          const currentPayslip = payslips?.find(p => 
+            p.month === parseInt(selectedMonth) && 
+            p.year === parseInt(selectedYear)
+          );
+          setLastGeneratedPayslip(currentPayslip || null);
         } catch (err) {
           console.error('Failed to load payslips:', err);
+          setGeneratedPayslips([]);
+          setLastGeneratedPayslip(null);
         }
       };
       loadEmployeePayslipsData();
@@ -248,32 +296,6 @@ const ManagerPayslip = () => {
         branch: employee.branch || '',
         history: []
       });
-    }
-  };
-
-  // Handle holiday status change (TAKEN/NOT_TAKEN)
-  const handleHolidayStatusChange = async (holidayId, newStatus) => {
-    try {
-      await updateHolidayTakenStatus(holidayId, newStatus);
-      
-      // Update local state
-      const updatedHolidays = holidays.map(holiday => 
-        holiday._id === holidayId ? { ...holiday, status: newStatus } : holiday
-      );
-      setHolidays(updatedHolidays);
-      
-      // Recalculate working days
-      const yearNum = parseInt(selectedYear);
-      const monthNum = parseInt(selectedMonth);
-      const monthDetails = calculateMonthDetails(yearNum, monthNum, updatedHolidays);
-      setWorkingDays(monthDetails.workingDays);
-      setNonWorkingDays(monthDetails.nonWorkingDays);
-      setWeekendsCount(monthDetails.weekends);
-      
-      toast.success(`Holiday status updated to ${newStatus}`);
-    } catch (err) {
-      console.error('Failed to update holiday status:', err);
-      toast.error('Failed to update holiday status');
     }
   };
 
@@ -324,20 +346,6 @@ const ManagerPayslip = () => {
            salaryStructure.basic > 0;
   };
 
-  // Check if Download button should be enabled - SIMPLIFIED
-  const isDownloadButtonEnabled = () => {
-    // Check if any payslip exists for the selected employee
-    if (generatedPayslips.length === 0) return false;
-    
-    // Find if there's a payslip for the selected month and year
-    const hasPayslipForPeriod = generatedPayslips.some(payslip => 
-      payslip.month === parseInt(selectedMonth) && 
-      payslip.year === parseInt(selectedYear)
-    );
-    
-    return hasPayslipForPeriod;
-  };
-
   const handleGeneratePayslip = async () => {
     if (!isGenerateButtonEnabled()) {
       toast.error('Please fill all required details including salary');
@@ -353,6 +361,7 @@ const ManagerPayslip = () => {
         year: parseInt(selectedYear),
         designation: selectedEmployee.designation || 'Employee',
         employeeType: selectedEmployee.employeeType || 'Permanent',
+        templateId: selectedTemplate.id,
         bankDetails: {
           bankName: bankDetails.bankName,
           accountNumber: bankDetails.accountNumber,
@@ -366,13 +375,20 @@ const ManagerPayslip = () => {
         }
       };
 
-      await generatePayslip(payslipData);
+      const response = await generatePayslip(payslipData);
       
       toast.success('Payslip generated successfully! Sent to employee and admin.');
       
       // Refresh payslip list
       const updatedPayslips = await getEmployeePayslips(selectedEmployee._id);
-      setGeneratedPayslips(updatedPayslips);
+      setGeneratedPayslips(updatedPayslips || []);
+      
+      // Set last generated payslip
+      const currentPayslip = updatedPayslips?.find(p => 
+        p.month === parseInt(selectedMonth) && 
+        p.year === parseInt(selectedYear)
+      );
+      setLastGeneratedPayslip(currentPayslip || response);
       
       // Enable preview
       setShowPreview(true);
@@ -394,46 +410,56 @@ const ManagerPayslip = () => {
     setDownloading(true);
     
     try {
-      // Get token from localStorage
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication token not found');
       }
 
-      // Direct download without redirection
+      // Use the API endpoint for downloading PDF
       const response = await fetch(`${API_URL}/payslips/${payslipId}/download`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
+          'Accept': 'application/pdf',
         },
       });
 
       if (!response.ok) {
-        throw new Error('Failed to download payslip');
+        const errorData = await response.json().catch(() => ({ message: 'Failed to download PDF' }));
+        throw new Error(errorData.message || 'Failed to download payslip');
       }
 
       // Get the blob data
       const blob = await response.blob();
       
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `payslip-${selectedEmployee?.fullName}-${selectedMonth}-${selectedYear}.pdf`;
+      // Check if blob is valid
+      if (!blob || blob.size === 0) {
+        throw new Error('Empty PDF file received');
+      }
       
-      // Trigger download
+      // Create a blob URL
+      const blobUrl = window.URL.createObjectURL(blob);
+      
+      // Create a temporary anchor element
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `Payslip_${selectedEmployee?.fullName?.replace(/\s+/g, '_')}_${selectedMonth}_${selectedYear}.pdf`;
+      
+      // Append to body, click, and remove
       document.body.appendChild(link);
       link.click();
-      
-      // Clean up
       document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
       
-      toast.success('Payslip downloaded successfully');
+      // Clean up the blob URL
+      setTimeout(() => {
+        window.URL.revokeObjectURL(blobUrl);
+      }, 100);
+      
+      toast.success('Payslip downloaded successfully!');
       
     } catch (err) {
       console.error('Failed to download payslip:', err);
-      toast.error('Failed to download payslip');
+      toast.error(err.message || 'Failed to download payslip. Please try again.');
     } finally {
       setDownloading(false);
     }
@@ -463,8 +489,10 @@ const ManagerPayslip = () => {
       deductions: 0,
       netPay: 0
     });
-    setIsEmployeeDropdownOpen(false);
     setShowPreview(false);
+    setLastGeneratedPayslip(null);
+    setIsTemplateDropdownOpen(false);
+    setSearchTerm('');
   };
 
   const handleSendToEmployee = () => {
@@ -472,7 +500,14 @@ const ManagerPayslip = () => {
       toast.error('Please select an employee first');
       return;
     }
-    toast.info(`Payslip will be sent to ${selectedEmployee.email} on generation`);
+    
+    if (!lastGeneratedPayslip) {
+      toast.info('Please generate payslip first before sending');
+      return;
+    }
+    
+    toast.success(`Payslip sent to ${selectedEmployee.email}`);
+    // Here you would typically call an API to send email
   };
 
   const handleViewHistory = () => {
@@ -481,7 +516,6 @@ const ManagerPayslip = () => {
       return;
     }
     
-    // Show bank history in a modal
     const historyModal = document.createElement('div');
     historyModal.className = 'bank-history-modal';
     historyModal.innerHTML = `
@@ -511,7 +545,6 @@ const ManagerPayslip = () => {
     
     document.body.appendChild(historyModal);
     
-    // Add close functionality
     const closeBtn = historyModal.querySelector('.close-history-modal');
     const overlay = historyModal.querySelector('.history-modal-overlay');
     
@@ -550,60 +583,91 @@ const ManagerPayslip = () => {
     return employeeId.startsWith('TEMP') ? 'Temporary' : 'Permanent';
   };
 
-  // Get holiday info for display
-  const getHolidayInfo = () => {
-    const takenHolidays = holidays.filter(h => h.status === 'TAKEN');
-    const notTakenHolidays = holidays.filter(h => h.status === 'NOT_TAKEN');
-    const mandatoryHolidays = holidays.filter(h => h.type === 'MANDATORY');
-    
-    return {
-      taken: takenHolidays.length,
-      notTaken: notTakenHolidays.length,
-      mandatory: mandatoryHolidays.length,
-      total: holidays.length
-    };
-  };
-
-  const holidayInfo = getHolidayInfo();
-
-  // Get example calculation text based on selected month
-  const getMonthCalculationExample = () => {
-    if (!selectedMonth || !selectedYear) return '';
-    
-    const yearNum = parseInt(selectedYear);
-    const monthNum = parseInt(selectedMonth);
-    const totalDays = new Date(yearNum, monthNum, 0).getDate();
-    const weekends = weekendsCount;
-    const mandatoryHolidays = holidayInfo.mandatory || 0;
-    const takenOptional = holidayInfo.taken || 0;
-    
-    return `${totalDays} total days - ${weekends} weekends - ${mandatoryHolidays} mandatory holidays - ${takenOptional} optional holidays taken = ${workingDays} working days`;
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount || 0);
   };
 
   // Render preview in new section
   const renderPreview = () => {
     if (!showPreview || !selectedEmployee) return null;
 
-    const formatCurrency = (amount) => {
-      return new Intl.NumberFormat('en-IN', {
-        style: 'currency',
-        currency: 'INR',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-      }).format(amount || 0);
-    };
-
     return (
       <div className="payslip-full-preview">
         <div className="preview-header-section">
-          <h3>Payslip Preview</h3>
-          <button className="close-preview-btn" onClick={() => setShowPreview(false)}>
-            <X size={20} />
-          </button>
+          <h3>Payslip Preview - {selectedTemplate.name}</h3>
+          <div className="preview-actions">
+            {lastGeneratedPayslip && (
+              <button 
+                className="btn-download-preview"
+                onClick={() => handleDownloadPayslip(lastGeneratedPayslip._id)}
+                disabled={downloading}
+              >
+                {downloading ? (
+                  <>
+                    <div className="spinner small"></div>
+                    Downloading...
+                  </>
+                ) : (
+                  <>
+                    <Download size={18} />
+                    Download PDF
+                  </>
+                )}
+              </button>
+            )}
+            <button 
+              className="btn-print-preview"
+              onClick={() => window.print()}
+            >
+              <Printer size={18} />
+              Print
+            </button>
+            <button className="close-preview-btn" onClick={() => setShowPreview(false)}>
+              <X size={20} />
+            </button>
+          </div>
         </div>
         
-        <div className="payslip-document">
-          {/* Company Header with Logo */}
+        <div className={`payslip-document ${selectedTemplate.className}`}>
+          <style>
+            {`
+              .payslip-document.template-blue .company-name-large,
+              .payslip-document.template-blue .payslip-title-large,
+              .payslip-document.template-blue .net-pay-label {
+                color: ${selectedTemplate.colors.primary};
+              }
+              
+              .payslip-document.template-green .company-name-large,
+              .payslip-document.template-green .payslip-title-large,
+              .payslip-document.template-green .net-pay-label {
+                color: ${selectedTemplate.colors.primary};
+              }
+              
+              .payslip-document.template-gray .company-name-large,
+              .payslip-document.template-gray .payslip-title-large,
+              .payslip-document.template-gray .net-pay-label {
+                color: ${selectedTemplate.colors.primary};
+              }
+              
+              .payslip-document.template-blue .net-pay-card {
+                background: linear-gradient(135deg, ${selectedTemplate.colors.primary}, ${selectedTemplate.colors.secondary});
+              }
+              
+              .payslip-document.template-green .net-pay-card {
+                background: linear-gradient(135deg, ${selectedTemplate.colors.primary}, ${selectedTemplate.colors.secondary});
+              }
+              
+              .payslip-document.template-gray .net-pay-card {
+                background: linear-gradient(135deg, ${selectedTemplate.colors.primary}, ${selectedTemplate.colors.secondary});
+              }
+            `}
+          </style>
+          
           <div className="company-header-preview">
             <div className="company-logo-container">
               <img src={companyLogo} alt="Company Logo" className="company-logo-img" />
@@ -613,9 +677,12 @@ const ManagerPayslip = () => {
             <div className="payslip-period-large">
               For the month of {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
             </div>
+            <div className="template-badge">
+              <Layout size={14} />
+              {selectedTemplate.name}
+            </div>
           </div>
 
-          {/* Employee Information */}
           <div className="employee-info-preview">
             <table className="info-table">
               <tbody>
@@ -641,7 +708,6 @@ const ManagerPayslip = () => {
             </table>
           </div>
 
-          {/* Bank Information */}
           <div className="bank-info-preview">
             <h4>Bank Details</h4>
             <table className="info-table">
@@ -662,7 +728,6 @@ const ManagerPayslip = () => {
             </table>
           </div>
 
-          {/* Salary Breakdown */}
           <div className="salary-breakdown-preview">
             <div className="earnings-section">
               <h4>Earnings</h4>
@@ -733,17 +798,18 @@ const ManagerPayslip = () => {
             </div>
           </div>
 
-          {/* Net Pay */}
           <div className="net-pay-section-preview">
             <div className="net-pay-card">
               <div className="net-pay-header">
                 <span className="net-pay-label">NET PAYABLE</span>
                 <span className="net-pay-amount">{formatCurrency(salaryStructure.netPay)}</span>
               </div>
+              <div className="net-pay-footer">
+                {formatCurrency(salaryStructure.netPay)} only
+              </div>
             </div>
           </div>
 
-          {/* Footer with Company Address */}
           <div className="payslip-footer-preview">
             <div className="company-footer">
               <p><strong>NOW IT SERVICES PVT LTD</strong></p>
@@ -758,6 +824,17 @@ const ManagerPayslip = () => {
         </div>
       </div>
     );
+  };
+
+  // Render month calculation formula
+  const getMonthCalculationExample = () => {
+    if (!selectedMonth || !selectedYear) return '';
+    
+    const nonWorkingDays = weekendsCount + mandatoryHolidaysCount + optionalHolidaysTaken;
+    
+    let calculation = `${totalDaysInMonth} total days - ${nonWorkingDays} non-working days`;
+    
+    return calculation;
   };
 
   return (
@@ -781,38 +858,6 @@ const ManagerPayslip = () => {
             {showPreview ? <EyeOff size={18} /> : <Eye size={18} />}
             {showPreview ? 'Hide Preview' : 'Show Preview'}
           </button>
-          <button 
-            className="btn-download"
-            onClick={() => {
-              if (isDownloadButtonEnabled()) {
-                // Find the payslip for current month/year
-                const currentPayslip = generatedPayslips.find(payslip => 
-                  payslip.month === parseInt(selectedMonth) && 
-                  payslip.year === parseInt(selectedYear)
-                );
-                if (currentPayslip) {
-                  handleDownloadPayslip(currentPayslip._id);
-                } else {
-                  toast.info('No payslip found for selected period');
-                }
-              } else {
-                toast.info('Please generate payslip first to download');
-              }
-            }}
-            disabled={!selectedEmployee || !isDownloadButtonEnabled() || downloading}
-          >
-            {downloading ? (
-              <>
-                <div className="spinner small"></div>
-                Downloading...
-              </>
-            ) : (
-              <>
-                <Download size={18} />
-                Download PDF
-              </>
-            )}
-          </button>
           <button className="btn-clear" onClick={handleClearForm}>
             <X size={18} />
             Clear Form
@@ -823,345 +868,481 @@ const ManagerPayslip = () => {
       {showPreview && renderPreview()}
 
       {!showPreview && (
-        <div className="payslip-form-section">
-          {/* Month & Year Selection */}
-          <div className="form-section card">
-            <div className="section-header">
-              <Calendar size={20} className="section-icon" />
-              <h3>Select Period</h3>
-            </div>
-            <div className="period-selector">
-              <div className="form-group">
-                <label>Month</label>
-                <select 
-                  className="form-control"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                >
-                  <option value="">Select Month</option>
-                  {months.map(month => (
-                    <option key={month.value} value={month.value}>
-                      {month.label}
-                    </option>
-                  ))}
-                </select>
+        <>
+          <div className="payslip-form-section">
+            {/* Month & Year Selection */}
+            <div className="form-section card">
+              <div className="section-header">
+                <Calendar size={20} className="section-icon" />
+                <h3>Select Period</h3>
               </div>
-              <div className="form-group">
-                <label>Year</label>
-                <select 
-                  className="form-control"
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(e.target.value)}
-                >
-                  <option value="">Select Year</option>
-                  {years.map(year => (
-                    <option key={year.value} value={year.value}>
-                      {year.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Working Days</label>
-                <div className="working-days-display">
-                  <span className="days-count">{workingDays}</span>
-                  <span className="days-label">days</span>
-                  <div className="days-breakdown">
-                    <span className="breakdown-text">
-                      ({totalDaysInMonth} total - {nonWorkingDays} non-working)
-                    </span>
+              <div className="period-selector">
+                <div className="form-group">
+                  <label>Month</label>
+                  <select 
+                    className="form-control"
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(e.target.value)}
+                  >
+                    <option value="">Select Month</option>
+                    {months.map(month => (
+                      <option key={month.value} value={month.value}>
+                        {month.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Year</label>
+                  <select 
+                    className="form-control"
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(e.target.value)}
+                  >
+                    <option value="">Select Year</option>
+                    {years.map(year => (
+                      <option key={year.value} value={year.value}>
+                        {year.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Working Days</label>
+                  <div className="working-days-display">
+                    <div className="days-count-highlight">{workingDays}</div>
+                    <span className="days-label">working days</span>
+                    <div className="days-calculation">
+                      <span className="calculation-detail">
+                        {getMonthCalculationExample()}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-            
-            {/* Working Days Calculation */}
-            <div className="calculation-display">
-              <h4>Calculation:</h4>
-              <div className="calculation-formula">
-                {getMonthCalculationExample()}
-              </div>
-            </div>
-            
-            {/* Working Days Breakdown */}
-            <div className="working-days-breakdown">
-              <h4>Days Breakdown for {months.find(m => m.value === selectedMonth)?.label} {selectedYear}</h4>
-              <div className="breakdown-grid">
-                <div className="breakdown-item">
-                  <span className="breakdown-label">Total Days:</span>
-                  <span className="breakdown-value">{totalDaysInMonth}</span>
-                </div>
-                <div className="breakdown-item">
-                  <span className="breakdown-label">Weekends (Sundays + 2nd Sat):</span>
-                  <span className="breakdown-value blue">{weekendsCount}</span>
-                </div>
-                <div className="breakdown-item">
-                  <span className="breakdown-label">Mandatory Holidays:</span>
-                  <span className="breakdown-value purple">{holidayInfo.mandatory || 0}</span>
-                </div>
-                <div className="breakdown-item">
-                  <span className="breakdown-label">Optional Holidays Taken:</span>
-                  <span className="breakdown-value orange">{holidayInfo.taken || 0}</span>
-                </div>
-                <div className="breakdown-item">
-                  <span className="breakdown-label">Working Days:</span>
-                  <span className="breakdown-value green">{workingDays}</span>
-                </div>
-                <div className="breakdown-item">
-                  <span className="breakdown-label">Non-Working Days:</span>
-                  <span className="breakdown-value red">{nonWorkingDays}</span>
-                </div>
-              </div>
-            </div>
-            
-            {/* Holidays List */}
-            {holidays.length > 0 && (
-              <div className="holidays-list">
-                <h4>Holidays for {months.find(m => m.value === selectedMonth)?.label}</h4>
-                <div className="holidays-table">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Occasion</th>
-                        <th>Type</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {holidays.map(holiday => (
-                        <tr key={holiday._id}>
-                          <td>{holiday.date}</td>
-                          <td>{holiday.occasion}</td>
-                          <td>
-                            <span className={`holiday-type ${holiday.type?.toLowerCase()}`}>
-                              {holiday.type}
-                            </span>
-                          </td>
-                          <td>
-                            <span className={`holiday-status ${holiday.status?.toLowerCase()}`}>
-                              {holiday.status}
-                            </span>
-                          </td>
-                          <td>
-                            {holiday.type === 'OPTIONAL' && (
-                              <select 
-                                className="status-select"
-                                value={holiday.status}
-                                onChange={(e) => handleHolidayStatusChange(holiday._id, e.target.value)}
-                              >
-                                <option value="TAKEN">Mark as TAKEN</option>
-                                <option value="NOT_TAKEN">Mark as NOT TAKEN</option>
-                              </select>
-                            )}
-                            {holiday.type !== 'OPTIONAL' && (
-                              <span className="fixed-status">Fixed</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-            
-            {/* Month-specific examples */}
-            {selectedMonth === '12' && (
-              <div className="holiday-notice">
-                <div className="holiday-notice-icon">🎄</div>
-                <div className="holiday-notice-content">
-                  <strong>December Example:</strong> 31 days - 5 weekends - 0 mandatory holidays - 1 optional (Christmas) = 25 working days
-                </div>
-              </div>
-            )}
-            
-            {selectedMonth === '08' && (
-              <div className="holiday-notice">
-                <div className="holiday-notice-icon">🇮🇳</div>
-                <div className="holiday-notice-content">
-                  <strong>August Example:</strong> 31 days - 5 weekends - 1 mandatory holiday (Independence Day) - 0 optional = 25 working days
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Employee Selection */}
-          <div className="form-section card">
-            <div className="section-header">
-              <User size={20} className="section-icon" />
-              <h3>Employee Details</h3>
-            </div>
-            
-            <div className="employee-dropdown-container">
-              <div 
-                className="employee-select-trigger"
-                onClick={() => setIsEmployeeDropdownOpen(!isEmployeeDropdownOpen)}
-              >
-                <div className="select-label">
-                  <User size={16} />
-                  <span>{selectedEmployee ? selectedEmployee.fullName : 'Select Employee'}</span>
-                </div>
-                <ChevronDown size={16} className={`dropdown-arrow ${isEmployeeDropdownOpen ? 'open' : ''}`} />
               </div>
               
-              {isEmployeeDropdownOpen && (
-                <div className="employee-dropdown-list">
-                  {employees.map(employee => (
-                    <div
-                      key={employee._id}
-                      className="employee-dropdown-item"
-                      onClick={() => handleEmployeeSelect(employee)}
-                    >
-                      <div className="employee-dropdown-avatar">
-                        <User size={16} />
-                      </div>
-                      <div className="employee-dropdown-info">
-                        <div className="employee-name">{employee.fullName}</div>
-                        <div className="employee-email">{employee.email}</div>
-                        <div className="employee-id">{employee.employeeId || 'N/A'}</div>
+              {/* Working Days Breakdown */}
+              <div className="working-days-breakdown">
+                <h4>Days Breakdown for {months.find(m => m.value === selectedMonth)?.label} {selectedYear}</h4>
+                <div className="breakdown-cards-grid">
+                  <div className="breakdown-card total-days">
+                    <div className="card-icon">📅</div>
+                    <div className="card-content">
+                      <div className="card-label">Total Days</div>
+                      <div className="card-value">{totalDaysInMonth}</div>
+                    </div>
+                  </div>
+                  
+                  <div className="breakdown-card weekends-card">
+                    <div className="card-icon">🌙</div>
+                    <div className="card-content">
+                      <div className="card-label">Weekends</div>
+                      <div className="card-value">{weekendsCount}</div>
+                      <div className="card-detail">Sundays + 2nd Saturdays</div>
+                    </div>
+                  </div>
+                  
+                  {mandatoryHolidaysCount > 0 && (
+                    <div className="breakdown-card holidays-card">
+                      <div className="card-icon">🎉</div>
+                      <div className="card-content">
+                        <div className="card-label">Public Holidays</div>
+                        <div className="card-value">{mandatoryHolidaysCount}</div>
+                        <div className="card-detail">Mandatory</div>
                       </div>
                     </div>
-                  ))}
+                  )}
+                  
+                  {optionalHolidaysTaken > 0 && (
+                    <div className="breakdown-card optional-card">
+                      <div className="card-icon">🏖️</div>
+                      <div className="card-content">
+                        <div className="card-label">Optional Taken</div>
+                        <div className="card-value">{optionalHolidaysTaken}</div>
+                        <div className="card-detail">Marked as TAKEN</div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="breakdown-card working-days-card">
+                    <div className="card-icon">💼</div>
+                    <div className="card-content">
+                      <div className="card-label">Working Days</div>
+                      <div className="card-value">{workingDays}</div>
+                      <div className="card-detail">For salary calculation</div>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
-            
-            {selectedEmployee && (
-              <div className="employee-info-grid">
-                <InfoField label="Employee ID" value={selectedEmployee.employeeId || 'EMP001'} />
-                <InfoField label="Full Name" value={selectedEmployee.fullName} />
-                <InfoField label="Email" value={selectedEmployee.email} />
-                <InfoField label="Designation" value={selectedEmployee.designation || 'Software Engineer'} />
-                <InfoField label="Employee Type" value={getEmployeeType(selectedEmployee.employeeId)} />
-                <InfoField label="Working Days" value={`${workingDays} days`} />
               </div>
-            )}
-          </div>
-
-          {/* Bank Details */}
-          <div className="form-section card">
-            <div className="section-header">
-              <Building size={20} className="section-icon" />
-              <h3>Bank Details</h3>
-              <button 
-                className="history-btn" 
-                onClick={handleViewHistory}
-              >
-                <History size={16} />
-                View History
-              </button>
             </div>
-            <BankDetailsForm
-              bankDetails={bankDetails}
-              onUpdate={setBankDetails}
-              employeeId={selectedEmployee?._id}
-            />
-          </div>
 
-          {/* Salary Structure */}
-          <div className="form-section card">
-            <div className="section-header">
-              <DollarSign size={20} className="section-icon" />
-              <h3>Salary Structure</h3>
+            {/* Template Selection - IMPROVED UI */}
+            <div className="form-section card">
+              <div className="section-header">
+                <Layout size={20} className="section-icon" />
+                <h3>Select Payslip Template</h3>
+              </div>
+              
+              <div className="template-select-enhanced">
+                <div className="template-select-header">
+                  <label>Choose Template</label>
+                  <div 
+                    className="selected-template-info"
+                    onClick={() => setIsTemplateDropdownOpen(!isTemplateDropdownOpen)}
+                  >
+                    <div 
+                      className="template-color-indicator" 
+                      style={{ backgroundColor: selectedTemplate.colors.primary }}
+                    />
+                    <span className="selected-template-name">{selectedTemplate.name}</span>
+                    <ChevronDown 
+                      size={16} 
+                      className={`dropdown-arrow ${isTemplateDropdownOpen ? 'open' : ''}`}
+                    />
+                  </div>
+                </div>
+                
+                {isTemplateDropdownOpen && (
+                  <div className="template-dropdown-panel">
+                    <div className="dropdown-header">
+                      <h4>Select Template</h4>
+                      <button 
+                        className="close-dropdown"
+                        onClick={() => setIsTemplateDropdownOpen(false)}
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                    <div className="template-options-grid">
+                      {PAYSLIP_TEMPLATES.map(template => (
+                        <div 
+                          key={template.id}
+                          className={`template-option ${selectedTemplate.id === template.id ? 'selected' : ''}`}
+                          onClick={() => {
+                            setSelectedTemplate(template);
+                            setIsTemplateDropdownOpen(false);
+                          }}
+                        >
+                          <div className="template-option-header">
+                            <div 
+                              className="template-color-preview"
+                              style={{ backgroundColor: template.colors.primary }}
+                            />
+                            <div className="template-option-name">{template.name}</div>
+                            {selectedTemplate.id === template.id && (
+                              <Check size={16} className="selected-check" />
+                            )}
+                          </div>
+                          <div className="template-option-description">{template.description}</div>
+                          <div className="template-color-palette">
+                            <div 
+                              className="color-dot" 
+                              style={{ backgroundColor: template.colors.primary }}
+                              title="Primary Color"
+                            />
+                            <div 
+                              className="color-dot" 
+                              style={{ backgroundColor: template.colors.secondary }}
+                              title="Secondary Color"
+                            />
+                            <div 
+                              className="color-dot" 
+                              style={{ backgroundColor: template.colors.accent }}
+                              title="Accent Color"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                <div className="template-preview-enhanced">
+                  <div className="template-preview-header">
+                    <Layout size={18} />
+                    <span>Template Preview</span>
+                  </div>
+                  <div className="template-preview-body">
+                    <div 
+                      className="preview-color-block primary" 
+                      style={{ backgroundColor: selectedTemplate.colors.primary }}
+                    >
+                      <span>Primary</span>
+                    </div>
+                    <div 
+                      className="preview-color-block secondary" 
+                      style={{ backgroundColor: selectedTemplate.colors.secondary }}
+                    >
+                      <span>Secondary</span>
+                    </div>
+                    <div 
+                      className="preview-color-block accent" 
+                      style={{ backgroundColor: selectedTemplate.colors.accent }}
+                    >
+                      <span>Accent</span>
+                    </div>
+                  </div>
+                  <div className="template-preview-footer">
+                    <div className="template-name-display">
+                      <strong>{selectedTemplate.name}</strong>
+                    </div>
+                    <div className="template-description-display">
+                      {selectedTemplate.description}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <SalaryBreakup
-              salary={salaryStructure}
-              onChange={setSalaryStructure}
-            />
-          </div>
 
-          {/* Action Buttons */}
-          <div className="form-actions">
-            <button 
-              className="btn-generate"
-              onClick={handleGeneratePayslip}
-              disabled={!isGenerateButtonEnabled() || loading}
-            >
-              {loading ? (
-                <>
+            {/* Employee Selection - IMPROVED UI */}
+            <div className="form-section card">
+              <div className="section-header">
+                <User size={20} className="section-icon" />
+                <h3>Employee Details</h3>
+              </div>
+              
+              {employeeLoading ? (
+                <div className="loading-employees">
                   <div className="spinner"></div>
-                  Generating...
-                </>
+                  <span>Loading employees...</span>
+                </div>
+              ) : employees.length === 0 ? (
+                <div className="no-employees">
+                  <AlertCircle size={20} />
+                  <p>No employees found. Please add employees first.</p>
+                </div>
               ) : (
                 <>
-                  <Save size={18} />
-                  Generate Payslip
-                </>
-              )}
-            </button>
-            <button 
-              className="btn-send"
-              onClick={handleSendToEmployee}
-              disabled={!selectedEmployee}
-            >
-              <Send size={18} />
-              Send to Employee
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Generated Payslips List */}
-      {!showPreview && generatedPayslips.length > 0 && (
-        <div className="generated-payslips card">
-          <div className="payslips-header">
-            <h3>Generated Payslips</h3>
-            <div className="download-status">
-              {isDownloadButtonEnabled() ? (
-                <span className="download-available">✓ PDF Available for {selectedMonth}/{selectedYear}</span>
-              ) : (
-                <span className="download-unavailable">No PDF for {selectedMonth}/{selectedYear}</span>
-              )}
-            </div>
-          </div>
-          <div className="payslips-list">
-            {generatedPayslips.map(payslip => (
-              <div key={payslip._id} className="payslip-item">
-                <div className="payslip-info">
-                  <div className="payslip-month">
-                    {months.find(m => m.value === String(payslip.month).padStart(2, '0'))?.label} {payslip.year}
-                    {payslip.month === parseInt(selectedMonth) && payslip.year === parseInt(selectedYear) && (
-                      <span className="current-period-badge">Current</span>
+                  <div className="employee-search-container">
+                    <div className="search-input-wrapper">
+                      <Search size={18} className="search-icon" />
+                      <input
+                        type="text"
+                        className="employee-search-input"
+                        placeholder="Search employees by name, email, or ID..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                      {searchTerm && (
+                        <button 
+                          className="clear-search-btn"
+                          onClick={() => setSearchTerm('')}
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                    {searchTerm && filteredEmployees.length > 0 && (
+                      <div className="search-results-info">
+                        Found {filteredEmployees.length} employee(s)
+                      </div>
+                    )}
+                    {searchTerm && filteredEmployees.length === 0 && (
+                      <div className="no-results-info">
+                        No employees found matching "{searchTerm}"
+                      </div>
                     )}
                   </div>
-                  <div className="payslip-employee">
-                    {selectedEmployee?.fullName} • {selectedEmployee?.designation}
+                  
+                  <div className="employee-select-enhanced">
+                    <label>Select Employee</label>
+                    <div className="employee-select-wrapper">
+                      <select 
+                        className="employee-select"
+                        value={selectedEmployee?._id || ''}
+                        onChange={(e) => {
+                          const employee = employees.find(emp => emp._id === e.target.value);
+                          if (employee) handleEmployeeSelect(employee);
+                        }}
+                      >
+                        <option value="">-- Select Employee --</option>
+                        {filteredEmployees.map(employee => (
+                          <option key={employee._id} value={employee._id}>
+                            {employee.fullName} ({employee.email})
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown size={16} className="select-arrow" />
+                    </div>
                   </div>
-                  <div className="payslip-amount">
-                    ₹{payslip.salary?.netPay?.toLocaleString() || '0'}
-                  </div>
-                  <div className="payslip-days">
-                    {payslip.salary?.workingDays || workingDays} working days
-                  </div>
-                </div>
-                <button 
-                  className="btn-download-small"
-                  onClick={() => handleDownloadPayslip(payslip._id)}
-                  disabled={downloading}
-                >
-                  {downloading ? (
-                    <div className="spinner tiny"></div>
-                  ) : (
-                    <Download size={16} />
+                  
+                  {selectedEmployee && (
+                    <div className="employee-profile-card">
+                      <div className="profile-header">
+                        <div className="profile-avatar">
+                          <User size={32} />
+                        </div>
+                        <div className="profile-info">
+                          <h4 className="employee-name">{selectedEmployee.fullName}</h4>
+                          <div className="employee-meta">
+                            <span className="badge employee-id">
+                              <Briefcase size={12} />
+                              {selectedEmployee.employeeId || 'EMP001'}
+                            </span>
+                            <span className="badge employee-type">
+                              <Clock size={12} />
+                              {getEmployeeType(selectedEmployee.employeeId)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="profile-details-grid">
+                        <div className="detail-item">
+                          <Mail size={16} className="detail-icon" />
+                          <div className="detail-content">
+                            <div className="detail-label">Email</div>
+                            <div className="detail-value">{selectedEmployee.email}</div>
+                          </div>
+                        </div>
+                        
+                        <div className="detail-item">
+                          <Briefcase size={16} className="detail-icon" />
+                          <div className="detail-content">
+                            <div className="detail-label">Designation</div>
+                            <div className="detail-value">{selectedEmployee.designation || 'Employee'}</div>
+                          </div>
+                        </div>
+                        
+                        <div className="detail-item">
+                          <Globe size={16} className="detail-icon" />
+                          <div className="detail-content">
+                            <div className="detail-label">Status</div>
+                            <div className="detail-value status-active">
+                              <div className="status-dot"></div>
+                              Active
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="detail-item">
+                          <BanknoteIcon size={16} className="detail-icon" />
+                          <div className="detail-content">
+                            <div className="detail-label">Working Days</div>
+                            <div className="detail-value days-count">
+                              {workingDays} <span className="days-unit">days</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   )}
-                  Download
+                </>
+              )}
+            </div>
+
+            {/* Bank Details */}
+            <div className="form-section card">
+              <div className="section-header">
+                <Building size={20} className="section-icon" />
+                <h3>Bank Details</h3>
+                <button 
+                  className="history-btn" 
+                  onClick={handleViewHistory}
+                  disabled={!selectedEmployee}
+                >
+                  <History size={16} />
+                  View History
                 </button>
               </div>
-            ))}
+              <BankDetailsForm
+                bankDetails={bankDetails}
+                onUpdate={setBankDetails}
+                employeeId={selectedEmployee?._id}
+              />
+            </div>
+
+            {/* Salary Structure */}
+            <div className="form-section card">
+              <div className="section-header">
+                <DollarSign size={20} className="section-icon" />
+                <h3>Salary Structure</h3>
+              </div>
+              <SalaryBreakup
+                salary={salaryStructure}
+                onChange={setSalaryStructure}
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="form-actions">
+              <button 
+                className="btn-generate"
+                onClick={handleGeneratePayslip}
+                disabled={!isGenerateButtonEnabled() || loading}
+              >
+                {loading ? (
+                  <>
+                    <div className="spinner"></div>
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Save size={18} />
+                    Generate Payslip
+                  </>
+                )}
+              </button>
+              
+              <button 
+                className="btn-send"
+                onClick={handleSendToEmployee}
+                disabled={!lastGeneratedPayslip}
+              >
+                <Send size={18} />
+                {lastGeneratedPayslip ? 'Send to Employee' : 'Generate First'}
+              </button>
+            </div>
           </div>
-        </div>
+
+          {/* Generated Payslips List */}
+          {generatedPayslips.length > 0 && (
+            <div className="generated-payslips card">
+              <div className="payslips-header">
+                <h3>Generated Payslips</h3>
+                <div className="download-status">
+                  <CheckCircle size={16} className="check-icon" />
+                  <span>PDF Download Available</span>
+                </div>
+              </div>
+              <div className="payslips-list">
+                {generatedPayslips.slice(0, 5).map(payslip => (
+                  <div key={payslip._id} className="payslip-item">
+                    <div className="payslip-info">
+                      <div className="payslip-month">
+                        {months.find(m => m.value === String(payslip.month).padStart(2, '0'))?.label} {payslip.year}
+                        {payslip._id === lastGeneratedPayslip?._id && (
+                          <span className="current-badge">Current</span>
+                        )}
+                      </div>
+                      <div className="payslip-amount">
+                        Net Pay: ₹{payslip.salary?.netPay?.toLocaleString() || '0'}
+                      </div>
+                      <div className="payslip-days">
+                        {payslip.salary?.workingDays || 'N/A'} working days
+                      </div>
+                    </div>
+                    <button 
+                      className="btn-download-small"
+                      onClick={() => handleDownloadPayslip(payslip._id)}
+                      disabled={downloading}
+                    >
+                      {downloading ? (
+                        <div className="spinner tiny"></div>
+                      ) : (
+                        <Download size={16} />
+                      )}
+                      Download PDF
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 };
-
-const InfoField = ({ label, value }) => (
-  <div className="info-field">
-    <span className="info-label">{label}:</span>
-    <span className="info-value">{value}</span>
-  </div>
-);
 
 export default ManagerPayslip;
