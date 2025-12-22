@@ -1,5 +1,5 @@
 // src/pages/ManagerPayslip.jsx
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import '../../styles/managerPayslip.css';
@@ -8,27 +8,21 @@ import {
   User, 
   Building, 
   DollarSign, 
-  Download, 
   Eye, 
   EyeOff,
   FileText,
   Save,
   X,
-  History,
-  Send,
   Layout,
   Printer,
-  CheckCircle,
   AlertCircle,
   ChevronDown,
   Check,
-  Mail,
-  Phone,
-  Briefcase,
-  Clock,
-  Globe,
-  BanknoteIcon,
-  Search
+  Search,
+  Download,
+  Loader2,
+  Send,
+  Share2
 } from 'lucide-react';
 
 // Import company logo
@@ -41,14 +35,8 @@ import SalaryBreakup from '../components/payslips/SalaryBreakup';
 // API functions
 import { 
   getEmployees, 
-  generatePayslip, 
-  getEmployeePayslips
+  generatePayslip
 } from '../utils/api';
-
-// Get API URL from environment or use default
-const API_URL = window.location.hostname === 'localhost' 
-  ? 'http://localhost:5000/api' 
-  : '/api';
 
 // Payslip Templates Data
 const PAYSLIP_TEMPLATES = [
@@ -89,7 +77,7 @@ const PAYSLIP_TEMPLATES = [
 
 const ManagerPayslip = () => {
   const [loading, setLoading] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState('');
@@ -97,10 +85,12 @@ const ManagerPayslip = () => {
   const [selectedTemplate, setSelectedTemplate] = useState(PAYSLIP_TEMPLATES[0]);
   const [showPreview, setShowPreview] = useState(false);
   const [workingDays, setWorkingDays] = useState(0);
-  const [totalDaysInMonth, setTotalDaysInMonth] = useState(0);
-  const [weekendsCount, setWeekendsCount] = useState(0);
-  const [mandatoryHolidaysCount, setMandatoryHolidaysCount] = useState(0);
-  const [optionalHolidaysTaken, setOptionalHolidaysTaken] = useState(0);
+  const [monthDetails, setMonthDetails] = useState({
+    totalDays: 0,
+    weekends: 0,
+    mandatoryHolidays: 0,
+    workingDays: 0
+  });
   const [bankDetails, setBankDetails] = useState({
     bankName: '',
     accountNumber: '',
@@ -123,11 +113,10 @@ const ManagerPayslip = () => {
     deductions: 0,
     netPay: 0
   });
-  const [generatedPayslips, setGeneratedPayslips] = useState([]);
   const [employeeLoading, setEmployeeLoading] = useState(true);
-  const [lastGeneratedPayslip, setLastGeneratedPayslip] = useState(null);
   const [isTemplateDropdownOpen, setIsTemplateDropdownOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const previewRef = useRef(null);
 
   // Get current month and year
   useEffect(() => {
@@ -138,16 +127,13 @@ const ManagerPayslip = () => {
     setSelectedYear(year.toString());
   }, []);
 
-  // Load employees with error handling
+  // Load employees
   useEffect(() => {
     const fetchEmployeesData = async () => {
       setEmployeeLoading(true);
       try {
         const data = await getEmployees();
         setEmployees(data || []);
-        if (!data || data.length === 0) {
-          console.warn('No employees found or empty response');
-        }
       } catch (err) {
         console.error('Failed to load employees:', err);
         toast.error('Failed to load employees. Please check connection.');
@@ -159,7 +145,7 @@ const ManagerPayslip = () => {
     fetchEmployeesData();
   }, []);
 
-  // Calculate weekends (Sundays + 2nd Saturdays) for any month
+  // Calculate weekends
   const calculateWeekendsForMonth = useCallback((yearNum, monthNum) => {
     const totalDays = new Date(yearNum, monthNum, 0).getDate();
     let weekends = 0;
@@ -168,94 +154,64 @@ const ManagerPayslip = () => {
       const date = new Date(yearNum, monthNum - 1, day);
       const dayOfWeek = date.getDay();
       
-      // Sunday - always holiday
-      if (dayOfWeek === 0) {
-        weekends++;
-      }
-      // Saturday - check if 2nd Saturday (always holiday)
+      if (dayOfWeek === 0) weekends++;
       else if (dayOfWeek === 6) {
         const weekOfMonth = Math.ceil(day / 7);
-        if (weekOfMonth === 2) {
-          weekends++;
-        }
+        if (weekOfMonth === 2) weekends++;
       }
     }
     
-    return {
-      weekends
-    };
+    return { weekends };
   }, []);
 
-  // Predefined mandatory holidays for 2024-2025
+  // Get mandatory holidays
   const getMandatoryHolidaysForMonth = useCallback((monthNum) => {
     const holidaysList = [];
-    
-    // Republic Day
     if (monthNum === 1) holidaysList.push({ day: 26, name: 'Republic Day' });
-    
-    // Independence Day
     if (monthNum === 8) holidaysList.push({ day: 15, name: 'Independence Day' });
-    
-    // Gandhi Jayanti
     if (monthNum === 10) holidaysList.push({ day: 2, name: 'Gandhi Jayanti' });
-    
     return holidaysList;
   }, []);
 
-  // Calculate working days
+  // Calculate month details
   const calculateMonthDetails = useCallback((yearNum, monthNum) => {
-    // Get total days in month
     const totalDays = new Date(yearNum, monthNum, 0).getDate();
-    setTotalDaysInMonth(totalDays);
     
-    // Calculate weekends (Sundays + 2nd Saturdays)
     const weekendData = calculateWeekendsForMonth(yearNum, monthNum);
-    setWeekendsCount(weekendData.weekends);
+    const weekends = weekendData.weekends;
     
-    // Get mandatory holidays for this month
     const mandatoryHolidays = getMandatoryHolidaysForMonth(monthNum);
-    setMandatoryHolidaysCount(mandatoryHolidays.length);
+    const mandatoryHolidaysCount = mandatoryHolidays.length;
     
-    let workingDaysCount = totalDays - weekendData.weekends - mandatoryHolidays.length;
-    
-    // Ensure minimum 0 working days
+    let workingDaysCount = totalDays - weekends - mandatoryHolidaysCount;
     if (workingDaysCount < 0) workingDaysCount = 0;
     
-    setOptionalHolidaysTaken(0); // Reset optional holidays for now
-    
-    console.log(`Month ${monthNum}/${yearNum}:`, {
-      totalDays,
-      weekends: weekendData.weekends,
-      mandatoryHolidays: mandatoryHolidays.length,
-      workingDays: workingDaysCount,
-    });
-    
     return {
-      workingDays: workingDaysCount,
-      weekends: weekendData.weekends,
-      mandatoryHolidays: mandatoryHolidays.length,
-      totalDays
+      totalDays,
+      weekends,
+      mandatoryHolidays: mandatoryHolidaysCount,
+      workingDays: workingDaysCount
     };
   }, [calculateWeekendsForMonth, getMandatoryHolidaysForMonth]);
 
-  // Calculate working days when month/year changes
+  // Update month details when month/year changes
   useEffect(() => {
     if (selectedMonth && selectedYear) {
       try {
         const yearNum = parseInt(selectedYear);
         const monthNum = parseInt(selectedMonth);
-        const monthDetails = calculateMonthDetails(yearNum, monthNum);
-        setWorkingDays(monthDetails.workingDays);
+        const details = calculateMonthDetails(yearNum, monthNum);
+        setMonthDetails(details);
+        setWorkingDays(details.workingDays);
       } catch (err) {
-        console.error('Failed to calculate working days:', err);
+        console.error('Failed to calculate month details:', err);
       }
     }
   }, [selectedMonth, selectedYear, calculateMonthDetails]);
 
-  // Filter employees based on search term
+  // Filter employees
   const filteredEmployees = employees.filter(employee => {
     if (!searchTerm.trim()) return true;
-    
     const term = searchTerm.toLowerCase();
     return (
       employee.fullName?.toLowerCase().includes(term) ||
@@ -265,30 +221,11 @@ const ManagerPayslip = () => {
     );
   });
 
+  // Handle employee selection
   const handleEmployeeSelect = (employee) => {
     setSelectedEmployee(employee);
     
     if (employee?._id) {
-      const loadEmployeePayslipsData = async () => {
-        try {
-          const payslips = await getEmployeePayslips(employee._id);
-          setGeneratedPayslips(payslips || []);
-          
-          // Find last generated payslip for the selected month/year
-          const currentPayslip = payslips?.find(p => 
-            p.month === parseInt(selectedMonth) && 
-            p.year === parseInt(selectedYear)
-          );
-          setLastGeneratedPayslip(currentPayslip || null);
-        } catch (err) {
-          console.error('Failed to load payslips:', err);
-          setGeneratedPayslips([]);
-          setLastGeneratedPayslip(null);
-        }
-      };
-      loadEmployeePayslipsData();
-      
-      // Pre-fill bank details
       setBankDetails({
         bankName: employee.bankName || '',
         accountNumber: employee.accountNumber || '',
@@ -299,26 +236,30 @@ const ManagerPayslip = () => {
     }
   };
 
-  // Calculate salary callback
-  const calculateSalary = useCallback(() => {
-    const basic = salaryStructure.basic || 0;
-    const hra = salaryStructure.hra || 0;
-    const conveyance = salaryStructure.conveyance || 0;
-    const travelAllowance = salaryStructure.travelAllowance || 0;
-    const medicalAllowance = salaryStructure.medicalAllowance || 0;
-    const specialAllowance = salaryStructure.specialAllowance || 0;
-    
-    const gross = basic + hra + conveyance + travelAllowance + medicalAllowance + specialAllowance;
-    const deductions = (salaryStructure.pf || 0) + (salaryStructure.esi || 0) + 
-                      (salaryStructure.professionalTax || 0) + (salaryStructure.tds || 0);
-    const netPay = gross - deductions;
+  // Calculate salary - moved inside useEffect to avoid dependency warning
+  useEffect(() => {
+    const calculateSalary = () => {
+      const basic = salaryStructure.basic || 0;
+      const hra = salaryStructure.hra || 0;
+      const conveyance = salaryStructure.conveyance || 0;
+      const travelAllowance = salaryStructure.travelAllowance || 0;
+      const medicalAllowance = salaryStructure.medicalAllowance || 0;
+      const specialAllowance = salaryStructure.specialAllowance || 0;
+      
+      const gross = basic + hra + conveyance + travelAllowance + medicalAllowance + specialAllowance;
+      const deductions = (salaryStructure.pf || 0) + (salaryStructure.esi || 0) + 
+                        (salaryStructure.professionalTax || 0) + (salaryStructure.tds || 0);
+      const netPay = gross - deductions;
 
-    setSalaryStructure(prev => ({
-      ...prev,
-      gross,
-      deductions,
-      netPay
-    }));
+      setSalaryStructure(prev => ({
+        ...prev,
+        gross,
+        deductions,
+        netPay
+      }));
+    };
+
+    calculateSalary();
   }, [
     salaryStructure.basic,
     salaryStructure.hra,
@@ -332,11 +273,6 @@ const ManagerPayslip = () => {
     salaryStructure.tds
   ]);
 
-  // Auto-calculate salary when dependencies change
-  useEffect(() => {
-    calculateSalary();
-  }, [calculateSalary]);
-
   // Check if Generate Payslip button should be enabled
   const isGenerateButtonEnabled = () => {
     return selectedEmployee && 
@@ -346,6 +282,7 @@ const ManagerPayslip = () => {
            salaryStructure.basic > 0;
   };
 
+  // Generate payslip
   const handleGeneratePayslip = async () => {
     if (!isGenerateButtonEnabled()) {
       toast.error('Please fill all required details including salary');
@@ -359,6 +296,7 @@ const ManagerPayslip = () => {
         employeeId: selectedEmployee._id,
         month: parseInt(selectedMonth),
         year: parseInt(selectedYear),
+        workingDays: workingDays,
         designation: selectedEmployee.designation || 'Employee',
         employeeType: selectedEmployee.employeeType || 'Permanent',
         templateId: selectedTemplate.id,
@@ -370,25 +308,17 @@ const ManagerPayslip = () => {
         },
         salary: {
           ...salaryStructure,
-          workingDays,
-          allowances: salaryStructure.travelAllowance + salaryStructure.medicalAllowance + salaryStructure.specialAllowance
+          allowances: salaryStructure.travelAllowance +
+                     salaryStructure.medicalAllowance +
+                     salaryStructure.specialAllowance
         }
       };
 
-      const response = await generatePayslip(payslipData);
+      console.log('Generating payslip with data:', payslipData);
+
+      await generatePayslip(payslipData);
       
-      toast.success('Payslip generated successfully! Sent to employee and admin.');
-      
-      // Refresh payslip list
-      const updatedPayslips = await getEmployeePayslips(selectedEmployee._id);
-      setGeneratedPayslips(updatedPayslips || []);
-      
-      // Set last generated payslip
-      const currentPayslip = updatedPayslips?.find(p => 
-        p.month === parseInt(selectedMonth) && 
-        p.year === parseInt(selectedYear)
-      );
-      setLastGeneratedPayslip(currentPayslip || response);
+      toast.success('Payslip generated successfully!');
       
       // Enable preview
       setShowPreview(true);
@@ -401,70 +331,483 @@ const ManagerPayslip = () => {
     }
   };
 
-  const handleDownloadPayslip = async (payslipId) => {
-    if (!payslipId) {
-      toast.error('No payslip available to download');
+  // ✅ ENHANCED PDF DOWNLOAD FUNCTION WITH COMPANY LOGO - SINGLE PAGE
+  const handleDownloadPDF = () => {
+    console.log('Download PDF clicked');
+    
+    if (!selectedEmployee) {
+      toast.error('Please select an employee first');
       return;
     }
 
-    setDownloading(true);
+    setGeneratingPDF(true);
     
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Authentication token not found');
-      }
+    // Generate HTML content with company logo
+    const htmlContent = generatePayslipHTML();
+    
+    // Open print dialog which allows saving as PDF
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    // Wait for content to load
+    setTimeout(() => {
+      printWindow.print();
+      setGeneratingPDF(false);
+      toast.success('PDF download started via print dialog');
+    }, 1000);
+  };
 
-      // Use the API endpoint for downloading PDF
-      const response = await fetch(`${API_URL}/payslips/${payslipId}/download`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/pdf',
-        },
-      });
+  // Generate HTML for PDF with company logo - SINGLE PAGE OPTIMIZED
+  const generatePayslipHTML = () => {
+    const monthName = months.find(m => m.value === selectedMonth)?.label || selectedMonth;
+    const logoUrl = companyLogo;
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Payslip - ${selectedEmployee?.fullName}</title>
+          <style>
+            @page { 
+              size: A4;
+              margin: 10mm 15mm;
+              size: portrait;
+            }
+            body { 
+              font-family: Arial, sans-serif; 
+              margin: 0; 
+              padding: 0;
+              color: #333;
+              background-color: #fff;
+              font-size: 11px;
+              line-height: 1.4;
+            }
+            .container { 
+              width: 100%;
+              max-height: 277mm;
+              padding: 15px;
+              background-color: #fff;
+              box-sizing: border-box;
+            }
+            .company-header {
+              text-align: center;
+              margin-bottom: 15px;
+              padding-bottom: 10px;
+              border-bottom: 1.5px solid ${selectedTemplate.colors.primary};
+              position: relative;
+              page-break-inside: avoid;
+            }
+            .company-logo-section {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 15px;
+              margin-bottom: 8px;
+            }
+            .company-logo {
+              height: 50px;
+              width: auto;
+              max-width: 120px;
+              object-fit: contain;
+            }
+            .company-name { 
+              font-size: 18px; 
+              font-weight: bold; 
+              color: ${selectedTemplate.colors.primary};
+              margin: 0;
+            }
+            .payslip-title { 
+              font-size: 16px; 
+              font-weight: bold; 
+              margin: 5px 0 3px 0;
+              color: #374151;
+            }
+            .period { 
+              font-size: 12px; 
+              color: #666; 
+              margin-bottom: 5px;
+              font-weight: 500;
+            }
+            .template-badge {
+              position: absolute;
+              top: 0;
+              right: 0;
+              background-color: ${selectedTemplate.colors.accent};
+              color: white;
+              padding: 3px 8px;
+              border-radius: 3px;
+              font-size: 10px;
+              font-weight: 500;
+            }
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin-bottom: 10px;
+              font-size: 10px;
+              page-break-inside: avoid;
+            }
+            th, td { 
+              border: 0.8px solid #cbd5e1; 
+              padding: 8px; 
+              text-align: left;
+              vertical-align: top;
+            }
+            th { 
+              background-color: #f1f5f9; 
+              font-weight: 600;
+              color: #374151;
+              font-size: 10px;
+            }
+            .amount { 
+              text-align: right; 
+              font-weight: 500;
+            }
+            .total-row { 
+              border-top: 1.5px solid #cbd5e1; 
+              font-weight: bold;
+              background-color: #f8fafc;
+            }
+            .net-pay-section {
+              background: linear-gradient(135deg, ${selectedTemplate.colors.primary}, ${selectedTemplate.colors.secondary});
+              color: white;
+              padding: 15px;
+              border-radius: 6px;
+              text-align: center;
+              margin: 15px 0;
+              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+              page-break-inside: avoid;
+            }
+            .net-pay-label { 
+              font-size: 12px; 
+              margin-bottom: 5px;
+              opacity: 0.9;
+            }
+            .net-pay-amount { 
+              font-size: 20px; 
+              font-weight: bold; 
+              margin-bottom: 5px;
+              letter-spacing: 0.5px;
+            }
+            .net-pay-words {
+              font-size: 10px;
+              opacity: 0.9;
+            }
+            .footer { 
+              margin-top: 15px; 
+              padding-top: 10px; 
+              border-top: 0.8px solid #e2e8f0; 
+              text-align: center; 
+              font-size: 9px; 
+              color: #64748b;
+              page-break-inside: avoid;
+            }
+            .salary-breakdown {
+              display: flex;
+              gap: 10px;
+              margin-bottom: 15px;
+              page-break-inside: avoid;
+            }
+            .earnings-section, .deductions-section {
+              flex: 1;
+              min-width: 0;
+            }
+            .section-title {
+              color: ${selectedTemplate.colors.primary};
+              margin-bottom: 8px;
+              padding-bottom: 4px;
+              border-bottom: 1.5px solid ${selectedTemplate.colors.accent};
+              font-size: 12px;
+              font-weight: 600;
+            }
+            .employee-info-table {
+              margin-bottom: 15px;
+              background-color: #f8fafc;
+              border-radius: 5px;
+              overflow: hidden;
+            }
+            .employee-info-table th {
+              background-color: ${selectedTemplate.colors.secondary}20;
+              color: ${selectedTemplate.colors.primary};
+            }
+            .bank-info {
+              margin-bottom: 15px;
+              background-color: #f8fafc;
+              border-radius: 5px;
+              overflow: hidden;
+            }
+            .bank-info th {
+              background-color: ${selectedTemplate.colors.secondary}20;
+              color: ${selectedTemplate.colors.primary};
+            }
+            .company-footer {
+              margin-top: 3px;
+            }
+            .company-address {
+              font-size: 9px;
+              color: #6b7280;
+              margin: 3px 0;
+            }
+            .signature-section {
+              margin-top: 15px;
+              display: flex;
+              justify-content: space-between;
+              padding: 10px 20px;
+              page-break-inside: avoid;
+            }
+            .signature-box {
+              text-align: center;
+              width: 45%;
+            }
+            .signature-line {
+              border-top: 0.8px solid #374151;
+              width: 80%;
+              margin: 15px auto 5px;
+            }
+            .signature-label {
+              font-size: 9px;
+              color: #6b7280;
+            }
+            .generated-date {
+              text-align: right;
+              font-size: 9px;
+              color: #9ca3af;
+              margin-top: 5px;
+            }
+            /* Compact layout to fit on one page */
+            .compact-table td, .compact-table th {
+              padding: 6px 8px;
+            }
+            .compact-section {
+              margin-bottom: 12px;
+            }
+            .no-break {
+              page-break-inside: avoid;
+              break-inside: avoid;
+            }
+            @media print {
+              body { 
+                padding: 0;
+                margin: 0;
+                font-size: 10px;
+              }
+              .container {
+                box-shadow: none;
+                border: none;
+                padding: 10px 15px;
+                max-height: none;
+              }
+              .no-print {
+                display: none;
+              }
+              /* Force single page */
+              .container > * {
+                page-break-inside: avoid;
+              }
+            }
+            /* Ensure everything fits on one page */
+            * {
+              box-sizing: border-box;
+            }
+            .info-row {
+              display: flex;
+              margin-bottom: 2px;
+            }
+            .info-label {
+              font-weight: 600;
+              min-width: 120px;
+              color: ${selectedTemplate.colors.primary};
+            }
+            .info-value {
+              flex: 1;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <!-- Company Header with Logo -->
+            <div class="company-header no-break">
+              <div class="company-logo-section">
+                <img src="${logoUrl}" alt="Company Logo" class="company-logo" />
+              </div>
+              <div class="company-name">NOW IT SERVICES PVT LTD</div>
+              <div class="payslip-title">SALARY SLIP</div>
+              <div class="period">For the month of ${monthName} ${selectedYear}</div>
+              <div class="template-badge">${selectedTemplate.name}</div>
+            </div>
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Failed to download PDF' }));
-        throw new Error(errorData.message || 'Failed to download payslip');
-      }
+            <!-- Employee Information - Compact -->
+            <div class="employee-info-table compact-section no-break">
+              <table class="compact-table">
+                <tr>
+                  <th width="20%">Employee ID</th>
+                  <td width="30%">${selectedEmployee?.employeeId || 'EMP001'}</td>
+                  <th width="20%">Employee Name</th>
+                  <td width="30%">${selectedEmployee?.fullName || 'Employee'}</td>
+                </tr>
+                <tr>
+                  <th>Email</th>
+                  <td>${selectedEmployee?.email || 'N/A'}</td>
+                  <th>Designation</th>
+                  <td>${selectedEmployee?.designation || 'Employee'}</td>
+                </tr>
+                <tr>
+                  <th>Working Days</th>
+                  <td>${workingDays} days</td>
+                  <th>Employee Type</th>
+                  <td>${getEmployeeType(selectedEmployee?.employeeId)}</td>
+                </tr>
+              </table>
+            </div>
 
-      // Get the blob data
-      const blob = await response.blob();
-      
-      // Check if blob is valid
-      if (!blob || blob.size === 0) {
-        throw new Error('Empty PDF file received');
-      }
-      
-      // Create a blob URL
-      const blobUrl = window.URL.createObjectURL(blob);
-      
-      // Create a temporary anchor element
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = `Payslip_${selectedEmployee?.fullName?.replace(/\s+/g, '_')}_${selectedMonth}_${selectedYear}.pdf`;
-      
-      // Append to body, click, and remove
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      // Clean up the blob URL
-      setTimeout(() => {
-        window.URL.revokeObjectURL(blobUrl);
-      }, 100);
-      
-      toast.success('Payslip downloaded successfully!');
-      
-    } catch (err) {
-      console.error('Failed to download payslip:', err);
-      toast.error(err.message || 'Failed to download payslip. Please try again.');
-    } finally {
-      setDownloading(false);
+            <!-- Bank Information - Compact -->
+            <div class="bank-info compact-section no-break">
+              <table class="compact-table">
+                <tr>
+                  <th width="20%">Bank Name</th>
+                  <td width="30%">${bankDetails.bankName || 'State Bank of India'}</td>
+                  <th width="20%">Account Number</th>
+                  <td width="30%">****${bankDetails.accountNumber?.slice(-4) || 'XXXX'}</td>
+                </tr>
+                <tr>
+                  <th>IFSC Code</th>
+                  <td>${bankDetails.ifsc || 'SBIN0005943'}</td>
+                  <th>Branch</th>
+                  <td>${bankDetails.branch || 'SBI Main Branch, Bengaluru'}</td>
+                </tr>
+              </table>
+            </div>
+
+            <!-- Salary Breakdown -->
+            <div class="salary-breakdown no-break">
+              <div class="earnings-section">
+                <div class="section-title">Earnings</div>
+                <table class="compact-table">
+                  <tbody>
+                    <tr><td>Basic Pay</td><td class="amount">₹${salaryStructure.basic?.toLocaleString() || '0'}</td></tr>
+                    <tr><td>House Rent Allowance (HRA)</td><td class="amount">₹${salaryStructure.hra?.toLocaleString() || '0'}</td></tr>
+                    <tr><td>Conveyance Allowance</td><td class="amount">₹${salaryStructure.conveyance?.toLocaleString() || '0'}</td></tr>
+                    <tr><td>Travel Allowance</td><td class="amount">₹${salaryStructure.travelAllowance?.toLocaleString() || '0'}</td></tr>
+                    <tr><td>Medical Allowance</td><td class="amount">₹${salaryStructure.medicalAllowance?.toLocaleString() || '0'}</td></tr>
+                    <tr><td>Special Allowance</td><td class="amount">₹${salaryStructure.specialAllowance?.toLocaleString() || '0'}</td></tr>
+                    <tr class="total-row"><td><strong>Total Earnings</strong></td><td class="amount"><strong>₹${salaryStructure.gross?.toLocaleString() || '0'}</strong></td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="deductions-section">
+                <div class="section-title">Deductions</div>
+                <table class="compact-table">
+                  <tbody>
+                    <tr><td>Provident Fund (PF)</td><td class="amount">₹${salaryStructure.pf?.toLocaleString() || '0'}</td></tr>
+                    <tr><td>ESI Contribution</td><td class="amount">₹${salaryStructure.esi?.toLocaleString() || '0'}</td></tr>
+                    <tr><td>Professional Tax</td><td class="amount">₹${salaryStructure.professionalTax?.toLocaleString() || '0'}</td></tr>
+                    <tr><td>Income Tax (TDS)</td><td class="amount">₹${salaryStructure.tds?.toLocaleString() || '0'}</td></tr>
+                    <tr class="total-row"><td><strong>Total Deductions</strong></td><td class="amount"><strong>₹${salaryStructure.deductions?.toLocaleString() || '0'}</strong></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Net Pay Section -->
+            <div class="net-pay-section no-break">
+              <div class="net-pay-label">NET PAYABLE AMOUNT</div>
+              <div class="net-pay-amount">₹${salaryStructure.netPay?.toLocaleString() || '0'}</div>
+              <div class="net-pay-words">${formatCurrency(salaryStructure.netPay)} only</div>
+            </div>
+
+            <!-- Signatures - Compact -->
+            <div class="signature-section no-break">
+              <div class="signature-box">
+                <div class="signature-line"></div>
+                <div class="signature-label">Employee Signature</div>
+              </div>
+              <div class="signature-box">
+                <div class="signature-line"></div>
+                <div class="signature-label">Authorized Signatory</div>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="footer no-break">
+              <div class="company-footer">
+                <p><strong>NOW IT SERVICES PVT LTD</strong></p>
+                <p class="company-address">6-284-1, Uma Shankar Nagar, Revenue Ward -17, YSR Tadigadapa, 520007</p>
+                <p class="company-address">Phone: 7893536373 | Email: hr@nowitservices.com</p>
+              </div>
+              <div class="footer-notes">
+                <p><em>This is a computer generated payslip and does not require signature.</em></p>
+                <p class="generated-date">Generated on ${new Date().toLocaleDateString('en-IN', { 
+                  year: 'numeric', 
+                  month: 'short', 
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}</p>
+                <p>© ${new Date().getFullYear()} NOW IT SERVICES PVT LTD. All rights reserved.</p>
+              </div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+  };
+
+  // ✅ SIMPLE PRINT FUNCTION
+  const handlePrint = () => {
+    console.log('Print clicked');
+    
+    if (!selectedEmployee) {
+      toast.error('Please select an employee first');
+      return;
+    }
+
+    const htmlContent = generatePayslipHTML();
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+      printWindow.print();
+      toast.success('Print dialog opened');
+    }, 500);
+  };
+
+  // ✅ SIMPLE SHARE FUNCTION
+  const handleShare = () => {
+    console.log('Share clicked');
+    
+    if (!selectedEmployee) {
+      toast.error('Please select an employee first');
+      return;
+    }
+
+    const monthName = months.find(m => m.value === selectedMonth)?.label || selectedMonth;
+    const shareText = `Payslip for ${selectedEmployee.fullName}\nMonth: ${monthName} ${selectedYear}\nNet Pay: ₹${salaryStructure.netPay?.toLocaleString() || '0'}\nGenerated on ${new Date().toLocaleDateString()}`;
+    
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(shareText)
+        .then(() => toast.success('Payslip details copied to clipboard!'))
+        .catch(() => toast.info('Could not copy to clipboard'));
+    } else {
+      toast.info('Share feature not available on this browser');
     }
   };
 
+  // ✅ SIMPLE SEND FUNCTION
+  const handleSendToEmployee = () => {
+    console.log('Send clicked');
+    
+    if (!selectedEmployee) {
+      toast.error('Please select an employee first');
+      return;
+    }
+
+    toast.success(`Payslip ready to send to ${selectedEmployee.email}`);
+    // In a real app, you would call an API here to send email
+  };
+
+  // Clear form
   const handleClearForm = () => {
     setSelectedEmployee(null);
     setBankDetails({
@@ -490,74 +833,11 @@ const ManagerPayslip = () => {
       netPay: 0
     });
     setShowPreview(false);
-    setLastGeneratedPayslip(null);
     setIsTemplateDropdownOpen(false);
     setSearchTerm('');
   };
 
-  const handleSendToEmployee = () => {
-    if (!selectedEmployee) {
-      toast.error('Please select an employee first');
-      return;
-    }
-    
-    if (!lastGeneratedPayslip) {
-      toast.info('Please generate payslip first before sending');
-      return;
-    }
-    
-    toast.success(`Payslip sent to ${selectedEmployee.email}`);
-    // Here you would typically call an API to send email
-  };
-
-  const handleViewHistory = () => {
-    if (!selectedEmployee) {
-      toast.error('Please select an employee first');
-      return;
-    }
-    
-    const historyModal = document.createElement('div');
-    historyModal.className = 'bank-history-modal';
-    historyModal.innerHTML = `
-      <div class="history-modal-overlay">
-        <div class="history-modal-content">
-          <div class="history-modal-header">
-            <h3>Bank Details History</h3>
-            <button class="close-history-modal">&times;</button>
-          </div>
-          <div class="history-modal-body">
-            ${bankDetails.history.length > 0 ? bankDetails.history.map((record) => `
-              <div class="history-record">
-                <div class="history-date">${record.date} ${record.time}</div>
-                <div class="history-details">
-                  <div><strong>Bank:</strong> ${record.bankName || 'N/A'}</div>
-                  <div><strong>Account:</strong> ****${record.accountNumber?.slice(-4) || '****'}</div>
-                  <div><strong>IFSC:</strong> ${record.ifsc || 'N/A'}</div>
-                  <div><strong>Branch:</strong> ${record.branch || 'N/A'}</div>
-                  <div><strong>Changed by:</strong> ${record.changedBy || 'Manager'}</div>
-                </div>
-              </div>
-            `).join('') : '<p class="no-history">No bank history available</p>'}
-          </div>
-        </div>
-      </div>
-    `;
-    
-    document.body.appendChild(historyModal);
-    
-    const closeBtn = historyModal.querySelector('.close-history-modal');
-    const overlay = historyModal.querySelector('.history-modal-overlay');
-    
-    const closeModal = () => {
-      document.body.removeChild(historyModal);
-    };
-    
-    closeBtn.onclick = closeModal;
-    overlay.onclick = (e) => {
-      if (e.target === overlay) closeModal();
-    };
-  };
-
+  // Months array
   const months = [
     { value: '01', label: 'January' },
     { value: '02', label: 'February' },
@@ -573,16 +853,19 @@ const ManagerPayslip = () => {
     { value: '12', label: 'December' }
   ];
 
+  // Years array
   const years = Array.from({ length: 5 }, (_, i) => {
     const year = new Date().getFullYear() - 2 + i;
     return { value: year.toString(), label: year.toString() };
   });
 
+  // Get employee type
   const getEmployeeType = (employeeId) => {
     if (!employeeId) return 'Permanent';
     return employeeId.startsWith('TEMP') ? 'Temporary' : 'Permanent';
   };
 
+  // Format currency
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -592,249 +875,480 @@ const ManagerPayslip = () => {
     }).format(amount || 0);
   };
 
-  // Render preview in new section
+  // Month calculation display
+  const getMonthCalculationDisplay = () => {
+    const nonWorkingDays = monthDetails.weekends + monthDetails.mandatoryHolidays;
+    return `${monthDetails.totalDays} total days - ${nonWorkingDays} non-working days = ${monthDetails.workingDays} working days`;
+  };
+
+  // ✅ PREVIEW ACTION BUTTONS COMPONENT
+  const PreviewActionButtons = () => (
+    <div className="preview-action-buttons">
+      <button 
+        className="btn-action-download"
+        onClick={handleDownloadPDF}
+        disabled={generatingPDF || !selectedEmployee}
+        title="Download PDF"
+      >
+        {generatingPDF ? (
+          <>
+            <Loader2 size={18} className="spinner" />
+            <span>Preparing PDF...</span>
+          </>
+        ) : (
+          <>
+            <Download size={18} />
+            <span>Download PDF</span>
+          </>
+        )}
+      </button>
+      
+      <button 
+        className="btn-action-print"
+        onClick={handlePrint}
+        disabled={!selectedEmployee}
+        title="Print"
+      >
+        <Printer size={18} />
+        <span>Print</span>
+      </button>
+      
+      <button 
+        className="btn-action-share"
+        onClick={handleShare}
+        disabled={!selectedEmployee}
+        title="Share"
+      >
+        <Share2 size={18} />
+        <span>Share</span>
+      </button>
+      
+      <button 
+        className="btn-action-send"
+        onClick={handleSendToEmployee}
+        disabled={!selectedEmployee}
+        title="Send to Employee"
+      >
+        <Send size={18} />
+        <span>Send</span>
+      </button>
+    </div>
+  );
+
+  // ✅ RENDER PREVIEW - UPDATED TO MATCH PDF
   const renderPreview = () => {
     if (!showPreview || !selectedEmployee) return null;
 
     return (
       <div className="payslip-full-preview">
         <div className="preview-header-section">
-          <h3>Payslip Preview - {selectedTemplate.name}</h3>
-          <div className="preview-actions">
-            {lastGeneratedPayslip && (
-              <button 
-                className="btn-download-preview"
-                onClick={() => handleDownloadPayslip(lastGeneratedPayslip._id)}
-                disabled={downloading}
-              >
-                {downloading ? (
-                  <>
-                    <div className="spinner small"></div>
-                    Downloading...
-                  </>
-                ) : (
-                  <>
-                    <Download size={18} />
-                    Download PDF
-                  </>
-                )}
-              </button>
-            )}
+          <div className="preview-header-left">
+            <h3>
+              <FileText size={24} />
+              Payslip Preview - {selectedTemplate.name}
+            </h3>
+            <div className="preview-subtitle">
+              For {selectedEmployee.fullName} • {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
+            </div>
+          </div>
+          
+          <div className="preview-header-right">
+            <PreviewActionButtons />
             <button 
-              className="btn-print-preview"
-              onClick={() => window.print()}
+              className="btn-close-preview" 
+              onClick={() => setShowPreview(false)}
+              title="Close Preview"
             >
-              <Printer size={18} />
-              Print
-            </button>
-            <button className="close-preview-btn" onClick={() => setShowPreview(false)}>
               <X size={20} />
             </button>
           </div>
         </div>
         
-        <div className={`payslip-document ${selectedTemplate.className}`}>
-          <style>
-            {`
-              .payslip-document.template-blue .company-name-large,
-              .payslip-document.template-blue .payslip-title-large,
-              .payslip-document.template-blue .net-pay-label {
-                color: ${selectedTemplate.colors.primary};
-              }
-              
-              .payslip-document.template-green .company-name-large,
-              .payslip-document.template-green .payslip-title-large,
-              .payslip-document.template-green .net-pay-label {
-                color: ${selectedTemplate.colors.primary};
-              }
-              
-              .payslip-document.template-gray .company-name-large,
-              .payslip-document.template-gray .payslip-title-large,
-              .payslip-document.template-gray .net-pay-label {
-                color: ${selectedTemplate.colors.primary};
-              }
-              
-              .payslip-document.template-blue .net-pay-card {
-                background: linear-gradient(135deg, ${selectedTemplate.colors.primary}, ${selectedTemplate.colors.secondary});
-              }
-              
-              .payslip-document.template-green .net-pay-card {
-                background: linear-gradient(135deg, ${selectedTemplate.colors.primary}, ${selectedTemplate.colors.secondary});
-              }
-              
-              .payslip-document.template-gray .net-pay-card {
-                background: linear-gradient(135deg, ${selectedTemplate.colors.primary}, ${selectedTemplate.colors.secondary});
-              }
-            `}
-          </style>
-          
-          <div className="company-header-preview">
-            <div className="company-logo-container">
-              <img src={companyLogo} alt="Company Logo" className="company-logo-img" />
-            </div>
-            <div className="company-name-large">NOW IT SERVICES PVT LTD</div>
-            <div className="payslip-title-large">SALARY SLIP</div>
-            <div className="payslip-period-large">
-              For the month of {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
-            </div>
-            <div className="template-badge">
-              <Layout size={14} />
-              {selectedTemplate.name}
-            </div>
-          </div>
-
-          <div className="employee-info-preview">
-            <table className="info-table">
-              <tbody>
-                <tr>
-                  <td><strong>Employee ID:</strong></td>
-                  <td>{selectedEmployee.employeeId || 'EMP001'}</td>
-                  <td><strong>Name:</strong></td>
-                  <td>{selectedEmployee.fullName}</td>
-                </tr>
-                <tr>
-                  <td><strong>Email:</strong></td>
-                  <td>{selectedEmployee.email}</td>
-                  <td><strong>Designation:</strong></td>
-                  <td>{selectedEmployee.designation || 'Software Engineer'}</td>
-                </tr>
-                <tr>
-                  <td><strong>Employee Type:</strong></td>
-                  <td>{getEmployeeType(selectedEmployee.employeeId)}</td>
-                  <td><strong>Working Days:</strong></td>
-                  <td>{workingDays} days</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div className="bank-info-preview">
-            <h4>Bank Details</h4>
-            <table className="info-table">
-              <tbody>
-                <tr>
-                  <td><strong>Bank Name:</strong></td>
-                  <td>{bankDetails.bankName || 'State Bank of India'}</td>
-                  <td><strong>Account Number:</strong></td>
-                  <td>****{bankDetails.accountNumber?.slice(-4) || '1234'}</td>
-                </tr>
-                <tr>
-                  <td><strong>IFSC Code:</strong></td>
-                  <td>{bankDetails.ifsc || 'SBIN0005943'}</td>
-                  <td><strong>Branch:</strong></td>
-                  <td>{bankDetails.branch || 'SBI Main Branch, Bengaluru'}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div className="salary-breakdown-preview">
-            <div className="earnings-section">
-              <h4>Earnings</h4>
-              <table className="salary-table">
-                <tbody>
-                  <tr>
-                    <td>Basic Pay</td>
-                    <td className="amount">{formatCurrency(salaryStructure.basic)}</td>
-                  </tr>
-                  <tr>
-                    <td>House Rent Allowance (HRA)</td>
-                    <td className="amount">{formatCurrency(salaryStructure.hra)}</td>
-                  </tr>
-                  <tr>
-                    <td>Conveyance Allowance</td>
-                    <td className="amount">{formatCurrency(salaryStructure.conveyance)}</td>
-                  </tr>
-                  <tr>
-                    <td>Travel Allowance</td>
-                    <td className="amount">{formatCurrency(salaryStructure.travelAllowance)}</td>
-                  </tr>
-                  <tr>
-                    <td>Medical Allowance</td>
-                    <td className="amount">{formatCurrency(salaryStructure.medicalAllowance)}</td>
-                  </tr>
-                  <tr>
-                    <td>Special Allowance</td>
-                    <td className="amount">{formatCurrency(salaryStructure.specialAllowance)}</td>
-                  </tr>
-                  <tr className="total-row">
-                    <td><strong>Total Earnings</strong></td>
-                    <td className="amount total">
-                      <strong>{formatCurrency(salaryStructure.gross)}</strong>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div className="deductions-section">
-              <h4>Deductions</h4>
-              <table className="salary-table">
-                <tbody>
-                  <tr>
-                    <td>Provident Fund (PF)</td>
-                    <td className="amount">{formatCurrency(salaryStructure.pf)}</td>
-                  </tr>
-                  <tr>
-                    <td>ESI Contribution</td>
-                    <td className="amount">{formatCurrency(salaryStructure.esi)}</td>
-                  </tr>
-                  <tr>
-                    <td>Professional Tax</td>
-                    <td className="amount">{formatCurrency(salaryStructure.professionalTax)}</td>
-                  </tr>
-                  <tr>
-                    <td>Income Tax (TDS)</td>
-                    <td className="amount">{formatCurrency(salaryStructure.tds)}</td>
-                  </tr>
-                  <tr className="total-row">
-                    <td><strong>Total Deductions</strong></td>
-                    <td className="amount total">
-                      <strong>{formatCurrency(salaryStructure.deductions)}</strong>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="net-pay-section-preview">
-            <div className="net-pay-card">
-              <div className="net-pay-header">
-                <span className="net-pay-label">NET PAYABLE</span>
-                <span className="net-pay-amount">{formatCurrency(salaryStructure.netPay)}</span>
+        <div className="preview-content-wrapper">
+          <div 
+            ref={previewRef} 
+            className={`payslip-document ${selectedTemplate.className}`}
+            id="payslip-preview-content"
+            style={{
+              // Single page A4 size preview
+              width: '210mm',
+              minHeight: '297mm',
+              margin: '0 auto',
+              padding: '15px',
+              border: '1px solid #e2e8f0',
+              borderRadius: '5px',
+              backgroundColor: '#fff',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+              fontSize: '11px',
+              lineHeight: '1.4'
+            }}
+          >
+            {/* Company Header - Updated to match PDF */}
+            <div style={{
+              textAlign: 'center',
+              marginBottom: '15px',
+              paddingBottom: '10px',
+              borderBottom: `1.5px solid ${selectedTemplate.colors.primary}`,
+              position: 'relative'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '15px',
+                marginBottom: '8px'
+              }}>
+                <img 
+                  src={companyLogo} 
+                  alt="Company Logo" 
+                  style={{
+                    height: '50px',
+                    width: 'auto',
+                    maxWidth: '120px',
+                    objectFit: 'contain'
+                  }}
+                />
               </div>
-              <div className="net-pay-footer">
+              <div style={{
+                fontSize: '18px',
+                fontWeight: 'bold',
+                color: selectedTemplate.colors.primary,
+                margin: '0'
+              }}>NOW IT SERVICES PVT LTD</div>
+              <div style={{
+                fontSize: '16px',
+                fontWeight: 'bold',
+                margin: '5px 0 3px 0',
+                color: '#374151'
+              }}>SALARY SLIP</div>
+              <div style={{
+                fontSize: '12px',
+                color: '#666',
+                marginBottom: '5px',
+                fontWeight: '500'
+              }}>
+                For the month of {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
+              </div>
+              <div style={{
+                position: 'absolute',
+                top: '0',
+                right: '0',
+                backgroundColor: selectedTemplate.colors.accent,
+                color: 'white',
+                padding: '3px 8px',
+                borderRadius: '3px',
+                fontSize: '10px',
+                fontWeight: '500'
+              }}>
+                <Layout size={12} />
+                {selectedTemplate.name}
+              </div>
+            </div>
+
+            {/* Employee Info - Compact */}
+            <div style={{
+              marginBottom: '15px',
+              backgroundColor: '#f8fafc',
+              borderRadius: '5px',
+              overflow: 'hidden'
+            }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+                <tbody>
+                  <tr>
+                    <th style={{
+                      width: '20%',
+                      padding: '8px',
+                      backgroundColor: `${selectedTemplate.colors.secondary}20`,
+                      color: selectedTemplate.colors.primary,
+                      border: '0.8px solid #cbd5e1',
+                      fontWeight: '600',
+                      fontSize: '10px'
+                    }}>Employee ID</th>
+                    <td style={{
+                      width: '30%',
+                      padding: '8px',
+                      border: '0.8px solid #cbd5e1'
+                    }}>{selectedEmployee.employeeId || 'EMP001'}</td>
+                    <th style={{
+                      width: '20%',
+                      padding: '8px',
+                      backgroundColor: `${selectedTemplate.colors.secondary}20`,
+                      color: selectedTemplate.colors.primary,
+                      border: '0.8px solid #cbd5e1',
+                      fontWeight: '600',
+                      fontSize: '10px'
+                    }}>Employee Name</th>
+                    <td style={{
+                      width: '30%',
+                      padding: '8px',
+                      border: '0.8px solid #cbd5e1'
+                    }}>{selectedEmployee.fullName}</td>
+                  </tr>
+                  <tr>
+                    <th style={{
+                      padding: '8px',
+                      backgroundColor: `${selectedTemplate.colors.secondary}20`,
+                      color: selectedTemplate.colors.primary,
+                      border: '0.8px solid #cbd5e1',
+                      fontWeight: '600',
+                      fontSize: '10px'
+                    }}>Email</th>
+                    <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>{selectedEmployee.email}</td>
+                    <th style={{
+                      padding: '8px',
+                      backgroundColor: `${selectedTemplate.colors.secondary}20`,
+                      color: selectedTemplate.colors.primary,
+                      border: '0.8px solid #cbd5e1',
+                      fontWeight: '600',
+                      fontSize: '10px'
+                    }}>Designation</th>
+                    <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>{selectedEmployee.designation || 'Software Engineer'}</td>
+                  </tr>
+                  <tr>
+                    <th style={{
+                      padding: '8px',
+                      backgroundColor: `${selectedTemplate.colors.secondary}20`,
+                      color: selectedTemplate.colors.primary,
+                      border: '0.8px solid #cbd5e1',
+                      fontWeight: '600',
+                      fontSize: '10px'
+                    }}>Working Days</th>
+                    <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>{workingDays} days</td>
+                    <th style={{
+                      padding: '8px',
+                      backgroundColor: `${selectedTemplate.colors.secondary}20`,
+                      color: selectedTemplate.colors.primary,
+                      border: '0.8px solid #cbd5e1',
+                      fontWeight: '600',
+                      fontSize: '10px'
+                    }}>Employee Type</th>
+                    <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>{getEmployeeType(selectedEmployee.employeeId)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Bank Details - Compact */}
+            <div style={{
+              marginBottom: '15px',
+              backgroundColor: '#f8fafc',
+              borderRadius: '5px',
+              overflow: 'hidden'
+            }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+                <tbody>
+                  <tr>
+                    <th style={{
+                      width: '20%',
+                      padding: '8px',
+                      backgroundColor: `${selectedTemplate.colors.secondary}20`,
+                      color: selectedTemplate.colors.primary,
+                      border: '0.8px solid #cbd5e1',
+                      fontWeight: '600',
+                      fontSize: '10px'
+                    }}>Bank Name</th>
+                    <td style={{
+                      width: '30%',
+                      padding: '8px',
+                      border: '0.8px solid #cbd5e1'
+                    }}>{bankDetails.bankName || 'State Bank of India'}</td>
+                    <th style={{
+                      width: '20%',
+                      padding: '8px',
+                      backgroundColor: `${selectedTemplate.colors.secondary}20`,
+                      color: selectedTemplate.colors.primary,
+                      border: '0.8px solid #cbd5e1',
+                      fontWeight: '600',
+                      fontSize: '10px'
+                    }}>Account Number</th>
+                    <td style={{
+                      width: '30%',
+                      padding: '8px',
+                      border: '0.8px solid #cbd5e1'
+                    }}>****{bankDetails.accountNumber?.slice(-4) || '1234'}</td>
+                  </tr>
+                  <tr>
+                    <th style={{
+                      padding: '8px',
+                      backgroundColor: `${selectedTemplate.colors.secondary}20`,
+                      color: selectedTemplate.colors.primary,
+                      border: '0.8px solid #cbd5e1',
+                      fontWeight: '600',
+                      fontSize: '10px'
+                    }}>IFSC Code</th>
+                    <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>{bankDetails.ifsc || 'SBIN0005943'}</td>
+                    <th style={{
+                      padding: '8px',
+                      backgroundColor: `${selectedTemplate.colors.secondary}20`,
+                      color: selectedTemplate.colors.primary,
+                      border: '0.8px solid #cbd5e1',
+                      fontWeight: '600',
+                      fontSize: '10px'
+                    }}>Branch</th>
+                    <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>{bankDetails.branch || 'SBI Main Branch, Bengaluru'}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Salary Breakdown - Updated to match PDF */}
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h4 style={{
+                  color: selectedTemplate.colors.primary,
+                  marginBottom: '8px',
+                  paddingBottom: '4px',
+                  borderBottom: `1.5px solid ${selectedTemplate.colors.accent}`,
+                  fontSize: '12px',
+                  fontWeight: '600'
+                }}>Earnings</h4>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>Basic Pay</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.basic)}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>House Rent Allowance (HRA)</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.hra)}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>Conveyance Allowance</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.conveyance)}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>Travel Allowance</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.travelAllowance)}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>Medical Allowance</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.medicalAllowance)}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>Special Allowance</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.specialAllowance)}</td>
+                    </tr>
+                    <tr style={{ borderTop: '1.5px solid #cbd5e1', fontWeight: 'bold', backgroundColor: '#f8fafc' }}>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}><strong>Total Earnings</strong></td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right' }}>
+                        <strong>{formatCurrency(salaryStructure.gross)}</strong>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h4 style={{
+                  color: selectedTemplate.colors.primary,
+                  marginBottom: '8px',
+                  paddingBottom: '4px',
+                  borderBottom: `1.5px solid ${selectedTemplate.colors.accent}`,
+                  fontSize: '12px',
+                  fontWeight: '600'
+                }}>Deductions</h4>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>Provident Fund (PF)</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.pf)}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>ESI Contribution</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.esi)}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>Professional Tax</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.professionalTax)}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>Income Tax (TDS)</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.tds)}</td>
+                    </tr>
+                    <tr style={{ borderTop: '1.5px solid #cbd5e1', fontWeight: 'bold', backgroundColor: '#f8fafc' }}>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}><strong>Total Deductions</strong></td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right' }}>
+                        <strong>{formatCurrency(salaryStructure.deductions)}</strong>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Net Pay - Updated to match PDF */}
+            <div style={{
+              background: `linear-gradient(135deg, ${selectedTemplate.colors.primary}, ${selectedTemplate.colors.secondary})`,
+              color: 'white',
+              padding: '15px',
+              borderRadius: '6px',
+              textAlign: 'center',
+              margin: '15px 0',
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+            }}>
+              <div style={{ marginBottom: '5px' }}>
+                <span style={{ fontSize: '12px', opacity: '0.9', display: 'block', marginBottom: '5px' }}>NET PAYABLE AMOUNT</span>
+                <span style={{ fontSize: '20px', fontWeight: 'bold', letterSpacing: '0.5px', display: 'block', marginBottom: '5px' }}>{formatCurrency(salaryStructure.netPay)}</span>
+              </div>
+              <div style={{ fontSize: '10px', opacity: '0.9' }}>
                 {formatCurrency(salaryStructure.netPay)} only
               </div>
             </div>
-          </div>
 
-          <div className="payslip-footer-preview">
-            <div className="company-footer">
-              <p><strong>NOW IT SERVICES PVT LTD</strong></p>
-              <p>6-284-1, Uma Shankar Nagar, Revenue Ward -17, YSR Tadigadapa, 520007</p>
-              <p>Phone: 7893536373 | Email: hr@nowitservices.com</p>
+            {/* Signatures - Added to match PDF */}
+            <div style={{
+              marginTop: '15px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              padding: '10px 20px'
+            }}>
+              <div style={{ textAlign: 'center', width: '45%' }}>
+                <div style={{ borderTop: '0.8px solid #374151', width: '80%', margin: '15px auto 5px' }}></div>
+                <div style={{ fontSize: '9px', color: '#6b7280' }}>Employee Signature</div>
+              </div>
+              <div style={{ textAlign: 'center', width: '45%' }}>
+                <div style={{ borderTop: '0.8px solid #374151', width: '80%', margin: '15px auto 5px' }}></div>
+                <div style={{ fontSize: '9px', color: '#6b7280' }}>Authorized Signatory</div>
+              </div>
             </div>
-            <div className="footer-notes">
-              <p>This is a computer generated payslip and does not require signature.</p>
-              <p className="footer-copyright">© {new Date().getFullYear()} NOW IT SERVICES PVT LTD. All rights reserved.</p>
+
+            {/* Footer - Updated to match PDF */}
+            <div style={{
+              marginTop: '15px',
+              paddingTop: '10px',
+              borderTop: '0.8px solid #e2e8f0',
+              textAlign: 'center',
+              fontSize: '9px',
+              color: '#64748b'
+            }}>
+              <div>
+                <p><strong>NOW IT SERVICES PVT LTD</strong></p>
+                <p style={{ fontSize: '9px', color: '#6b7280', margin: '3px 0' }}>6-284-1, Uma Shankar Nagar, Revenue Ward -17, YSR Tadigadapa, 520007</p>
+                <p style={{ fontSize: '9px', color: '#6b7280', margin: '3px 0' }}>Phone: 7893536373 | Email: hr@nowitservices.com</p>
+              </div>
+              <div>
+                <p><em>This is a computer generated payslip and does not require signature.</em></p>
+                <p style={{ fontSize: '9px', color: '#9ca3af', marginTop: '5px', textAlign: 'right' }}>
+                  Generated on {new Date().toLocaleDateString('en-IN', { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </p>
+                <p>© {new Date().getFullYear()} NOW IT SERVICES PVT LTD. All rights reserved.</p>
+              </div>
             </div>
           </div>
         </div>
+        
+        {/* Action buttons at bottom */}
+        <div className="preview-footer-actions">
+          <PreviewActionButtons />
+        </div>
       </div>
     );
-  };
-
-  // Render month calculation formula
-  const getMonthCalculationExample = () => {
-    if (!selectedMonth || !selectedYear) return '';
-    
-    const nonWorkingDays = weekendsCount + mandatoryHolidaysCount + optionalHolidaysTaken;
-    
-    let calculation = `${totalDaysInMonth} total days - ${nonWorkingDays} non-working days`;
-    
-    return calculation;
   };
 
   return (
@@ -851,7 +1365,7 @@ const ManagerPayslip = () => {
         </div>
         <div className="header-actions">
           <button 
-            className="btn-preview"
+            className={`btn-preview ${showPreview ? 'active' : ''}`}
             onClick={() => setShowPreview(!showPreview)}
             disabled={!selectedEmployee}
           >
@@ -870,7 +1384,7 @@ const ManagerPayslip = () => {
       {!showPreview && (
         <>
           <div className="payslip-form-section">
-            {/* Month & Year Selection */}
+            {/* Period Selection */}
             <div className="form-section card">
               <div className="section-header">
                 <Calendar size={20} className="section-icon" />
@@ -912,77 +1426,45 @@ const ManagerPayslip = () => {
                   <div className="working-days-display">
                     <div className="days-count-highlight">{workingDays}</div>
                     <span className="days-label">working days</span>
-                    <div className="days-calculation">
-                      <span className="calculation-detail">
-                        {getMonthCalculationExample()}
-                      </span>
-                    </div>
                   </div>
                 </div>
               </div>
               
-              {/* Working Days Breakdown */}
-              <div className="working-days-breakdown">
-                <h4>Days Breakdown for {months.find(m => m.value === selectedMonth)?.label} {selectedYear}</h4>
-                <div className="breakdown-cards-grid">
-                  <div className="breakdown-card total-days">
-                    <div className="card-icon">📅</div>
-                    <div className="card-content">
-                      <div className="card-label">Total Days</div>
-                      <div className="card-value">{totalDaysInMonth}</div>
-                    </div>
+              {/* Month Calculation Details */}
+              {selectedMonth && selectedYear && (
+                <div className="month-calculation-details">
+                  <div className="calculation-title">Month Calculation:</div>
+                  <div className="calculation-formula">
+                    {getMonthCalculationDisplay()}
                   </div>
-                  
-                  <div className="breakdown-card weekends-card">
-                    <div className="card-icon">🌙</div>
-                    <div className="card-content">
-                      <div className="card-label">Weekends</div>
-                      <div className="card-value">{weekendsCount}</div>
-                      <div className="card-detail">Sundays + 2nd Saturdays</div>
+                  <div className="breakdown-grid">
+                    <div className="breakdown-item">
+                      <span className="breakdown-label">Total Days:</span>
+                      <span className="breakdown-value">{monthDetails.totalDays}</span>
                     </div>
-                  </div>
-                  
-                  {mandatoryHolidaysCount > 0 && (
-                    <div className="breakdown-card holidays-card">
-                      <div className="card-icon">🎉</div>
-                      <div className="card-content">
-                        <div className="card-label">Public Holidays</div>
-                        <div className="card-value">{mandatoryHolidaysCount}</div>
-                        <div className="card-detail">Mandatory</div>
-                      </div>
+                    <div className="breakdown-item">
+                      <span className="breakdown-label">Weekends:</span>
+                      <span className="breakdown-value">{monthDetails.weekends}</span>
                     </div>
-                  )}
-                  
-                  {optionalHolidaysTaken > 0 && (
-                    <div className="breakdown-card optional-card">
-                      <div className="card-icon">🏖️</div>
-                      <div className="card-content">
-                        <div className="card-label">Optional Taken</div>
-                        <div className="card-value">{optionalHolidaysTaken}</div>
-                        <div className="card-detail">Marked as TAKEN</div>
-                      </div>
+                    <div className="breakdown-item">
+                      <span className="breakdown-label">Public Holidays:</span>
+                      <span className="breakdown-value">{monthDetails.mandatoryHolidays}</span>
                     </div>
-                  )}
-                  
-                  <div className="breakdown-card working-days-card">
-                    <div className="card-icon">💼</div>
-                    <div className="card-content">
-                      <div className="card-label">Working Days</div>
-                      <div className="card-value">{workingDays}</div>
-                      <div className="card-detail">For salary calculation</div>
+                    <div className="breakdown-item">
+                      <span className="breakdown-label">Working Days:</span>
+                      <span className="breakdown-value highlight">{monthDetails.workingDays}</span>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
-            {/* Template Selection - IMPROVED UI */}
+            {/* Template Selection */}
             <div className="form-section card">
               <div className="section-header">
                 <Layout size={20} className="section-icon" />
                 <h3>Select Payslip Template</h3>
               </div>
-              
               <div className="template-select-enhanced">
                 <div className="template-select-header">
                   <label>Choose Template</label>
@@ -1034,67 +1516,15 @@ const ManagerPayslip = () => {
                             )}
                           </div>
                           <div className="template-option-description">{template.description}</div>
-                          <div className="template-color-palette">
-                            <div 
-                              className="color-dot" 
-                              style={{ backgroundColor: template.colors.primary }}
-                              title="Primary Color"
-                            />
-                            <div 
-                              className="color-dot" 
-                              style={{ backgroundColor: template.colors.secondary }}
-                              title="Secondary Color"
-                            />
-                            <div 
-                              className="color-dot" 
-                              style={{ backgroundColor: template.colors.accent }}
-                              title="Accent Color"
-                            />
-                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
-                
-                <div className="template-preview-enhanced">
-                  <div className="template-preview-header">
-                    <Layout size={18} />
-                    <span>Template Preview</span>
-                  </div>
-                  <div className="template-preview-body">
-                    <div 
-                      className="preview-color-block primary" 
-                      style={{ backgroundColor: selectedTemplate.colors.primary }}
-                    >
-                      <span>Primary</span>
-                    </div>
-                    <div 
-                      className="preview-color-block secondary" 
-                      style={{ backgroundColor: selectedTemplate.colors.secondary }}
-                    >
-                      <span>Secondary</span>
-                    </div>
-                    <div 
-                      className="preview-color-block accent" 
-                      style={{ backgroundColor: selectedTemplate.colors.accent }}
-                    >
-                      <span>Accent</span>
-                    </div>
-                  </div>
-                  <div className="template-preview-footer">
-                    <div className="template-name-display">
-                      <strong>{selectedTemplate.name}</strong>
-                    </div>
-                    <div className="template-description-display">
-                      {selectedTemplate.description}
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
 
-            {/* Employee Selection - IMPROVED UI */}
+            {/* Employee Selection */}
             <div className="form-section card">
               <div className="section-header">
                 <User size={20} className="section-icon" />
@@ -1109,7 +1539,7 @@ const ManagerPayslip = () => {
               ) : employees.length === 0 ? (
                 <div className="no-employees">
                   <AlertCircle size={20} />
-                  <p>No employees found. Please add employees first.</p>
+                  <p>No employees found.</p>
                 </div>
               ) : (
                 <>
@@ -1119,114 +1549,31 @@ const ManagerPayslip = () => {
                       <input
                         type="text"
                         className="employee-search-input"
-                        placeholder="Search employees by name, email, or ID..."
+                        placeholder="Search employees..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                       />
-                      {searchTerm && (
-                        <button 
-                          className="clear-search-btn"
-                          onClick={() => setSearchTerm('')}
-                        >
-                          <X size={14} />
-                        </button>
-                      )}
                     </div>
-                    {searchTerm && filteredEmployees.length > 0 && (
-                      <div className="search-results-info">
-                        Found {filteredEmployees.length} employee(s)
-                      </div>
-                    )}
-                    {searchTerm && filteredEmployees.length === 0 && (
-                      <div className="no-results-info">
-                        No employees found matching "{searchTerm}"
-                      </div>
-                    )}
                   </div>
                   
                   <div className="employee-select-enhanced">
                     <label>Select Employee</label>
-                    <div className="employee-select-wrapper">
-                      <select 
-                        className="employee-select"
-                        value={selectedEmployee?._id || ''}
-                        onChange={(e) => {
-                          const employee = employees.find(emp => emp._id === e.target.value);
-                          if (employee) handleEmployeeSelect(employee);
-                        }}
-                      >
-                        <option value="">-- Select Employee --</option>
-                        {filteredEmployees.map(employee => (
-                          <option key={employee._id} value={employee._id}>
-                            {employee.fullName} ({employee.email})
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown size={16} className="select-arrow" />
-                    </div>
+                    <select 
+                      className="employee-select"
+                      value={selectedEmployee?._id || ''}
+                      onChange={(e) => {
+                        const employee = employees.find(emp => emp._id === e.target.value);
+                        if (employee) handleEmployeeSelect(employee);
+                      }}
+                    >
+                      <option value="">-- Select Employee --</option>
+                      {filteredEmployees.map(employee => (
+                        <option key={employee._id} value={employee._id}>
+                          {employee.fullName} ({employee.email})
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  
-                  {selectedEmployee && (
-                    <div className="employee-profile-card">
-                      <div className="profile-header">
-                        <div className="profile-avatar">
-                          <User size={32} />
-                        </div>
-                        <div className="profile-info">
-                          <h4 className="employee-name">{selectedEmployee.fullName}</h4>
-                          <div className="employee-meta">
-                            <span className="badge employee-id">
-                              <Briefcase size={12} />
-                              {selectedEmployee.employeeId || 'EMP001'}
-                            </span>
-                            <span className="badge employee-type">
-                              <Clock size={12} />
-                              {getEmployeeType(selectedEmployee.employeeId)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="profile-details-grid">
-                        <div className="detail-item">
-                          <Mail size={16} className="detail-icon" />
-                          <div className="detail-content">
-                            <div className="detail-label">Email</div>
-                            <div className="detail-value">{selectedEmployee.email}</div>
-                          </div>
-                        </div>
-                        
-                        <div className="detail-item">
-                          <Briefcase size={16} className="detail-icon" />
-                          <div className="detail-content">
-                            <div className="detail-label">Designation</div>
-                            <div className="detail-value">{selectedEmployee.designation || 'Employee'}</div>
-                          </div>
-                        </div>
-                        
-                        <div className="detail-item">
-                          <Globe size={16} className="detail-icon" />
-                          <div className="detail-content">
-                            <div className="detail-label">Status</div>
-                            <div className="detail-value status-active">
-                              <div className="status-dot"></div>
-                              Active
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="detail-item">
-                          <BanknoteIcon size={16} className="detail-icon" />
-                          <div className="detail-content">
-                            <div className="detail-label">Working Days</div>
-                            <div className="detail-value days-count">
-                              {workingDays} <span className="days-unit">days</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
             </div>
@@ -1236,14 +1583,6 @@ const ManagerPayslip = () => {
               <div className="section-header">
                 <Building size={20} className="section-icon" />
                 <h3>Bank Details</h3>
-                <button 
-                  className="history-btn" 
-                  onClick={handleViewHistory}
-                  disabled={!selectedEmployee}
-                >
-                  <History size={16} />
-                  View History
-                </button>
               </div>
               <BankDetailsForm
                 bankDetails={bankDetails}
@@ -1287,58 +1626,13 @@ const ManagerPayslip = () => {
               <button 
                 className="btn-send"
                 onClick={handleSendToEmployee}
-                disabled={!lastGeneratedPayslip}
+                disabled={!selectedEmployee}
               >
                 <Send size={18} />
-                {lastGeneratedPayslip ? 'Send to Employee' : 'Generate First'}
+                Send to Employee
               </button>
             </div>
           </div>
-
-          {/* Generated Payslips List */}
-          {generatedPayslips.length > 0 && (
-            <div className="generated-payslips card">
-              <div className="payslips-header">
-                <h3>Generated Payslips</h3>
-                <div className="download-status">
-                  <CheckCircle size={16} className="check-icon" />
-                  <span>PDF Download Available</span>
-                </div>
-              </div>
-              <div className="payslips-list">
-                {generatedPayslips.slice(0, 5).map(payslip => (
-                  <div key={payslip._id} className="payslip-item">
-                    <div className="payslip-info">
-                      <div className="payslip-month">
-                        {months.find(m => m.value === String(payslip.month).padStart(2, '0'))?.label} {payslip.year}
-                        {payslip._id === lastGeneratedPayslip?._id && (
-                          <span className="current-badge">Current</span>
-                        )}
-                      </div>
-                      <div className="payslip-amount">
-                        Net Pay: ₹{payslip.salary?.netPay?.toLocaleString() || '0'}
-                      </div>
-                      <div className="payslip-days">
-                        {payslip.salary?.workingDays || 'N/A'} working days
-                      </div>
-                    </div>
-                    <button 
-                      className="btn-download-small"
-                      onClick={() => handleDownloadPayslip(payslip._id)}
-                      disabled={downloading}
-                    >
-                      {downloading ? (
-                        <div className="spinner tiny"></div>
-                      ) : (
-                        <Download size={16} />
-                      )}
-                      Download PDF
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>

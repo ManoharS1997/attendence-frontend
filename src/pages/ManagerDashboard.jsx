@@ -405,15 +405,23 @@ export default function ManagerDashboard() {
     [month, year]
   );
 
-  const loadSummaries = useCallback(
-    async () => {
+const loadSummaries = useCallback(
+  async () => {
+    try {
+      console.log("Loading summaries for:", month, year);
       const res = await api.get("/leave/summary/all", {
         params: { month, year }
       });
+      console.log("Summaries loaded:", res.data?.length || 0, "records");
       setSummaries(res.data || []);
-    },
-    [month, year]
-  );
+    } catch (err) {
+      console.error("Error loading summaries:", err.response?.data || err.message);
+      setSummaries([]);
+      addAlert(`Error loading leave summaries: ${err.response?.data?.message || err.message}`);
+    }
+  },
+  [month, year]
+);
 
   const loadProjects = useCallback(async () => {
     const res = await api.get("/projects");
@@ -486,14 +494,27 @@ export default function ManagerDashboard() {
     return () => clearTimeout(id);
   }, [loadEmployees, loadProjects]);
 
-  useEffect(() => {
-    const id = setTimeout(() => {
-      loadAttendance();
-      loadSummaries();
-      loadPendingRequests();
-    }, 0);
-    return () => clearTimeout(id);
-  }, [loadAttendance, loadSummaries, loadPendingRequests]);
+useEffect(() => {
+  const id = setTimeout(() => {
+    loadAttendance();
+    loadSummaries();
+    loadPendingRequests();
+  }, 0);
+  return () => clearTimeout(id);
+}, [loadAttendance, loadSummaries, loadPendingRequests]);
+
+// ADD THIS NEW useEffect HERE:
+useEffect(() => {
+  // Whenever employees or attendance changes, reload summaries
+  if (employees.length > 0 || attendance.length > 0) {
+    loadSummaries();
+  }
+}, [employees, attendance, loadSummaries]);
+
+// Add this to refresh summaries when month/year changes
+useEffect(() => {
+  loadSummaries();
+}, [month, year, loadSummaries]);
 
   useEffect(() => {
     const id = setTimeout(() => {
@@ -536,47 +557,77 @@ export default function ManagerDashboard() {
 
   // -------- EMPLOYEE CRUD / LEAVES ----------
 
-  const handleCreateEmployee = async (e) => {
-    e.preventDefault();
-    try {
-      // Auto-calc monthly weekend + public holidays (read-only for manager)
-      const monthHolidays = buildHolidayCalendar(month, year) || [];
-      const weekendHolidayCount = monthHolidays.filter(
-        (h) => h.type === "WEEKEND"
-      ).length;
+  // In ManagerDashboard.jsx, update the handleCreateEmployee function:
 
-      const publicHolidaysMonth = monthHolidays.filter(
-        (h) =>
-          h.type === "MANDATORY_PUBLIC" ||
-          h.type === "OPTIONAL_PUBLIC" ||
-          h.isMandatory ||
-          h.isOptional ||
-          h.kind === "MANDATORY" ||
-          h.kind === "OPTIONAL"
-      ).length;
+// In handleCreateEmployee function in ManagerDashboard.jsx
+const handleCreateEmployee = async (e) => {
+  e.preventDefault();
+  try {
+    // Auto-calc monthly weekend + public holidays
+    const monthHolidays = buildHolidayCalendar(month, year) || [];
+    const weekendHolidayCount = monthHolidays.filter(
+      (h) => h.type === "WEEKEND"
+    ).length;
 
-      await api.post("/employees", {
-        ...form,
-        publicHolidays: publicHolidaysMonth,
-        weekendHolidays: weekendHolidayCount
-      });
+    const publicHolidaysMonth = monthHolidays.filter(
+      (h) =>
+        h.type === "MANDATORY_PUBLIC" ||
+        h.type === "OPTIONAL_PUBLIC" ||
+        h.isMandatory ||
+        h.isOptional ||
+        h.kind === "MANDATORY" ||
+        h.kind === "OPTIONAL"
+    ).length;
 
-      addAlert(
-        `Employee created. Default password: ${form.password}. Public & weekend holidays are auto-configured and not editable.`
-      );
-      setForm((prev) => ({
-        ...prev,
-        fullName: "",
-        email: "",
-        laptopId: ""
-      }));
-      loadEmployees();
-      loadSummaries();
-    } catch (err) {
-      addAlert(err.response?.data?.message || "Error creating employee");
-    }
-  };
+    // Prepare data without employeeId - backend will generate it
+    const employeeData = {
+      fullName: form.fullName,
+      email: form.email,
+      laptopId: form.laptopId,
+      password: form.password,
+      totalLeaveEntitlement: form.totalLeaveEntitlement,
+      carryForward2025: form.carryForward2025,
+      publicHolidays: publicHolidaysMonth,
+      weekendHolidays: weekendHolidayCount
+    };
 
+    const response = await api.post("/employees", employeeData);
+    
+    // Get the generated employee ID from response
+    const generatedEmployeeId = response.data.employeeId;
+
+    addAlert(
+      `✅ Employee created successfully!
+      
+      Employee Details:
+      • Name: ${form.fullName}
+      • Email: ${form.email}
+      • Employee ID: ${generatedEmployeeId}
+      • Default Password: ${form.password}
+      
+      Please share the Employee ID and password with the employee.
+      Public & weekend holidays are auto-configured.`
+    );
+
+    // Reset form
+    setForm({
+      fullName: "",
+      email: "",
+      laptopId: "",
+      password: "Emp@123",
+      totalLeaveEntitlement: 16,
+      carryForward2025: 0
+    });
+
+    // Reload data
+    await loadEmployees();
+    await loadSummaries();
+    
+  } catch (err) {
+    console.error("Create employee error:", err);
+    addAlert(err.response?.data?.message || "Error creating employee");
+  }
+};
   const deactivate = async (id) => {
     if (!window.confirm("Deactivate this employee?")) return;
     await api.patch(`/employees/${id}/deactivate`);
@@ -586,34 +637,48 @@ export default function ManagerDashboard() {
 
   // Manager can now only edit entitlement & carry forward – public/weekend
   // holidays are system-calculated and not editable.
-  const editLeaveConfig = async (emp) => {
-    const totalLeaveEntitlement = Number(
+ // Update the editLeaveConfig function in ManagerDashboard.jsx:
 
-      prompt("Total Leave Entitlement", emp.totalLeaveEntitlement ?? 16)
+const editLeaveConfig = async (emp) => {
+  const totalLeaveEntitlement = Number(
+    prompt("Total Leave Entitlement", emp.totalLeaveEntitlement ?? 16)
+  );
+  if (Number.isNaN(totalLeaveEntitlement)) return;
+
+  const carryForward2025 = Number(
+    prompt("2025 Carry Forward Leaves", emp.carryForward2025 ?? 0)
+  );
+  if (Number.isNaN(carryForward2025)) return;
+
+  try {
+    await api.patch(`/employees/${emp._id}/leave-config`, {
+      totalLeaveEntitlement,
+      carryForward2025
+    });
+    
+    addAlert(
+      `Leave configuration updated for ${emp.fullName} (${emp.employeeId}).`
     );
-    if (Number.isNaN(totalLeaveEntitlement)) return;
-
-    const carryForward2025 = Number(
-
-      prompt("2025 Carry Forward Leaves", emp.carryForward2025 ?? 0)
-    );
-    if (Number.isNaN(carryForward2025)) return;
-
-    try {
-      await api.patch(`/employees/${emp._id}/leave-config`, {
-        totalLeaveEntitlement,
-        carryForward2025
-      });
-      addAlert(
-        "Leave configuration updated. Public holidays & weekend holidays are auto-managed and cannot be changed."
-      );
-      loadEmployees();
-      loadSummaries();
-    } catch (err) {
-      addAlert(err.response?.data?.message || "Error updating leave config");
-    }
-  };
-
+    
+    // Force reload all data
+    await loadEmployees();
+    
+    // Clear and reload summaries
+    setSummaries([]);
+    await loadSummaries();
+    
+    // Clear and reload attendance
+    setAttendance([]);
+    await loadAttendance();
+    
+    // Force UI update
+    setSummaries(prev => [...prev.map(s => ({...s}))]);
+    
+  } catch (err) {
+    console.error("Edit leave config error:", err);
+    addAlert(err.response?.data?.message || "Error updating leave config");
+  }
+};
   // UPDATED: Manager approves / rejects an AttendanceRequest
   const decideLeave = async (id, decision) => {
     try {
@@ -1288,61 +1353,70 @@ export default function ManagerDashboard() {
                   </p>
                 </div>
 
-                <div className="card">
-                  <h2>Employees</h2>
-                  <div className="table-wrapper small-table">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Name</th>
-                          <th>Email</th>
-                          <th>Laptop</th>
-                          <th>Status</th>
-                          <th>Leaves (T / PH / W / CF)</th>
-                          <th>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {employees.map((e) => (
-                          <tr key={e._id}>
-                            <td>{e.fullName}</td>
-                            <td>{e.email}</td>
-                            <td>{e.laptopId || "-"}</td>
-                            <td>{e.isActive ? "Active" : "Inactive"}</td>
-                            <td>
-                              {e.totalLeaveEntitlement ?? 0}/
-                              {e.publicHolidays ?? 0}/{e.weekendHolidays ?? 0}/
-                              {e.carryForward2025 ?? 0}
-                            </td>
-                            <td>
-                              <button
-                                className="link-btn"
-                                onClick={() => editLeaveConfig(e)}
-                              >
-                                Edit Leave
-                              </button>
-                              {e.isActive && (
-                                <>
-                                  {" "}
-                                  |{" "}
-                                  <button
-                                    className="link-btn"
-                                    onClick={() => deactivate(e._id)}
-                                  >
-                                    Deactivate
-                                  </button>
-                                </>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {employees.length === 0 && (
-                      <p className="empty">No employees yet</p>
-                    )}
-                  </div>
-                </div>
+                {/* In the Employees table */}
+<div className="card">
+  <h2>Employees</h2>
+  <div className="table-wrapper small-table">
+    <table>
+      <thead>
+        <tr>
+          <th>Employee ID</th> {/* Add this column */}
+          <th>Name</th>
+          <th>Email</th>
+          <th>Laptop</th>
+          <th>Status</th>
+          <th>Leaves (T / PH / W / CF)</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {employees.map((e) => (
+          <tr key={e._id}>
+            <td>
+              <strong>{e.employeeId || "N/A"}</strong>
+            </td>
+            <td>{e.fullName}</td>
+            <td>{e.email}</td>
+            <td>{e.laptopId || "-"}</td>
+            <td>
+              <span className={`status-badge ${e.isActive ? 'active' : 'inactive'}`}>
+                {e.isActive ? "Active" : "Inactive"}
+              </span>
+            </td>
+            <td>
+              {e.totalLeaveEntitlement ?? 0}/
+              {e.publicHolidays ?? 0}/{e.weekendHolidays ?? 0}/
+              {e.carryForward2025 ?? 0}
+            </td>
+            <td>
+              <button
+                className="link-btn"
+                onClick={() => editLeaveConfig(e)}
+              >
+                Edit Leave
+              </button>
+              {e.isActive && (
+                <>
+                  {" "}
+                  |{" "}
+                  <button
+                    className="link-btn danger"
+                    onClick={() => deactivate(e._id)}
+                  >
+                    Deactivate
+                  </button>
+                </>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+    {employees.length === 0 && (
+      <p className="empty">No employees yet</p>
+    )}
+  </div>
+</div>
 
                 <div className="card">
                   <h2>Reset Employee Password</h2>

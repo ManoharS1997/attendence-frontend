@@ -87,6 +87,14 @@ export default function AdminDashboard() {
   const [attendance, setAttendance] = useState([]);
   const [summaries, setSummaries] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [employees, setEmployees] = useState([]);
+const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+const [payslips, setPayslips] = useState([]);
+
+// --- Admin Payslip helpers ---
+const selectedEmployee = useMemo(() => {
+  return employees.find((e) => e._id === selectedEmployeeId) || null;
+}, [employees, selectedEmployeeId]);
 
   // All project tasks (view only)
   const [allTasks, setAllTasks] = useState([]);
@@ -110,6 +118,7 @@ export default function AdminDashboard() {
   };
 
   // ---------- LOADERS ----------
+  
   const loadAttendance = useCallback(async () => {
     try {
       const res = await api.get("/attendance", { params: { month, year } });
@@ -210,17 +219,62 @@ export default function AdminDashboard() {
       setAllTasks([]);
     }
   }, []);
+const loadEmployees = useCallback(async () => {
+  try {
+    const res = await api.get("/employees");
+    setEmployees(res.data?.employees || res.data?.data || res.data || []);
+
+  } catch (err) {
+    console.error("Failed to load employees", err);
+    setEmployees([]);
+  }
+}, []);
+
+const loadEmployeePayslips = useCallback(async () => {
+  if (!selectedEmployeeId) {
+    setPayslips([]);
+    return;
+  }
+
+  try {
+    const res = await api.get("/payslips", {
+      params: { employeeId: selectedEmployeeId }
+    });
+    setPayslips(res.data || []);
+  } catch (err) {
+    console.error("Failed to load employee payslips", err);
+    setPayslips([]);
+  }
+}, [selectedEmployeeId]);
+
 
   useEffect(() => {
     // load projects asap
     loadProjects();
   }, [loadProjects]);
+  useEffect(() => {
+  loadEmployees();
+}, [loadEmployees]);
+
+useEffect(() => {
+  loadEmployeePayslips();
+}, [loadEmployeePayslips]);
+
+// 🔁 Reload payslips when switching to Payslips tab
+useEffect(() => {
+  if (activeTab === "payslips" && selectedEmployeeId) {
+    loadEmployeePayslips();
+  }
+}, [activeTab, selectedEmployeeId, loadEmployeePayslips]);
+
 
   useEffect(() => {
     loadAttendance();
     loadSummaries();
     loadHolidays();
   }, [loadAttendance, loadSummaries, loadHolidays]);
+
+  
 
   // ---------- CSV DOWNLOAD HELPERS ----------
   const downloadCsv = async (url, params = {}, filename) => {
@@ -567,6 +621,7 @@ export default function AdminDashboard() {
             >
               Timesheet Management
             </button>
+  
           </nav>
         </aside>
 
@@ -996,6 +1051,79 @@ export default function AdminDashboard() {
           )}
 
           {/* ========== DASHBOARD TAB (Reports & Tasks view) ========== */}
+          {/* ========== PAYSLIPS TAB (ADMIN) ========== */}
+{activeTab === "payslips" && (
+  <main className="layout single-column">
+    <section className="full-width">
+      <div className="card">
+        <h2>Employee Payslips</h2>
+
+        <label style={{ fontSize: 13 }}>
+          Select Employee:
+          <select
+            value={selectedEmployeeId}
+            onChange={(e) => setSelectedEmployeeId(e.target.value)}
+            style={{ marginLeft: 8, minWidth: 260 }}
+          >
+            <option value="">-- Select Employee --</option>
+            {employees.map((e) => (
+              <option key={e._id} value={e._id}>
+                {e.fullName} ({e.email})
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="table-wrapper" style={{ marginTop: 16 }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>Employee ID</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Net Pay</th>
+                <th>Download</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payslips.map((p) => (
+                <tr key={p._id}>
+                  <td>
+                    {monthNames[p.month - 1]} {p.year}
+                  </td>
+                  <td>{p.employeeId}</td>
+                 <td>{selectedEmployee?.fullName || "-"}</td>
+<td>{selectedEmployee?.email || "-"}</td>
+
+                  <td>₹{p.salary?.netPay || 0}</td>
+                  <td>
+                    <button
+                      className="link-btn"
+                      onClick={() =>
+                        window.open(
+                          `/api/payslips/${p._id}/download`,
+                          "_blank"
+                        )
+                      }
+                    >
+                      ⬇ Download
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {selectedEmployeeId && payslips.length === 0 && (
+            <p className="empty">No payslips available for this employee.</p>
+          )}
+        </div>
+      </div>
+    </section>
+  </main>
+)}
+
           {activeTab === "dashboard" && (
             <main className="layout single-column">
               <section className="full-width">

@@ -1799,4 +1799,419 @@
     padding: 0;
   }
 }
+.payslip-document {
+  width: 210mm;
+  min-height: 297mm;
+  margin: auto;
+}
+/* Add these styles to your existing managerPayslip.css */
 
+/* Preview Action Buttons */
+.preview-action-buttons {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.btn-action-download,
+.btn-action-print,
+.btn-action-share,
+.btn-action-view {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+  outline: none;
+}
+
+.btn-action-download {
+  background: linear-gradient(135deg, #1e40af, #3b82f6);
+  color: white;
+  box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
+}
+
+.btn-action-download:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1e3a8a, #2563eb);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(30, 64, 175, 0.4);
+}
+
+.btn-action-download:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.btn-action-print {
+  background: linear-gradient(135deg, #065f46, #10b981);
+  color: white;
+  box-shadow: 0 4px 12px rgba(6, 95, 70, 0.3);
+}
+
+.btn-action-print:hover {
+  background: linear-gradient(135deg, #064e3b, #0d9c6c);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(6, 95, 70, 0.4);
+}
+
+.btn-action-share {
+  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+  color: white;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+}
+
+.btn-action-share:hover {
+  background: linear-gradient(135deg, #6d28d9, #7c3aed);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.4);
+}
+
+.btn-action-view {
+  background: linear-gradient(135deg, #374151, #6b7280);
+  color: white;
+  box-shadow: 0 4px 12px rgba(55, 65, 81, 0.3);
+}
+
+.btn-action-view:hover {
+  background: linear-gradient(135deg, #2d3748, #4b5563);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(55, 65, 81, 0.4);
+}
+
+/* Preview Header */
+.preview-header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+  border-radius: 12px 12px 0 0;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.preview-header-left h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: #1e293b;
+}
+
+.preview-subtitle {
+  color: #64748b;
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.btn-close-preview {
+  background: #f1f5f9;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: #64748b;
+}
+
+.btn-close-preview:hover {
+  background: #e2e8f0;
+  color: #475569;
+  transform: rotate(90deg);
+}
+
+/* Preview Footer Actions */
+.preview-footer-actions {
+  padding: 20px;
+  background: #f8fafc;
+  border-radius: 0 0 12px 12px;
+  border-top: 2px solid #e2e8f0;
+  display: flex;
+  justify-content: center;
+}
+
+/* Spinner styles */
+.spinner.small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive buttons */
+@media (max-width: 768px) {
+  .preview-action-buttons {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .btn-action-download,
+  .btn-action-print,
+  .btn-action-share,
+  .btn-action-view {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  
+  .preview-header-section {
+    flex-direction: column;
+    gap: 16px;
+    text-align: center;
+  }
+}
+/* =====================================================
+   PREVIEW ACTION BUTTONS
+===================================================== */
+.preview-action-buttons {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.btn-action-download,
+.btn-action-print,
+.btn-action-share,
+.btn-action-send {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+  outline: none;
+  min-width: 140px;
+  justify-content: center;
+}
+
+.btn-action-download {
+  background: linear-gradient(135deg, #dc2626, #ef4444);
+  color: white;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+}
+
+.btn-action-download:hover:not(:disabled) {
+  background: linear-gradient(135deg, #b91c1c, #dc2626);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(220, 38, 38, 0.4);
+}
+
+.btn-action-download:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-action-print {
+  background: linear-gradient(135deg, #059669, #10b981);
+  color: white;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+}
+
+.btn-action-print:hover {
+  background: linear-gradient(135deg, #047857, #059669);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(5, 150, 105, 0.4);
+}
+
+.btn-action-share {
+  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+  color: white;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+}
+
+.btn-action-share:hover {
+  background: linear-gradient(135deg, #6d28d9, #7c3aed);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.4);
+}
+
+.btn-action-send {
+  background: linear-gradient(135deg, #1e40af, #3b82f6);
+  color: white;
+  box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
+}
+
+.btn-action-send:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1e3a8a, #2563eb);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(30, 64, 175, 0.4);
+}
+
+.btn-action-send:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Preview Header */
+.preview-header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+  border-radius: 12px 12px 0 0;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.preview-header-left h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: #1e293b;
+  font-size: 1.5rem;
+}
+
+.preview-subtitle {
+  color: #64748b;
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.btn-close-preview {
+  background: #f1f5f9;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: #64748b;
+  margin-left: 15px;
+}
+
+.btn-close-preview:hover {
+  background: #e2e8f0;
+  color: #475569;
+  transform: rotate(90deg);
+}
+
+/* Preview Footer Actions */
+.preview-footer-actions {
+  padding: 20px;
+  background: #f8fafc;
+  border-radius: 0 0 12px 12px;
+  border-top: 2px solid #e2e8f0;
+  display: flex;
+  justify-content: center;
+}
+
+/* Spinner */
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Payslip Preview Content */
+.preview-content-wrapper {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 20px;
+  background: white;
+}
+
+.payslip-document {
+  background: white;
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  max-width: 800px;
+  margin: 0 auto;
+  border: 1px solid #e2e8f0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .preview-action-buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .btn-action-download,
+  .btn-action-print,
+  .btn-action-share,
+  .btn-action-send {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .preview-header-section {
+    flex-direction: column;
+    gap: 16px;
+    text-align: center;
+  }
+  
+  .btn-close-preview {
+    margin-left: 0;
+    margin-top: 10px;
+  }
+}
+
+/* PDF Download Animation */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.generating-pdf {
+  animation: pulse 1.5s infinite;
+}
+
+/* Download Success Animation */
+@keyframes downloadSuccess {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.download-success {
+  animation: downloadSuccess 0.5s ease;
+}
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.status-badge.active {
+  background-color: #52c41a;
+  color: white;
+}
+
+.status-badge.inactive {
+  background-color: #ff4d4f;
+  color: white;
+}

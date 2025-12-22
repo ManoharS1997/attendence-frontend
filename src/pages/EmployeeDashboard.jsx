@@ -248,6 +248,32 @@ export default function EmployeeDashboard() {
   const [summary, setSummary] = useState(null);
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [payslips, setPayslips] = useState([]);
+
+  const handleDownloadPayslip = async (payslipId, month, year) => {
+  try {
+const res = await api.get(
+  `/payslips/${payslipId}/download`,
+  { responseType: "arraybuffer" }
+);
+
+const blob = new Blob([res.data], { type: "application/pdf" });
+
+const url = window.URL.createObjectURL(blob);
+const a = document.createElement("a");
+a.href = url;
+a.download = `Payslip-${month}-${year}.pdf`;
+document.body.appendChild(a);
+a.click();
+document.body.removeChild(a);
+window.URL.revokeObjectURL(url);
+
+  } catch (err) {
+    console.error("Failed to download payslip", err);
+    alert("Failed to download payslip");
+  }
+};
+
   const [loadingSave, setLoadingSave] = useState(false);
 
   const [lastAlertAttendanceId, setLastAlertAttendanceId] = useState(null);
@@ -298,6 +324,16 @@ export default function EmployeeDashboard() {
       setTasks([]);
     }
   }, []);
+  const loadPayslips = useCallback(async () => {
+  try {
+    const res = await api.get("/payslips/my");
+    setPayslips(res.data || []);
+  } catch (err) {
+    console.error("Failed to load payslips", err);
+    setPayslips([]);
+  }
+}, []);
+
 
   useEffect(() => {
     const id = setTimeout(() => {
@@ -321,6 +357,12 @@ export default function EmployeeDashboard() {
     }, 0);
     return () => clearTimeout(id);
   }, [loadProjects, loadTasks]);
+  useEffect(() => {
+  if (activeTab === "payslips") {
+    loadPayslips();
+  }
+}, [activeTab, loadPayslips]);
+
 
   useEffect(() => {
     if (!attendance || attendance.length === 0) return;
@@ -848,6 +890,15 @@ export default function EmployeeDashboard() {
             >
               Timesheet Management
             </button>
+            <button
+  className={
+    activeTab === "payslips" ? "nav-item active" : "nav-item"
+  }
+  onClick={() => setActiveTab("payslips")}
+>
+  Payslips
+</button>
+
           </nav>
         </aside>
 
@@ -1919,6 +1970,60 @@ export default function EmployeeDashboard() {
           )}
 
           {/* DASHBOARD TAB */}
+         {/* PAYSLIPS TAB */}
+{activeTab === "payslips" && (
+  <main className="layout single-column">
+    <section className="full-width">
+      <div className="card">
+        <h2>My Payslips</h2>
+
+        {payslips.length === 0 ? (
+          <p className="empty">No payslips generated yet.</p>
+        ) : (
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Employee ID</th>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Net Pay</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payslips.map((p) => (
+                  <tr key={p._id}>
+                    <td>
+                      {monthNames[p.month - 1]} {p.year}
+                    </td>
+                    <td>{p.employeeId}</td>
+                    <td>{user.fullName}</td>
+                    <td>{user.email}</td>
+                    <td>₹ {p.netPay}</td>
+                    <td>
+                      <button
+                        className="primary-btn"
+                        onClick={() =>
+                          handleDownloadPayslip(p._id, p.month, p.year)
+                        }
+                      >
+                        Download PDF
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
+  </main>
+)}
+
+
           {activeTab === "dashboard" && (
             <main className="layout single-column">
               <section className="full-width">

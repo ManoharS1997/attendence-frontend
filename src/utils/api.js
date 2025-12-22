@@ -1,147 +1,72 @@
 // src/utils/api.js
-import axios from 'axios';
+import axios from "axios";
 
-// Use Vite environment variable
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+/* =========================
+   BASE URL
+========================= */
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
+/* =========================
+   AXIOS INSTANCE
+========================= */
 const api = axios.create({
   baseURL: API_BASE_URL,
 });
 
-// Add token to requests
+/* =========================
+   TOKEN INTERCEPTOR
+========================= */
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Payslip Management APIs
+/* =========================
+   EMPLOYEES
+========================= */
 export const getEmployees = async () => {
-  try {
-    const response = await api.get('/employees');
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching employees:', error);
-    throw error;
-  }
+  const res = await api.get("/employees");
+  return res.data;
 };
 
-export const getWorkingDays = async (month, year) => {
-  try {
-    const response = await api.get('/payslips/working-days', {
-      params: { month, year }
-    });
-    return response.data.workingDays || 22;
-  } catch (error) {
-    console.error('Error fetching working days:', error);
-    return 22;
-  }
-};
-
-export const getHolidays = async (month, year) => {
-  try {
-    const response = await api.get('/holidays', {
-      params: { month, year }
-    });
-    return response.data || [];
-  } catch (error) {
-    console.error('Error fetching holidays:', error);
-    return [];
-  }
-};
-
-// Update holiday taken status
-export const updateHolidayTakenStatus = async (holidayId, status) => {
-  try {
-    const response = await api.post('/holidays/taken', {
-      dateKey: holidayId,
-      value: status
-    });
-    return response.data;
-  } catch (error) {
-    console.error('Error updating holiday status:', error);
-    throw error;
-  }
-};
-
-export const generatePayslip = async (payslipData) => {
-  try {
-    const response = await api.post('/payslips', payslipData);
-    return response.data;
-  } catch (error) {
-    console.error('Error generating payslip:', error);
-    throw error;
-  }
-};
-
-export const downloadPayslipPDF = async (payslipId) => {
-  try {
-    const response = await api.get(`/payslips/${payslipId}/download`, {
-      responseType: 'blob'
-    });
-    
-    const blob = new Blob([response.data], { type: 'application/pdf' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `payslip-${payslipId}.pdf`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-  } catch (error) {
-    console.error('Error downloading payslip:', error);
-    throw error;
-  }
+/* =========================
+   PAYSLIPS
+========================= */
+export const generatePayslip = async (data) => {
+  const res = await api.post("/payslips", data);
+  return res.data;
 };
 
 export const getEmployeePayslips = async (employeeId) => {
-  try {
-    const response = await api.get('/payslips/my', {
-      params: { employeeId }
-    });
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching employee payslips:', error);
-    return [];
-  }
+  const res = await api.get("/payslips/my", {
+    params: { employeeId },
+  });
+  return res.data;
 };
 
-export const getBankHistory = async (employeeId) => {
-  try {
-    const response = await api.get(`/payslips/${employeeId}/bank-history`);
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching bank history:', error);
-    return [];
-  }
-};
+export const downloadPayslipPDF = async (payslipId) => {
+  const res = await api.get(`/payslips/${payslipId}/download`, {
+    responseType: "blob",
+  });
 
-export const updateBankDetails = async (employeeId, bankData) => {
-  try {
-    const response = await api.put(`/payslips/${employeeId}/bank`, bankData);
-    return response.data;
-  } catch (error) {
-    console.error('Error updating bank details:', error);
-    throw error;
-  }
-};
+  const blob = new Blob([res.data], { type: "application/pdf" });
+  const url = window.URL.createObjectURL(blob);
 
-export const sendPayslipEmail = async (payslipId, emailData) => {
-  try {
-    const response = await api.post(`/payslips/${payslipId}/send-email`, emailData);
-    return response.data;
-  } catch (error) {
-    console.error('Error sending payslip email:', error);
-    throw error;
-  }
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `Payslip_${payslipId}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  window.URL.revokeObjectURL(url);
 };
 
 export default api;
