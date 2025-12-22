@@ -746,13 +746,6 @@ window.URL.revokeObjectURL(url);
     0
   );
 
-  const taskHoursByProject = tasks.reduce((acc, t) => {
-    const pid = t.project?._id || t.projectId;
-    if (!pid) return acc;
-    acc[pid] = (acc[pid] || 0) + (t.hoursAllocated || 0);
-    return acc;
-  }, {});
-
   const resetTaskForm = (keepProjectId = false) => {
     setEditingTaskId(null);
     setTaskForm((prev) => ({
@@ -1839,20 +1832,19 @@ window.URL.revokeObjectURL(url);
                           <th>Code</th>
                           <th>Description</th>
                           <th>Estimate (hrs)</th>
-                          <th>Task Allocated (hrs)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {projects.map((p) => (
-                          <tr key={p._id}>
-                            <td>{p.name}</td>
-                            <td>{p.code || "-"}</td>
-                            <td>{p.description || "-"}</td>
-                            <td>{p.totalEstimatedHours || 355}</td>
-                            <td>{taskHoursByProject[p._id] || 0}</td>
                           </tr>
-                        ))}
-                      </tbody>
+                      </thead>
+                     <tbody>
+  {projects.map((p) => (
+    <tr key={p._id}>
+      <td>{p.name}</td>
+      <td>{p.code || "-"}</td>
+      <td>{p.description || "-"}</td>
+      <td>{p.totalEstimatedHours || 355}</td>
+    </tr>
+  ))}
+</tbody>
+
                     </table>
                     {projects.length === 0 && (
                       <p className="empty">
