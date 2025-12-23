@@ -1,4 +1,4 @@
-# Vite requires Node 20+
+# Vite v7 requires Node 20+
 FROM node:20-alpine
 
 WORKDIR /app
@@ -7,17 +7,21 @@ WORKDIR /app
 COPY package*.json ./
 RUN rm -rf node_modules package-lock.json && npm install --force
 
-# Copy application source
+# Copy source code
 COPY . .
 
-# 🔧 Docker-only FIX for Linux case sensitivity
-# Converts Company Logo.PNG → Company Logo.png
-RUN if [ -f "src/assets/Company Logo.PNG" ]; then \
-      mv "src/assets/Company Logo.PNG" "src/assets/Company Logo.png"; \
+# 🔧 CRITICAL FIX: Handle BOTH .PNG and .png imports (Docker-only)
+RUN set -e && \
+    ASSET_DIR="src/assets" && \
+    if [ -f "$ASSET_DIR/Company Logo.PNG" ]; then \
+        echo "Fixing logo casing for Linux..." && \
+        cp "$ASSET_DIR/Company Logo.PNG" "$ASSET_DIR/Company Logo.png"; \
+    elif [ -f "$ASSET_DIR/Company Logo.png" ]; then \
+        cp "$ASSET_DIR/Company Logo.png" "$ASSET_DIR/Company Logo.PNG"; \
     fi
 
-# Do NOT run build (dev mode)
-# RUN npm run build ❌
+# ✅ MUST run build
+RUN npm run build
 
 EXPOSE 5173
 
