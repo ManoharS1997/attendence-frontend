@@ -1,4 +1,3 @@
-// src/pages/ManagerDashboard.jsx
 import React, { useEffect, useState, useCallback } from "react";
 import ManagerPayslip from "./ManagerPayslip";
 import { useAuth } from "../context/AuthContext";
@@ -84,85 +83,146 @@ const formatToday = () => {
  *  - Sundays
  *  - 2nd Saturdays
  *  - Mandatory public holidays
- *  - Optional public holidays that are marked as TAKEN (or defaultTaken)
+ *  - Optional public holidays that are marked as TAKEN
  */
 const diffDays = (startStr, endStr) => {
   if (!startStr || !endStr) return 0;
 
   const [sd, sm, sy] = startStr.split("-").map(Number);
   const [ed, em, ey] = endStr.split("-").map(Number);
+  
   if ([sd, sm, sy, ed, em, ey].some((n) => Number.isNaN(n))) return 0;
 
   const start = new Date(sy, sm - 1, sd);
   const end = new Date(ey, em - 1, ed);
+  
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
   if (end < start) return 0;
 
-  const calendarCache = {};
+  // Get holidays for the date range
+  const holidaysInRange = [];
+  let currentMonth = sm;
+  let currentYear = sy;
+  
+  while (currentYear < ey || (currentYear === ey && currentMonth <= em)) {
+    const monthHolidays = buildHolidayCalendar(
+      String(currentMonth).padStart(2, '0'), 
+      String(currentYear)
+    ) || [];
+    
+    // Filter holidays that are within the date range
+    monthHolidays.forEach((h) => {
+  let holidayDate = null;
 
-  const isSystemHolidayDate = (date) => {
-    const yyyy = date.getFullYear();
-    const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const dd = String(date.getDate()).padStart(2, "0");
-    const monthKey = `${yyyy}-${mm}`;
-    const dateKey = `${yyyy}-${mm}-${dd}`;
+  // Case 1: h.date is "dd-mm-yyyy"
+  if (typeof h.date === "string" && h.date.includes("-")) {
+    const [hd, hm, hy] = h.date.split("-").map(Number);
+    holidayDate = new Date(hy, hm - 1, hd);
+  }
 
-    if (!calendarCache[monthKey]) {
-      const list = buildHolidayCalendar(mm, String(yyyy)) || [];
-      const map = {};
-      list.forEach((h) => {
-        if (h.dateKey) map[h.dateKey] = h;
-      });
-      calendarCache[monthKey] = { list, map };
+  // Case 2: h.dateKey is "yyyy-mm-dd"
+  else if (typeof h.dateKey === "string" && h.dateKey.includes("-")) {
+    const [hy, hm, hd] = h.dateKey.split("-").map(Number);
+    holidayDate = new Date(hy, hm - 1, hd);
+  }
+
+  // Case 3: h.date is already a Date object
+  else if (h.date instanceof Date) {
+    holidayDate = h.date;
+  }
+
+  if (
+    holidayDate &&
+    !isNaN(holidayDate.getTime()) &&
+    holidayDate >= start &&
+    holidayDate <= end
+  ) {
+    holidaysInRange.push(h);
+  }
+});
+
+    
+    // Move to next month
+    currentMonth++;
+    if (currentMonth > 12) {
+      currentMonth = 1;
+      currentYear++;
     }
+  }
 
-    const { map } = calendarCache[monthKey];
-    const h = map[dateKey];
+  // Create a Set of holiday dates for quick lookup
+  const holidayDates = new Set();
+  holidaysInRange.forEach(h => {
+   if (typeof h.date === "string") {
+  holidayDates.add(h.date);
+} else if (typeof h.dateKey === "string") {
+  const [y, m, d] = h.dateKey.split("-");
+  holidayDates.add(`${d}-${m}-${y}`);
+}
 
-    const weekday = date.getDay(); // 0 Sun..6 Sat
-    const weekIndex = Math.floor((date.getDate() - 1) / 7);
-    const isSunday = weekday === 0;
-    const isSecondSaturday = weekday === 6 && weekIndex === 1;
-
-    const isMandatory =
-      h &&
-      (h.type === "MANDATORY_PUBLIC" || h.isMandatory || h.kind === "MANDATORY");
-
-    const isOptional =
-      h &&
-      (h.type === "OPTIONAL_PUBLIC" || h.isOptional || h.kind === "OPTIONAL");
-
-    const taken =
-      h &&
-        (h.taken === "TAKEN" ||
-          h.takenStatus === "TAKEN" ||
-          h.defaultTaken)
-        ? "TAKEN"
-        : "NOT_TAKEN";
-
-    const isOptionalEffectiveHoliday = isOptional && taken === "TAKEN";
-
-    return (
-      isSunday ||
-      isSecondSaturday ||
-      isMandatory ||
-      isOptionalEffectiveHoliday
-    );
-  };
+  });
 
   let count = 0;
   const cursor = new Date(start);
-
+  
   while (cursor <= end) {
-    if (!isSystemHolidayDate(cursor)) {
+    const yyyy = cursor.getFullYear();
+    const mm = String(cursor.getMonth() + 1).padStart(2, "0");
+    const dd = String(cursor.getDate()).padStart(2, "0");
+    const dateStr = `${dd}-${mm}-${yyyy}`;
+    
+    const weekday = cursor.getDay(); // 0 Sunday .. 6 Saturday
+    const isSunday = weekday === 0;
+    
+    // Check if it's 2nd Saturday
+    const dayOfMonth = cursor.getDate();
+    const weekIndex = Math.floor((dayOfMonth - 1) / 7);
+    const isSecondSaturday = weekday === 6 && weekIndex === 1;
+    
+    // Check if it's a holiday
+    const isHoliday = holidayDates.has(dateStr);
+    
+    if (!isSunday && !isSecondSaturday && !isHoliday) {
       count += 1;
     }
+    
     cursor.setDate(cursor.getDate() + 1);
   }
 
   return count;
 };
 
+/**
+ * Calculate months difference between two dates
+ */
+const calculateMonthsDiff = (startStr, endStr) => {
+  if (!startStr || !endStr) return 0;
+  
+  const [sd, sm, sy] = startStr.split("-").map(Number);
+  const [ed, em, ey] = endStr.split("-").map(Number);
+  
+  // Validate all parts are numbers
+  if ([sd, sm, sy, ed, em, ey].some(isNaN)) return 0;
+
+  const start = new Date(sy, sm - 1, sd);
+  const end = new Date(ey, em - 1, ed);
+  
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
+  if (end < start) return 0;
+  
+  // Calculate difference in months
+  let months = (ey - sy) * 12 + (em - sm);
+  
+  // If end day is less than start day, it's not a full month
+  if (ed < sd) {
+    months--;
+  }
+  
+  // Add 1 to include both start and end months
+  return Math.max(1, months + 1);
+};
+
+// convert between dd-mm-yyyy (stored) and yyyy-mm-dd (for <input type="date">)
 // convert between dd-mm-yyyy (stored) and yyyy-mm-dd (for <input type="date">)
 const toInputDate = (ddmmyyyy) => {
   if (!ddmmyyyy) return "";
@@ -176,6 +236,51 @@ const fromInputDate = (yyyymmdd) => {
   const [yyyy, mm, dd] = yyyymmdd.split("-");
   if (!dd || !mm || !yyyy) return "";
   return `${dd}-${mm}-${yyyy}`;
+};
+
+const calculateProjectDates = async (startDate, endDate) => {
+  if (!startDate || !endDate) {
+    return {
+      workingDays: 0,
+      totalEstimateHours: 0,
+      durationMonths: 0
+    };
+  }
+
+  try {
+    const response = await api.post("/utils/calculate-dates", {
+
+      startDate,
+      endDate
+    });
+
+    if (response.data?.success) {
+      return {
+        workingDays: response.data.data.workingDays,
+        totalEstimateHours: response.data.data.totalEstimateHours,
+        durationMonths: response.data.data.durationMonths
+      };
+    }
+  } catch {
+  console.warn("Using fallback project date calculation");
+}
+
+
+  // ---- FALLBACK ----
+  const [, sm, sy] = startDate.split("-").map(Number);
+  const [, em, ey] = endDate.split("-").map(Number);
+
+  const months = (ey - sy) * 12 + (em - sm);
+  const durationMonths = Math.max(1, months + 1);
+
+  const estimatedWorkingDays = durationMonths * 20;
+  const totalEstimateHours = estimatedWorkingDays * 8;
+
+  return {
+    workingDays: estimatedWorkingDays,
+    totalEstimateHours,
+    durationMonths
+  };
 };
 
 // Build a month calendar matrix: [[{ day, dateKey, date }, ... 7], ...]
@@ -283,7 +388,6 @@ export default function ManagerDashboard() {
     try {
       window.alert(message);
     } catch (err) {
-
       console.error("Manager alert popup error:", err);
     }
   };
@@ -291,15 +395,7 @@ export default function ManagerDashboard() {
   // Tabs: dashboard | projects | timesheet | logs
   const [activeTab, setActiveTab] = useState("dashboard");
 
-
-
-
-
-
   const [employees, setEmployees] = useState([]);
-  // ===== SELECTED EMPLOYEE (DERIVED) =====
-
-
   const [attendance, setAttendance] = useState([]);
   const [{ month, year }, setMonthYear] = useState(getCurrentMonth);
   const [summaries, setSummaries] = useState([]);
@@ -307,8 +403,6 @@ export default function ManagerDashboard() {
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
-  // ===== SELECTED EMPLOYEE (SAFE DERIVED VALUE) =====
-
 
   const [projectTasks, setProjectTasks] = useState([]);
   const [editingTaskId, setEditingTaskId] = useState(null);
@@ -316,21 +410,21 @@ export default function ManagerDashboard() {
     projectId: "",
     assignedUserId: "",
     recentRequirement: "",
-    requirementType: "NEW", // NEW | OLD | BUG
+    requirementType: "NEW",
     status: "OPEN",
-    scope: "AGREED", // AGREED | NOT_AGREED
+    scope: "AGREED",
     notes: "",
     discussedDate: formatToday(),
     originalClosureDate: "",
     estimatedDate: "",
     noOfDays: 0,
     clientPriority: "P3",
-    prioritySource: "CLIENT", // CLIENT | SERVICE_PROVIDER | THIRD_PARTY
+    prioritySource: "CLIENT",
     hoursAllocated: 0,
     createdBy: ""
   });
 
-  // Create employee form (public/weekend holidays are auto, not editable)
+  // Create employee form
   const [form, setForm] = useState({
     fullName: "",
     email: "",
@@ -340,14 +434,15 @@ export default function ManagerDashboard() {
     carryForward2025: 0
   });
 
-  // Project create form – manager can edit total hours & duration in months
+  // Project create form – with start and end dates
   const [projectForm, setProjectForm] = useState({
-    name: "Timesheet + Project + Budget Management System",
-    code: "MVP-1M",
-    description:
-      "MVP timesheet + project + budget management system (1 month, 355 hours).",
-    totalEstimatedHours: 355,
-    projectMonths: 1
+    name: "",
+    code: "",
+    description: "",
+    startDate: "",
+    endDate: "",
+    totalEstimatedHours: 0,
+    projectMonths: 0
   });
 
   const [assignUserId, setAssignUserId] = useState("");
@@ -356,42 +451,35 @@ export default function ManagerDashboard() {
   const [resetEmail, setResetEmail] = useState("");
   const [resetNewPassword, setResetNewPassword] = useState("");
 
-  // Optional holiday "Taken / Not Taken" state, keyed by dateKey (YYYY-MM-DD)
+  // Optional holiday "Taken / Not Taken" state
   const [holidayTakenMap, setHolidayTakenMap] = useState({});
 
   // ---------- LOGS (Manager View) ----------
   const [logs, setLogs] = useState([]);
   const [logsError, setLogsError] = useState("");
   const [logsLoading, setLogsLoading] = useState(false);
-  const [logsView, setLogsView] = useState("ALL"); // ALL | LOGIN | OPERATION
+  const [logsView, setLogsView] = useState("ALL");
   const [logUserFilter, setLogUserFilter] = useState("ALL");
   const [logSearch, setLogSearch] = useState("");
 
-  // NEW: pending attendance / leave / comp-off requests (from /attendance/requests)
+  // Pending attendance / leave / comp-off requests
   const [pendingRequests, setPendingRequests] = useState([]);
 
-  // Today holiday information (for professional banner)
+  // Today holiday information
   const todayHolidayInfo = getTodayHolidayInfo();
 
-  // -------- LOGOUT HANDLER (write logout log in backend) ----------
+  // -------- LOGOUT HANDLER ----------
   const handleLogout = async () => {
     try {
-      // backend /api/auth/logout should create LOGOUT log
       await api.post("/auth/logout");
     } catch (err) {
-
       console.error("Logout log error:", err?.response || err);
     } finally {
       logout();
     }
   };
 
-
-
-
-
   // -------- LOADERS ----------
-
   const loadEmployees = useCallback(async () => {
     const res = await api.get("/employees");
     setEmployees(res.data);
@@ -405,23 +493,21 @@ export default function ManagerDashboard() {
     [month, year]
   );
 
-const loadSummaries = useCallback(
-  async () => {
-    try {
-      console.log("Loading summaries for:", month, year);
-      const res = await api.get("/leave/summary/all", {
-        params: { month, year }
-      });
-      console.log("Summaries loaded:", res.data?.length || 0, "records");
-      setSummaries(res.data || []);
-    } catch (err) {
-      console.error("Error loading summaries:", err.response?.data || err.message);
-      setSummaries([]);
-      addAlert(`Error loading leave summaries: ${err.response?.data?.message || err.message}`);
-    }
-  },
-  [month, year]
-);
+  const loadSummaries = useCallback(
+    async () => {
+      try {
+        const res = await api.get("/leave/summary/all", {
+          params: { month, year }
+        });
+        setSummaries(res.data || []);
+      } catch (err) {
+        console.error("Error loading summaries:", err.response?.data || err.message);
+        setSummaries([]);
+        addAlert(`Error loading leave summaries: ${err.response?.data?.message || err.message}`);
+      }
+    },
+    [month, year]
+  );
 
   const loadProjects = useCallback(async () => {
     const res = await api.get("/projects");
@@ -441,7 +527,6 @@ const loadSummaries = useCallback(
         const res = await api.get(`/tasks/project/${projectIdToLoad}`);
         setProjectTasks(res.data || []);
       } catch (err) {
-
         console.error("Error loading project tasks", err);
         setProjectTasks([]);
       }
@@ -449,19 +534,16 @@ const loadSummaries = useCallback(
     [selectedProjectId]
   );
 
-  // NEW: load pending attendance / leave requests from backend
   const loadPendingRequests = useCallback(async () => {
     try {
       const res = await api.get("/attendance/requests");
       setPendingRequests(res.data || []);
     } catch (err) {
-
       console.error("Error loading attendance requests", err?.response || err);
       setPendingRequests([]);
     }
   }, []);
 
-  // Load all audit logs for selected month/year
   const loadLogs = useCallback(
     async () => {
       try {
@@ -472,12 +554,11 @@ const loadSummaries = useCallback(
         });
         setLogs(res.data || []);
       } catch (err) {
-
         console.error("Error loading logs", err?.response || err);
         setLogs([]);
         setLogsError(
           err?.response?.data?.message ||
-          "Error loading logs for this month (configure /logs API in backend)"
+          "Error loading logs for this month"
         );
       } finally {
         setLogsLoading(false);
@@ -494,27 +575,14 @@ const loadSummaries = useCallback(
     return () => clearTimeout(id);
   }, [loadEmployees, loadProjects]);
 
-useEffect(() => {
-  const id = setTimeout(() => {
-    loadAttendance();
-    loadSummaries();
-    loadPendingRequests();
-  }, 0);
-  return () => clearTimeout(id);
-}, [loadAttendance, loadSummaries, loadPendingRequests]);
-
-// ADD THIS NEW useEffect HERE:
-useEffect(() => {
-  // Whenever employees or attendance changes, reload summaries
-  if (employees.length > 0 || attendance.length > 0) {
-    loadSummaries();
-  }
-}, [employees, attendance, loadSummaries]);
-
-// Add this to refresh summaries when month/year changes
-useEffect(() => {
-  loadSummaries();
-}, [month, year, loadSummaries]);
+  useEffect(() => {
+    const id = setTimeout(() => {
+      loadAttendance();
+      loadSummaries();
+      loadPendingRequests();
+    }, 0);
+    return () => clearTimeout(id);
+  }, [loadAttendance, loadSummaries, loadPendingRequests]);
 
   useEffect(() => {
     const id = setTimeout(() => {
@@ -523,7 +591,7 @@ useEffect(() => {
     return () => clearTimeout(id);
   }, [selectedProjectId, loadProjectTasks]);
 
-  // Rebuild default Taken/NotTaken map whenever month/year changes
+  // Rebuild default Taken/NotTaken map
   useEffect(() => {
     const monthHolidays = buildHolidayCalendar(month, year);
     const fresh = {};
@@ -546,7 +614,7 @@ useEffect(() => {
     return () => clearTimeout(id);
   }, [month, year]);
 
-  // Load logs only when Logs tab is active (and month/year changes)
+  // Load logs only when Logs tab is active
   useEffect(() => {
     if (activeTab !== "logs") return undefined;
     const id = setTimeout(() => {
@@ -556,78 +624,70 @@ useEffect(() => {
   }, [activeTab, loadLogs]);
 
   // -------- EMPLOYEE CRUD / LEAVES ----------
+  const handleCreateEmployee = async (e) => {
+    e.preventDefault();
+    try {
+      const monthHolidays = buildHolidayCalendar(month, year) || [];
+      const weekendHolidayCount = monthHolidays.filter(
+        (h) => h.type === "WEEKEND"
+      ).length;
 
-  // In ManagerDashboard.jsx, update the handleCreateEmployee function:
+      const publicHolidaysMonth = monthHolidays.filter(
+        (h) =>
+          h.type === "MANDATORY_PUBLIC" ||
+          h.type === "OPTIONAL_PUBLIC" ||
+          h.isMandatory ||
+          h.isOptional ||
+          h.kind === "MANDATORY" ||
+          h.kind === "OPTIONAL"
+      ).length;
 
-// In handleCreateEmployee function in ManagerDashboard.jsx
-const handleCreateEmployee = async (e) => {
-  e.preventDefault();
-  try {
-    // Auto-calc monthly weekend + public holidays
-    const monthHolidays = buildHolidayCalendar(month, year) || [];
-    const weekendHolidayCount = monthHolidays.filter(
-      (h) => h.type === "WEEKEND"
-    ).length;
+      const employeeData = {
+        fullName: form.fullName,
+        email: form.email,
+        laptopId: form.laptopId,
+        password: form.password,
+        totalLeaveEntitlement: form.totalLeaveEntitlement,
+        carryForward2025: form.carryForward2025,
+        publicHolidays: publicHolidaysMonth,
+        weekendHolidays: weekendHolidayCount
+      };
 
-    const publicHolidaysMonth = monthHolidays.filter(
-      (h) =>
-        h.type === "MANDATORY_PUBLIC" ||
-        h.type === "OPTIONAL_PUBLIC" ||
-        h.isMandatory ||
-        h.isOptional ||
-        h.kind === "MANDATORY" ||
-        h.kind === "OPTIONAL"
-    ).length;
-
-    // Prepare data without employeeId - backend will generate it
-    const employeeData = {
-      fullName: form.fullName,
-      email: form.email,
-      laptopId: form.laptopId,
-      password: form.password,
-      totalLeaveEntitlement: form.totalLeaveEntitlement,
-      carryForward2025: form.carryForward2025,
-      publicHolidays: publicHolidaysMonth,
-      weekendHolidays: weekendHolidayCount
-    };
-
-    const response = await api.post("/employees", employeeData);
-    
-    // Get the generated employee ID from response
-    const generatedEmployeeId = response.data.employeeId;
-
-    addAlert(
-      `✅ Employee created successfully!
+      const response = await api.post("/employees", employeeData);
       
-      Employee Details:
-      • Name: ${form.fullName}
-      • Email: ${form.email}
-      • Employee ID: ${generatedEmployeeId}
-      • Default Password: ${form.password}
+      const generatedEmployeeId = response.data.employeeId;
+
+      addAlert(
+        `✅ Employee created successfully!
+        
+        Employee Details:
+        • Name: ${form.fullName}
+        • Email: ${form.email}
+        • Employee ID: ${generatedEmployeeId}
+        • Default Password: ${form.password}
+        
+        Please share the Employee ID and password with the employee.
+        Public & weekend holidays are auto-configured.`
+      );
+
+      setForm({
+        fullName: "",
+        email: "",
+        laptopId: "",
+        password: "Emp@123",
+        totalLeaveEntitlement: 16,
+        carryForward2025: 0
+      });
+
+      await loadEmployees();
+      await loadSummaries();
       
-      Please share the Employee ID and password with the employee.
-      Public & weekend holidays are auto-configured.`
-    );
+    } catch (err) {
+      console.error("Create employee error:", err);
+      addAlert(err.response?.data?.message || "Error creating employee");
+    }
+  };
 
-    // Reset form
-    setForm({
-      fullName: "",
-      email: "",
-      laptopId: "",
-      password: "Emp@123",
-      totalLeaveEntitlement: 16,
-      carryForward2025: 0
-    });
-
-    // Reload data
-    await loadEmployees();
-    await loadSummaries();
-    
-  } catch (err) {
-    console.error("Create employee error:", err);
-    addAlert(err.response?.data?.message || "Error creating employee");
-  }
-};
   const deactivate = async (id) => {
     if (!window.confirm("Deactivate this employee?")) return;
     await api.patch(`/employees/${id}/deactivate`);
@@ -635,51 +695,39 @@ const handleCreateEmployee = async (e) => {
     loadSummaries();
   };
 
-  // Manager can now only edit entitlement & carry forward – public/weekend
-  // holidays are system-calculated and not editable.
- // Update the editLeaveConfig function in ManagerDashboard.jsx:
-
-const editLeaveConfig = async (emp) => {
-  const totalLeaveEntitlement = Number(
-    prompt("Total Leave Entitlement", emp.totalLeaveEntitlement ?? 16)
-  );
-  if (Number.isNaN(totalLeaveEntitlement)) return;
-
-  const carryForward2025 = Number(
-    prompt("2025 Carry Forward Leaves", emp.carryForward2025 ?? 0)
-  );
-  if (Number.isNaN(carryForward2025)) return;
-
-  try {
-    await api.patch(`/employees/${emp._id}/leave-config`, {
-      totalLeaveEntitlement,
-      carryForward2025
-    });
-    
-    addAlert(
-      `Leave configuration updated for ${emp.fullName} (${emp.employeeId}).`
+  const editLeaveConfig = async (emp) => {
+    const totalLeaveEntitlement = Number(
+      prompt("Total Leave Entitlement", emp.totalLeaveEntitlement ?? 16)
     );
-    
-    // Force reload all data
-    await loadEmployees();
-    
-    // Clear and reload summaries
-    setSummaries([]);
-    await loadSummaries();
-    
-    // Clear and reload attendance
-    setAttendance([]);
-    await loadAttendance();
-    
-    // Force UI update
-    setSummaries(prev => [...prev.map(s => ({...s}))]);
-    
-  } catch (err) {
-    console.error("Edit leave config error:", err);
-    addAlert(err.response?.data?.message || "Error updating leave config");
-  }
-};
-  // UPDATED: Manager approves / rejects an AttendanceRequest
+    if (Number.isNaN(totalLeaveEntitlement)) return;
+
+    const carryForward2025 = Number(
+      prompt("2025 Carry Forward Leaves", emp.carryForward2025 ?? 0)
+    );
+    if (Number.isNaN(carryForward2025)) return;
+
+    try {
+      await api.patch(`/employees/${emp._id}/leave-config`, {
+        totalLeaveEntitlement,
+        carryForward2025
+      });
+      
+      addAlert(
+        `Leave configuration updated for ${emp.fullName} (${emp.employeeId}).`
+      );
+      
+      await loadEmployees();
+      setSummaries([]);
+      await loadSummaries();
+      setAttendance([]);
+      await loadAttendance();
+      
+    } catch (err) {
+      console.error("Edit leave config error:", err);
+      addAlert(err.response?.data?.message || "Error updating leave config");
+    }
+  };
+
   const decideLeave = async (id, decision) => {
     try {
       await api.patch(`/attendance/requests/${id}/decision`, { decision });
@@ -692,7 +740,6 @@ const editLeaveConfig = async (emp) => {
           : "Leave / attendance request rejected."
       );
     } catch (err) {
-
       console.error("Error deciding leave request", err?.response || err);
       addAlert(
         err?.response?.data?.message ||
@@ -722,7 +769,6 @@ const editLeaveConfig = async (emp) => {
       setResetEmail("");
       setResetNewPassword("");
     } catch (err) {
-
       console.error("Manager reset password error:", err);
       const msg =
         err.response?.data?.message ||
@@ -733,7 +779,6 @@ const editLeaveConfig = async (emp) => {
   };
 
   // -------- MONTH FILTER ----------
-
   const handleMonthChange = (e) => {
     const [m, y] = e.target.value.split("-");
     setMonthYear({ month: m, year: y });
@@ -794,33 +839,66 @@ const editLeaveConfig = async (emp) => {
         month
       });
     } catch (err) {
-
       console.error("Failed to save holiday taken/not-taken", err);
     }
   };
 
   // -------- PROJECT LOGIC ----------
-
   const handleCreateProject = async (e) => {
     e.preventDefault();
     try {
+      // Validate dates
+      if (!projectForm.startDate || !projectForm.endDate) {
+        addAlert("Start date and end date are required");
+        return;
+      }
+      
+      // Parse dates for validation
+      const parseDate = (dateStr) => {
+        if (!dateStr) return null;
+        const [dd, mm, yyyy] = dateStr.split("-").map(Number);
+        return new Date(yyyy, mm - 1, dd);
+      };
+      
+      const startDate = parseDate(projectForm.startDate);
+      const endDate = parseDate(projectForm.endDate);
+      
+      if (endDate < startDate) {
+        addAlert("End date cannot be before start date");
+        return;
+      }
+
       const payload = {
         name: projectForm.name,
         code: projectForm.code,
         description: projectForm.description,
+        startDate: projectForm.startDate,
+        endDate: projectForm.endDate,
         totalEstimatedHours: Number(projectForm.totalEstimatedHours) || 0,
-        projectMonths: Number(projectForm.projectMonths) || 0 // backend can ignore if not in schema
+        durationMonths: Number(projectForm.projectMonths) || 0,
       };
 
       const res = await api.post("/projects", payload);
-      addAlert("Project created");
+      addAlert("✅ Project created successfully with date range and auto-calculated hours");
       setSelectedProjectId(res.data._id);
       setTaskForm((prev) => ({
         ...prev,
         projectId: res.data._id
       }));
       loadProjects();
+      
+      // Reset form
+      setProjectForm({
+        name: "",
+        code: "",
+        description: "",
+        startDate: "",
+        endDate: "",
+        totalEstimatedHours: 0,
+        projectMonths: 0,
+      });
     } catch (err) {
+      console.error("Create project error:", err);
       addAlert(err.response?.data?.message || "Error creating project");
     }
   };
@@ -852,8 +930,7 @@ const editLeaveConfig = async (emp) => {
     loadProjectTasks(projectId);
   };
 
-  // -------- PROJECT TASKS (DISCUSSION REQUIREMENTS) ----------
-
+  // -------- PROJECT TASKS ----------
   const handleSubmitTask = async (e) => {
     e.preventDefault();
     if (!selectedProjectId) {
@@ -868,7 +945,7 @@ const editLeaveConfig = async (emp) => {
 
     const finalDays = taskForm.noOfDays || calculatedDays || 0;
     const hoursAllocated =
-      taskForm.hoursAllocated || (finalDays > 0 ? finalDays * 8 : 0); // simple rule
+      taskForm.hoursAllocated || (finalDays > 0 ? finalDays * 8 : 0);
 
     try {
       const payload = {
@@ -878,17 +955,14 @@ const editLeaveConfig = async (emp) => {
         hoursAllocated
       };
 
-      // "Assign To = None" allowed – just don't send assignedUserId
       if (!payload.assignedUserId) {
         delete payload.assignedUserId;
       }
 
-      // Allow empty requirement – put a default text
       if (!payload.recentRequirement || !payload.recentRequirement.trim()) {
         payload.recentRequirement = "Requirement not specified";
       }
 
-      // createdBy always comes from login user (or existing when editing)
       payload.createdBy = taskForm.createdBy || user.fullName;
 
       if (!editingTaskId) {
@@ -920,7 +994,6 @@ const editLeaveConfig = async (emp) => {
       }));
       loadProjectTasks(selectedProjectId);
     } catch (err) {
-
       console.error("Error saving task", err);
       addAlert(err.response?.data?.message || "Error saving task");
     }
@@ -954,7 +1027,6 @@ const editLeaveConfig = async (emp) => {
       await api.patch(`/tasks/${id}`, payload);
       loadProjectTasks();
     } catch (err) {
-
       console.error("Error updating task", err);
       addAlert(err.response?.data?.message || "Error updating task");
     }
@@ -991,7 +1063,7 @@ const editLeaveConfig = async (emp) => {
     });
     acc[p._id] = {
       used,
-      remaining: Math.max(0, (p.totalEstimatedHours || 355) - used)
+      remaining: Math.max(0, (p.totalEstimatedHours || 0) - used)
     };
     return acc;
   }, {});
@@ -1003,7 +1075,6 @@ const editLeaveConfig = async (emp) => {
     (selectedEmployeeId && hoursByEmployee[selectedEmployeeId]) || 0;
 
   // -------- REPORT METRICS (Manager) ----------
-
   const totalEmployees = employees.length;
   const activeEmployees = employees.filter((e) => e.isActive).length;
   const totalProjects = projects.length;
@@ -1029,7 +1100,6 @@ const editLeaveConfig = async (emp) => {
     .sort((a, b) => b.workedHours - a.workedHours);
 
   // -------- LOG METRICS + FILTERING ----------
-
   const loginLogs = logs.filter(
     (l) => l.type === "LOGIN" || l.type === "LOGOUT"
   );
@@ -1083,7 +1153,6 @@ const editLeaveConfig = async (emp) => {
       return parts.includes(q);
     });
 
-  // unique user list for Employee filter (from logs, includes admin/manager too)
   const logUserOptions = Array.from(
     new Map(
       logs.map((l) => {
@@ -1113,7 +1182,6 @@ const editLeaveConfig = async (emp) => {
             <div className="sidebar-role">Manager</div>
           </div>
           <nav className="sidebar-nav">
-            {/* 1. Dashboard (old Reports tab) */}
             <button
               className={
                 activeTab === "dashboard" ? "nav-item active" : "nav-item"
@@ -1123,7 +1191,6 @@ const editLeaveConfig = async (emp) => {
               Dashboard
             </button>
 
-            {/* 2. Project Management (old Projects tab) */}
             <button
               className={
                 activeTab === "projects" ? "nav-item active" : "nav-item"
@@ -1133,7 +1200,6 @@ const editLeaveConfig = async (emp) => {
               Project Management
             </button>
 
-            {/* 3. Timesheet Management (old Employees & Attendance tab) */}
             <button
               className={
                 activeTab === "timesheet" ? "nav-item active" : "nav-item"
@@ -1151,8 +1217,6 @@ const editLeaveConfig = async (emp) => {
               Payslip Management
             </button>
 
-
-            {/* 4. Logs & Audit */}
             <button
               className={activeTab === "logs" ? "nav-item active" : "nav-item"}
               onClick={() => setActiveTab("logs")}
@@ -1178,18 +1242,13 @@ const editLeaveConfig = async (emp) => {
                     try {
                       window.alert("No alerts yet");
                     } catch (err) {
-
-                      console.error(
-                        "Manager alert history popup error:",
-                        err
-                      );
+                      console.error("Manager alert history popup error:", err);
                     }
                     return;
                   }
                   try {
                     window.alert(alerts.join("\n\n"));
                   } catch (err) {
-
                     console.error("Manager alert history popup error:", err);
                   }
                 }}
@@ -1251,7 +1310,7 @@ const editLeaveConfig = async (emp) => {
             </div>
           )}
 
-          {/* ========== TIMESHEET MANAGEMENT TAB (Employees & Attendance) ========== */}
+          {/* ========== TIMESHEET MANAGEMENT TAB ========== */}
           {activeTab === "timesheet" && (
             <main className="layout">
               {/* LEFT COLUMN – Employees & password */}
@@ -1309,7 +1368,6 @@ const editLeaveConfig = async (emp) => {
                         }
                       />
                     </label>
-                    {/* Auto-calculated, not editable */}
                     <label>
                       Public Holidays (auto for {monthLabel})
                       <input
@@ -1353,70 +1411,69 @@ const editLeaveConfig = async (emp) => {
                   </p>
                 </div>
 
-                {/* In the Employees table */}
-<div className="card">
-  <h2>Employees</h2>
-  <div className="table-wrapper small-table">
-    <table>
-      <thead>
-        <tr>
-          <th>Employee ID</th> {/* Add this column */}
-          <th>Name</th>
-          <th>Email</th>
-          <th>Laptop</th>
-          <th>Status</th>
-          <th>Leaves (T / PH / W / CF)</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        {employees.map((e) => (
-          <tr key={e._id}>
-            <td>
-              <strong>{e.employeeId || "N/A"}</strong>
-            </td>
-            <td>{e.fullName}</td>
-            <td>{e.email}</td>
-            <td>{e.laptopId || "-"}</td>
-            <td>
-              <span className={`status-badge ${e.isActive ? 'active' : 'inactive'}`}>
-                {e.isActive ? "Active" : "Inactive"}
-              </span>
-            </td>
-            <td>
-              {e.totalLeaveEntitlement ?? 0}/
-              {e.publicHolidays ?? 0}/{e.weekendHolidays ?? 0}/
-              {e.carryForward2025 ?? 0}
-            </td>
-            <td>
-              <button
-                className="link-btn"
-                onClick={() => editLeaveConfig(e)}
-              >
-                Edit Leave
-              </button>
-              {e.isActive && (
-                <>
-                  {" "}
-                  |{" "}
-                  <button
-                    className="link-btn danger"
-                    onClick={() => deactivate(e._id)}
-                  >
-                    Deactivate
-                  </button>
-                </>
-              )}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-    {employees.length === 0 && (
-      <p className="empty">No employees yet</p>
-    )}
-  </div>
-</div>
+                <div className="card">
+                  <h2>Employees</h2>
+                  <div className="table-wrapper small-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Employee ID</th>
+                          <th>Name</th>
+                          <th>Email</th>
+                          <th>Laptop</th>
+                          <th>Status</th>
+                          <th>Leaves (T / PH / W / CF)</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {employees.map((e) => (
+                          <tr key={e._id}>
+                            <td>
+                              <strong>{e.employeeId || "N/A"}</strong>
+                            </td>
+                            <td>{e.fullName}</td>
+                            <td>{e.email}</td>
+                            <td>{e.laptopId || "-"}</td>
+                            <td>
+                              <span className={`status-badge ${e.isActive ? 'active' : 'inactive'}`}>
+                                {e.isActive ? "Active" : "Inactive"}
+                              </span>
+                            </td>
+                            <td>
+                              {e.totalLeaveEntitlement ?? 0}/
+                              {e.publicHolidays ?? 0}/{e.weekendHolidays ?? 0}/
+                              {e.carryForward2025 ?? 0}
+                            </td>
+                            <td>
+                              <button
+                                className="link-btn"
+                                onClick={() => editLeaveConfig(e)}
+                              >
+                                Edit Leave
+                              </button>
+                              {e.isActive && (
+                                <>
+                                  {" "}
+                                  |{" "}
+                                  <button
+                                    className="link-btn danger"
+                                    onClick={() => deactivate(e._id)}
+                                  >
+                                    Deactivate
+                                  </button>
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {employees.length === 0 && (
+                      <p className="empty">No employees yet</p>
+                    )}
+                  </div>
+                </div>
 
                 <div className="card">
                   <h2>Reset Employee Password</h2>
@@ -1627,15 +1684,11 @@ const editLeaveConfig = async (emp) => {
             </main>
           )}
 
-           {/* <main className="layout single-column">
-              <ManagerPayslip />
-            </main> */}
-
-
+          {/* ========== PROJECT MANAGEMENT TAB ========== */}
           {activeTab === "projects" && (
             <main className="layout single-column">
               <section className="full-width">
-                {/* Setup */}
+                {/* Project Setup */}
                 <div className="card">
                   <div className="card-header-row">
                     <h2>Projects – Setup</h2>
@@ -1667,8 +1720,11 @@ const editLeaveConfig = async (emp) => {
                             name: e.target.value
                           })
                         }
+                        placeholder="Enter project name"
+                        required
                       />
                     </label>
+                    
                     <label>
                       Project Code
                       <input
@@ -1679,37 +1735,213 @@ const editLeaveConfig = async (emp) => {
                             code: e.target.value
                           })
                         }
+                        placeholder="e.g., PROJ-001"
                       />
                     </label>
+                    
+                    {/* DATE FIELDS */}
+                   {/* START DATE */}
+{/* START DATE */}
+<label>
+  Start Date
+  <input
+    type="date"
+    value={toInputDate(projectForm.startDate)}
+    onChange={async (e) => {
+      const newStartDate = fromInputDate(e.target.value);
+      
+      if (!newStartDate) {
+        setProjectForm({
+          ...projectForm,
+          startDate: "",
+          totalEstimatedHours: 0,
+          projectMonths: 0
+        });
+        return;
+      }
+      
+      // If no end date, just set start date
+      if (!projectForm.endDate) {
+        setProjectForm({
+          ...projectForm,
+          startDate: newStartDate
+        });
+        return;
+      }
+      
+      // Validate dates
+      const [sd, sm, sy] = newStartDate.split("-").map(Number);
+      const [ed, em, ey] = projectForm.endDate.split("-").map(Number);
+      
+      const startDate = new Date(sy, sm - 1, sd);
+      const endDate = new Date(ey, em - 1, ed);
+      
+      if (endDate < startDate) {
+        addAlert("❌ End date cannot be before start date");
+        return;
+      }
+      
+      // Calculate project details from backend
+      const calculation = await calculateProjectDates(
+        newStartDate,
+        projectForm.endDate,
+        addAlert
+      );
+      
+      setProjectForm({
+        ...projectForm,
+        startDate: newStartDate,
+        totalEstimatedHours: calculation.totalEstimateHours,
+        projectMonths: calculation.durationMonths,
+      });
+    }}
+    required
+  />
+  <small style={{ fontSize: 11, color: '#aaa', display: 'block', marginTop: 4 }}>
+    Format: DD-MM-YYYY
+  </small>
+</label>
+
+{/* END DATE */}
+<label>
+  End Date
+  <input
+    type="date"
+    value={toInputDate(projectForm.endDate)}
+    onChange={async (e) => {
+      const newEndDate = fromInputDate(e.target.value);
+      
+      if (!newEndDate) {
+        setProjectForm({
+          ...projectForm,
+          endDate: "",
+          totalEstimatedHours: 0,
+          projectMonths: 0
+        });
+        return;
+      }
+      
+      // If no start date, just set end date
+      if (!projectForm.startDate) {
+        setProjectForm({
+          ...projectForm,
+          endDate: newEndDate
+        });
+        return;
+      }
+      
+      // Validate dates
+      const [sd, sm, sy] = projectForm.startDate.split("-").map(Number);
+      const [ed, em, ey] = newEndDate.split("-").map(Number);
+      
+      const startDate = new Date(sy, sm - 1, sd);
+      const endDate = new Date(ey, em - 1, ed);
+      
+      if (endDate < startDate) {
+        addAlert("❌ End date cannot be before start date");
+        return;
+      }
+      
+      // Calculate project details from backend
+      const calculation = await calculateProjectDates(
+        projectForm.startDate,
+        newEndDate,
+        addAlert
+      );
+      
+      setProjectForm({
+        ...projectForm,
+        endDate: newEndDate,
+        totalEstimatedHours: calculation.totalEstimateHours,
+        projectMonths: calculation.durationMonths,
+      });
+    }}
+    required
+  />
+  <small style={{ fontSize: 11, color: '#aaa', display: 'block', marginTop: 4 }}>
+    Format: DD-MM-YYYY
+  </small>
+</label>
+                    
+                    {/* AUTO-CALCULATED & EDITABLE FIELDS */}
                     <label>
-                      Total Estimated Hours
-                      <input
-                        type="number"
-                        value={projectForm.totalEstimatedHours}
-                        onChange={(e) =>
-                          setProjectForm({
-                            ...projectForm,
-                            totalEstimatedHours: Number(e.target.value)
-                          })
-                        }
-                      />
+                      Total Estimate Hours
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="number"
+                          value={projectForm.totalEstimatedHours}
+                          onChange={(e) => {
+                            const value = Number(e.target.value);
+                            setProjectForm({
+                              ...projectForm,
+                              totalEstimatedHours: value >= 0 ? value : 0
+                            });
+                          }}
+                          min="0"
+                          step="1"
+                        />
+                        {projectForm.startDate && projectForm.endDate && (
+                          <small style={{ 
+                            fontSize: 10, 
+                            color: '#40a9ff',
+                            position: 'absolute',
+                            right: 8,
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'rgba(64, 169, 255, 0.1)',
+                            padding: '2px 6px',
+                            borderRadius: 3
+                          }}>
+                            Auto: {diffDays(projectForm.startDate, projectForm.endDate) * 8} hrs
+                          </small>
+                        )}
+                      </div>
+                      <small style={{ fontSize: 11, color: '#aaa', display: 'block', marginTop: 4 }}>
+                        Auto-calculated from dates (Working days × 8 hours)
+                      </small>
                     </label>
+                    
                     <label>
                       Duration (Months)
-                      <input
-                        type="number"
-                        value={projectForm.projectMonths}
-                        onChange={(e) =>
-                          setProjectForm({
-                            ...projectForm,
-                            projectMonths: Number(e.target.value)
-                          })
-                        }
-                      />
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="number"
+                          value={projectForm.projectMonths}
+                          onChange={(e) => {
+                            const value = Number(e.target.value);
+                            setProjectForm({
+                              ...projectForm,
+                              projectMonths: value >= 1 ? value : 1
+                            });
+                          }}
+                          min="1"
+                          step="1"
+                        />
+                        {projectForm.startDate && projectForm.endDate && (
+                          <small style={{ 
+                            fontSize: 10, 
+                            color: '#40a9ff',
+                            position: 'absolute',
+                            right: 8,
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'rgba(64, 169, 255, 0.1)',
+                            padding: '2px 6px',
+                            borderRadius: 3
+                          }}>
+                            Auto: {calculateMonthsDiff(projectForm.startDate, projectForm.endDate)} mo
+                          </small>
+                        )}
+                      </div>
+                      <small style={{ fontSize: 11, color: '#aaa', display: 'block', marginTop: 4 }}>
+                        Auto-calculated from dates
+                      </small>
                     </label>
+                    
                     <label className="full-row">
                       Description
-                      <input
+                      <textarea
+                        rows={3}
                         value={projectForm.description}
                         onChange={(e) =>
                           setProjectForm({
@@ -1717,10 +1949,12 @@ const editLeaveConfig = async (emp) => {
                             description: e.target.value
                           })
                         }
+                        placeholder="Enter project description..."
                       />
                     </label>
-                    <div className="full-row">
-                      <button type="submit" className="primary-btn">
+                    
+                    <div className="full-row" style={{ marginTop: 8 }}>
+                      <button type="submit" className="primary-btn" style={{ width: '100%' }}>
                         Create Project
                       </button>
                     </div>
@@ -1751,7 +1985,7 @@ const editLeaveConfig = async (emp) => {
                         <option value="">-- Select --</option>
                         {projects.map((p) => (
                           <option key={p._id} value={p._id}>
-                            {p.name}
+                            {p.name} ({p.code || 'No Code'})
                           </option>
                         ))}
                       </select>
@@ -2079,8 +2313,7 @@ const editLeaveConfig = async (emp) => {
                   <h2>Projects Overview – {monthLabel}</h2>
                   <p style={{ fontSize: 12, marginBottom: 6 }}>
                     Click a project row to see detailed allocation and balance
-                    below. Public Holidays column is auto-calculated from the
-                    holiday calendar above.
+                    below.
                   </p>
                   <div className="table-wrapper small-table">
                     <table>
@@ -2088,27 +2321,31 @@ const editLeaveConfig = async (emp) => {
                         <tr>
                           <th>Project</th>
                           <th>Code</th>
+                          <th>Start Date</th>
+                          <th>End Date</th>
+                          <th>Duration</th>
+                          <th>Total Hours</th>
                           <th>Employees</th>
-                          <th>Project Total (hrs)</th>
                           <th>Worked (hrs)</th>
                           <th>Balance (hrs)</th>
-                          <th>Public Holidays</th>
                         </tr>
                       </thead>
                       <tbody>
                         {projects.map((p) => {
                           const totals = projectTotals[p._id] || {
                             used: 0,
-                            remaining: p.totalEstimatedHours || 355
+                            remaining: p.totalEstimatedHours || 0
                           };
                           const count = p.assignments?.length || 0;
                           const isSelected = selectedProjectId === p._id;
+                          
                           return (
                             <tr
                               key={p._id}
                               style={{
                                 cursor: "pointer",
-                                fontWeight: isSelected ? "600" : "400"
+                                fontWeight: isSelected ? "600" : "400",
+                                backgroundColor: isSelected ? "rgba(64, 169, 255, 0.1)" : "transparent"
                               }}
                               onClick={() => {
                                 setSelectedProjectId(p._id);
@@ -2119,13 +2356,19 @@ const editLeaveConfig = async (emp) => {
                                 }));
                               }}
                             >
-                              <td>{p.name}</td>
-                              <td>{p.code || "-"}</td>
-                              <td>{count}</td>
-                              <td>{p.totalEstimatedHours || 355}</td>
-                              <td>{totals.used}</td>
-                              <td>{totals.remaining}</td>
-                              <td>{totalPublicForMonth}</td>
+                              <td style={{ padding: '8px' }}>{p.name}</td>
+                              <td style={{ padding: '8px' }}>{p.code || "-"}</td>
+                              <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{p.startDate || "-"}</td>
+                              <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{p.endDate || "-"}</td>
+                              <td style={{ padding: '8px', textAlign: 'center' }}>{p.durationMonths || 0} mo</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>
+                                <div>
+                                  <div>{p.totalEstimatedHours || 0} hrs</div>
+                                </div>
+                              </td>
+                              <td style={{ padding: '8px', textAlign: 'center' }}>{count}</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>{totals.used} hrs</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>{totals.remaining} hrs</td>
                             </tr>
                           );
                         })}
@@ -2150,20 +2393,10 @@ const editLeaveConfig = async (emp) => {
                         — {selectedProject.description || "No description"}.
                       </p>
                       <p style={{ fontSize: 12, marginBottom: 8 }}>
-                        Estimate:{" "}
-                        <strong>
-                          {selectedProject.totalEstimatedHours || 355} hrs
-                        </strong>{" "}
-                        • Worked:{" "}
-                        <strong>
-                          {projectTotals[selectedProject._id]?.used || 0} hrs
-                        </strong>{" "}
-                        • Balance:{" "}
-                        <strong>
-                          {projectTotals[selectedProject._id]?.remaining ||
-                            (selectedProject.totalEstimatedHours || 355)}{" "}
-                          hrs
-                        </strong>
+                        <strong>Duration:</strong> {selectedProject.startDate} to {selectedProject.endDate} ({selectedProject.durationMonths || 0} months)<br />
+                        <strong>Estimate:</strong> {selectedProject.totalEstimatedHours || 0} hrs • 
+                        <strong> Worked:</strong> {projectTotals[selectedProject._id]?.used || 0} hrs • 
+                        <strong> Balance:</strong> {projectTotals[selectedProject._id]?.remaining || 0} hrs
                       </p>
 
                       <h3 style={{ fontSize: 14, marginBottom: 6 }}>
@@ -2431,7 +2664,6 @@ const editLeaveConfig = async (emp) => {
                             readOnly
                           />
                         </label>
-                        {/* Notes at bottom, multi-line */}
                         <label className="full-row">
                           Notes
                           <textarea
@@ -2629,8 +2861,7 @@ const editLeaveConfig = async (emp) => {
                   <p className="note" style={{ marginBottom: 8 }}>
                     View all system activity for this month – login attempts,
                     logout events and key operations performed by Manager /
-                    Employees / Admin. This is a read-only view for audit and
-                    compliance. Only Manager can access this screen.
+                    Employees / Admin.
                   </p>
 
                   {/* KPI Row for logs */}
@@ -2813,9 +3044,7 @@ const editLeaveConfig = async (emp) => {
                     </table>
                     {filteredLogs.length === 0 && !logsLoading && (
                       <p className="empty">
-                        No logs available for the selected filters. Once the
-                        <code> /logs </code> API captures login, logout and
-                        operations, they will appear here.
+                        No logs available for the selected filters.
                       </p>
                     )}
                   </div>
@@ -2824,7 +3053,7 @@ const editLeaveConfig = async (emp) => {
             </main>
           )}
 
-          {/* ========== DASHBOARD TAB (old Reports) ========== */}
+          {/* ========== DASHBOARD TAB ========== */}
           {activeTab === "dashboard" && (
             <main className="layout single-column">
               <section className="full-width">
@@ -2936,28 +3165,32 @@ const editLeaveConfig = async (emp) => {
                         <tr>
                           <th>Project</th>
                           <th>Code</th>
+                          <th>Start Date</th>
+                          <th>End Date</th>
+                          <th>Duration</th>
+                          <th>Total Hours</th>
                           <th>Employees</th>
-                          <th>Estimate (hrs)</th>
                           <th>Worked (hrs)</th>
                           <th>Balance (hrs)</th>
-                          <th>Public Holidays</th>
                         </tr>
                       </thead>
                       <tbody>
                         {projects.map((p) => {
                           const totals = projectTotals[p._id] || {
                             used: 0,
-                            remaining: p.totalEstimatedHours || 355
+                            remaining: p.totalEstimatedHours || 0
                           };
                           return (
                             <tr key={p._id}>
                               <td>{p.name}</td>
                               <td>{p.code || "-"}</td>
+                              <td>{p.startDate || "-"}</td>
+                              <td>{p.endDate || "-"}</td>
+                              <td>{p.durationMonths || 0} mo</td>
+                              <td>{p.totalEstimatedHours || 0}</td>
                               <td>{p.assignments?.length || 0}</td>
-                              <td>{p.totalEstimatedHours || 355}</td>
                               <td>{totals.used}</td>
                               <td>{totals.remaining}</td>
-                              <td>{totalPublicForMonth}</td>
                             </tr>
                           );
                         })}
@@ -3008,7 +3241,6 @@ const editLeaveConfig = async (emp) => {
                   <p className="note">
                     Reports are view-only. Update data using Timesheet
                     Management, Project Management and Logs &amp; Audit tabs.
-                    Admin sees the same reports but cannot change any data.
                   </p>
                 </div>
               </section>

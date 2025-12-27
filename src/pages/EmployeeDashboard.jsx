@@ -250,30 +250,28 @@ export default function EmployeeDashboard() {
   const [tasks, setTasks] = useState([]);
   const [payslips, setPayslips] = useState([]);
 
-  const handleDownloadPayslip = async (payslipId, month, year) => {
+ const handleDownloadPayslip = async (payslipId) => {
   try {
-const res = await api.get(
-  `/payslips/${payslipId}/download`,
-  { responseType: "arraybuffer" }
-);
-
-const blob = new Blob([res.data], { type: "application/pdf" });
-
-const url = window.URL.createObjectURL(blob);
-const a = document.createElement("a");
-a.href = url;
-a.download = `Payslip-${month}-${year}.pdf`;
-document.body.appendChild(a);
-a.click();
-document.body.removeChild(a);
-window.URL.revokeObjectURL(url);
-
-  } catch (err) {
-    console.error("Failed to download payslip", err);
-    alert("Failed to download payslip");
+    // Create a form and submit it to force download without navigation
+    const form = document.createElement('form');
+    form.method = 'GET';
+    form.action = `/payslips/download/${payslipId}`;
+    form.target = '_blank'; // Open in new tab/window
+    form.style.display = 'none';
+    
+    document.body.appendChild(form);
+    form.submit();
+    
+    // Remove form after submission
+    setTimeout(() => {
+      document.body.removeChild(form);
+    }, 100);
+    
+  } catch (error) {
+    console.error("Payslip download error:", error);
+    alert("Error downloading payslip. Please try right-clicking and 'Save link as' or contact your manager.");
   }
 };
-
   const [loadingSave, setLoadingSave] = useState(false);
 
   const [lastAlertAttendanceId, setLastAlertAttendanceId] = useState(null);
@@ -324,16 +322,16 @@ window.URL.revokeObjectURL(url);
       setTasks([]);
     }
   }, []);
-  const loadPayslips = useCallback(async () => {
-  try {
-    const res = await api.get("/payslips/my");
-    setPayslips(res.data || []);
-  } catch (err) {
-    console.error("Failed to load payslips", err);
-    setPayslips([]);
-  }
-}, []);
 
+  const loadPayslips = useCallback(async () => {
+    try {
+      const res = await api.get("/payslips/my");
+      setPayslips(res.data || []);
+    } catch (err) {
+      console.error("Failed to load payslips", err);
+      setPayslips([]);
+    }
+  }, []);
 
   useEffect(() => {
     const id = setTimeout(() => {
@@ -357,12 +355,12 @@ window.URL.revokeObjectURL(url);
     }, 0);
     return () => clearTimeout(id);
   }, [loadProjects, loadTasks]);
-  useEffect(() => {
-  if (activeTab === "payslips") {
-    loadPayslips();
-  }
-}, [activeTab, loadPayslips]);
 
+  useEffect(() => {
+    if (activeTab === "payslips") {
+      loadPayslips();
+    }
+  }, [activeTab, loadPayslips]);
 
   useEffect(() => {
     if (!attendance || attendance.length === 0) return;
@@ -884,14 +882,13 @@ window.URL.revokeObjectURL(url);
               Timesheet Management
             </button>
             <button
-  className={
-    activeTab === "payslips" ? "nav-item active" : "nav-item"
-  }
-  onClick={() => setActiveTab("payslips")}
->
-  Payslips
-</button>
-
+              className={
+                activeTab === "payslips" ? "nav-item active" : "nav-item"
+              }
+              onClick={() => setActiveTab("payslips")}
+            >
+              Payslips
+            </button>
           </nav>
         </aside>
 
@@ -1832,19 +1829,18 @@ window.URL.revokeObjectURL(url);
                           <th>Code</th>
                           <th>Description</th>
                           <th>Estimate (hrs)</th>
-                          </tr>
+                        </tr>
                       </thead>
-                     <tbody>
-  {projects.map((p) => (
-    <tr key={p._id}>
-      <td>{p.name}</td>
-      <td>{p.code || "-"}</td>
-      <td>{p.description || "-"}</td>
-      <td>{p.totalEstimatedHours || 355}</td>
-    </tr>
-  ))}
-</tbody>
-
+                      <tbody>
+                        {projects.map((p) => (
+                          <tr key={p._id}>
+                            <td>{p.name}</td>
+                            <td>{p.code || "-"}</td>
+                            <td>{p.description || "-"}</td>
+                            <td>{p.totalEstimatedHours || 355}</td>
+                          </tr>
+                        ))}
+                      </tbody>
                     </table>
                     {projects.length === 0 && (
                       <p className="empty">
@@ -1961,61 +1957,76 @@ window.URL.revokeObjectURL(url);
             </main>
           )}
 
+          {/* PAYSLIPS TAB */}
+          {activeTab === "payslips" && (
+            <main className="layout single-column">
+              <section className="full-width">
+                <div className="card">
+                  <h2>My Payslips</h2>
+
+                  {payslips.length === 0 ? (
+                    <p className="empty">No payslips generated yet.</p>
+                  ) : (
+                    <div className="table-wrapper">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Month</th>
+                            <th>Year</th>
+                            <th>Employee ID</th>
+                            <th>Name</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {payslips.map((p) => (
+                            <tr key={p._id}>
+                              <td>{monthNames[p.month - 1]}</td>
+                              <td>{p.year}</td>
+                              <td>{p.employeeId || user.employeeId || "N/A"}</td>
+                              <td>{user.fullName}</td>
+                              <td>
+                                <span className={`status-badge ${p.status === 'GENERATED' ? 'active' : 'pending'}`}>
+                                  {p.status || 'GENERATED'}
+                                </span>
+                              </td>
+                              <td>
+                                <button
+  className="primary-btn"
+  onClick={(e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleDownloadPayslip(p._id, p.month, p.year);
+  }}
+  style={{ padding: '6px 12px', fontSize: '12px' }}
+>
+  📥 Download PDF
+</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Information note */}
+                <div className="card" style={{ marginTop: '16px' }}>
+                  <h3>Payslip Information</h3>
+                  <p className="note">
+                    • Payslips are generated by Manager at the end of each month<br />
+                    • Download the PDF to view complete salary details including Basic Pay, Allowances, Deductions, and Net Pay<br />
+                    • The PDF format matches the professional payslip shown to Manager<br />
+                    • Contact HR/Manager if you have any questions about your payslip
+                  </p>
+                </div>
+              </section>
+            </main>
+          )}
+
           {/* DASHBOARD TAB */}
-         {/* PAYSLIPS TAB */}
-{activeTab === "payslips" && (
-  <main className="layout single-column">
-    <section className="full-width">
-      <div className="card">
-        <h2>My Payslips</h2>
-
-        {payslips.length === 0 ? (
-          <p className="empty">No payslips generated yet.</p>
-        ) : (
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Month</th>
-                  <th>Employee ID</th>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Net Pay</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payslips.map((p) => (
-                  <tr key={p._id}>
-                    <td>
-                      {monthNames[p.month - 1]} {p.year}
-                    </td>
-                    <td>{p.employeeId}</td>
-                    <td>{user.fullName}</td>
-                    <td>{user.email}</td>
-                    <td>₹ {p.netPay}</td>
-                    <td>
-                      <button
-                        className="primary-btn"
-                        onClick={() =>
-                          handleDownloadPayslip(p._id, p.month, p.year)
-                        }
-                      >
-                        Download PDF
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </section>
-  </main>
-)}
-
-
           {activeTab === "dashboard" && (
             <main className="layout single-column">
               <section className="full-width">

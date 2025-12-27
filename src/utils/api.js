@@ -5,7 +5,7 @@ import axios from "axios";
    BASE URL
 ========================= */
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://44.217.109.241:5000/api";
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 /* =========================
    AXIOS INSTANCE
