@@ -250,28 +250,39 @@ export default function EmployeeDashboard() {
   const [tasks, setTasks] = useState([]);
   const [payslips, setPayslips] = useState([]);
 
- const handleDownloadPayslip = async (payslipId) => {
+  // Payslip preview modal state
+const [previewPayslip, setPreviewPayslip] = useState(null);
+
+const handleDownloadPayslip = async (payslipId) => {
   try {
-    // Create a form and submit it to force download without navigation
-    const form = document.createElement('form');
-    form.method = 'GET';
-    form.action = `/payslips/download/${payslipId}`;
-    form.target = '_blank'; // Open in new tab/window
-    form.style.display = 'none';
-    
-    document.body.appendChild(form);
-    form.submit();
-    
-    // Remove form after submission
-    setTimeout(() => {
-      document.body.removeChild(form);
-    }, 100);
-    
-  } catch (error) {
-    console.error("Payslip download error:", error);
-    alert("Error downloading payslip. Please try right-clicking and 'Save link as' or contact your manager.");
+    const response = await api.get(
+      `/payslips/${payslipId}/download`,
+      {
+        responseType: "blob" // 🔥 MUST
+      }
+    );
+
+    const blob = new Blob([response.data], {
+      type: "application/pdf"
+    });
+
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "Payslip.pdf"; // browser uses backend filename
+    document.body.appendChild(a);
+    a.click();
+
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("Payslip download failed", err);
+    alert("Unable to download payslip");
   }
 };
+
+
   const [loadingSave, setLoadingSave] = useState(false);
 
   const [lastAlertAttendanceId, setLastAlertAttendanceId] = useState(null);
@@ -2011,6 +2022,104 @@ export default function EmployeeDashboard() {
                     </div>
                   )}
                 </div>
+                {/* PAYSLIP PREVIEW MODAL */}
+{previewPayslip && (
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.55)",
+      zIndex: 9999,
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center"
+    }}
+  >
+    <div
+      style={{
+        width: "92%",
+        height: "92%",
+        background: "#f5f7fb",
+        borderRadius: 12,
+        display: "flex",
+        flexDirection: "column"
+      }}
+    >
+      {/* HEADER */}
+      <div
+        style={{
+          padding: "14px 18px",
+          background: "#fff",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
+        }}
+      >
+        <div>
+          <h3 style={{ margin: 0 }}>
+            Payslip Preview – Professional Blue
+          </h3>
+          <small>
+            For {user.fullName} •{" "}
+            {monthNames[previewPayslip.month - 1]} {previewPayslip.year}
+          </small>
+        </div>
+
+        <div style={{ display: "flex", gap: 8 }}>
+        <button
+  className="primary-btn"
+  onClick={() => handleDownloadPayslip(previewPayslip._id)}
+
+>
+  ⬇ Download PDF
+</button>
+
+          <button
+            className="outline-btn"
+            onClick={() => setPreviewPayslip(null)}
+          >
+            ✖ Close
+          </button>
+        </div>
+      </div>
+
+      {/* BODY */}
+      <div style={{ flex: 1, padding: 12 }}>
+        <iframe
+          title="Payslip Preview"
+          src={`/api/payslips/${previewPayslip._id}/preview`}
+          style={{
+            width: "100%",
+            height: "100%",
+            border: "none",
+            borderRadius: 8,
+            background: "#fff"
+          }}
+        />
+      </div>
+
+      {/* FOOTER */}
+      <div
+        style={{
+          padding: "12px 18px",
+          background: "#fff",
+          display: "flex",
+          justifyContent: "center",
+          gap: 12
+        }}
+      >
+        <button
+          className="primary-btn"
+          onClick={() => handleDownloadPayslip(previewPayslip._id)}
+        >
+          ⬇ Download PDF
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
                 
                 {/* Information note */}
                 <div className="card" style={{ marginTop: '16px' }}>
