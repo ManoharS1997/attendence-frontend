@@ -1,4 +1,4 @@
-// src/components/PayslipGenerator.jsx
+// src/components/payslips/PayslipGenerator.jsx
 import React, { useEffect, useState } from "react";
 
 /**

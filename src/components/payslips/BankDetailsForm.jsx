@@ -1,14 +1,32 @@
-import React, { useState } from 'react';
-import { Building, CreditCard, Lock, MapPin, Edit2, Save, X, History } from 'lucide-react';
+// src/components/payslips/BankDetailsForm.jsx
+import React, { useState, useEffect } from 'react';
+import { Building, CreditCard, Lock, MapPin, Edit2, Save, X, History, CheckCircle, AlertCircle, Shield } from 'lucide-react';
+import { updateBankDetails, getBankDetails, getBankHistory, verifyBankDetails } from '../../utils/api';
 
-const BankDetailsForm = ({ bankDetails, onUpdate }) => {
-
+const BankDetailsForm = ({ employeeId, onUpdateSuccess }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState({ ...bankDetails });
   const [showHistory, setShowHistory] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyData, setHistoryData] = useState([]);
+  const [verifying, setVerifying] = useState(false);
+  
+  const [bankDetails, setBankDetails] = useState({
+    bankName: '',
+    accountNumber: '',
+    ifsc: '',
+    branch: '',
+    accountType: 'Savings',
+    verified: false,
+    verifiedBy: null,
+    verifiedAt: null,
+    notes: ''
+  });
+
+  const [editData, setEditData] = useState({ ...bankDetails });
 
   const bankOptions = [
-   'State Bank of India',
+    'State Bank of India',
     'HDFC Bank',
     'ICICI Bank',
     'Axis Bank',
@@ -53,26 +71,90 @@ const BankDetailsForm = ({ bankDetails, onUpdate }) => {
     'Other Bank'
   ];
 
-  const handleSave = () => {
-    // Add to history before updating
-    const updatedHistory = [
-      {
-        date: new Date().toLocaleDateString(),
-        time: new Date().toLocaleTimeString(),
-        bankName: bankDetails.bankName,
-        accountNumber: bankDetails.accountNumber,
-        ifsc: bankDetails.ifsc,
-        branch: bankDetails.branch,
-        changedBy: 'Manager'
-      },
-      ...bankDetails.history.slice(0, 4) // Keep only last 5 entries
-    ];
+  const accountTypeOptions = ['Savings', 'Current', 'Salary'];
 
-    onUpdate({
-      ...editData,
-      history: updatedHistory
-    });
-    setIsEditing(false);
+  // Load bank details
+  useEffect(() => {
+    if (employeeId) {
+      loadBankDetails();
+    }
+  }, [employeeId]);
+
+  const loadBankDetails = async () => {
+    try {
+      setLoading(true);
+      const data = await getBankDetails(employeeId);
+      setBankDetails(data);
+      setEditData(data);
+    } catch (error) {
+      console.error('Error loading bank details:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadBankHistory = async () => {
+    try {
+      setHistoryLoading(true);
+      const data = await getBankHistory(employeeId);
+      setHistoryData(data.history || []);
+    } catch (error) {
+      console.error('Error loading bank history:', error);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      setLoading(true);
+      const { bankName, accountNumber, ifsc, branch, accountType } = editData;
+      
+      const bankData = {
+        bankName,
+        accountNumber,
+        ifsc,
+        branch,
+        accountType,
+        reason: 'Bank details updated by manager'
+      };
+
+      await updateBankDetails(employeeId, bankData);
+      
+      // Reload bank details
+      await loadBankDetails();
+      
+      setIsEditing(false);
+      
+      if (onUpdateSuccess) {
+        onUpdateSuccess();
+      }
+      
+      // Show success message
+      alert('Bank details updated successfully!');
+    } catch (error) {
+      console.error('Error saving bank details:', error);
+      alert('Failed to update bank details. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    try {
+      setVerifying(true);
+      await verifyBankDetails(employeeId, 'Bank details verified');
+      
+      // Reload bank details
+      await loadBankDetails();
+      
+      alert('Bank details verified successfully!');
+    } catch (error) {
+      console.error('Error verifying bank details:', error);
+      alert('Failed to verify bank details.');
+    } finally {
+      setVerifying(false);
+    }
   };
 
   const handleCancel = () => {
@@ -93,38 +175,80 @@ const BankDetailsForm = ({ bankDetails, onUpdate }) => {
     return `****${last4}`;
   };
 
+  const handleHistoryClick = () => {
+    setShowHistory(!showHistory);
+    if (!showHistory) {
+      loadBankHistory();
+    }
+  };
+
+  if (loading && !bankDetails.bankName) {
+    return (
+      <div className="bank-details-loading">
+        <div className="spinner"></div>
+        <span>Loading bank details...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="bank-details-form">
       <div className="bank-details-header">
-        {!isEditing ? (
-          <>
-            <button
-              className="edit-btn"
-              onClick={() => setIsEditing(true)}
-            >
-              <Edit2 size={16} />
-              Edit Bank Details
-            </button>
-            <button
-              className="history-btn"
-              onClick={() => setShowHistory(!showHistory)}
-            >
-              <History size={16} />
-              Bank History
-            </button>
-          </>
-        ) : (
-          <div className="edit-actions">
-            <button className="save-btn" onClick={handleSave}>
-              <Save size={16} />
-              Save Changes
-            </button>
-            <button className="cancel-btn" onClick={handleCancel}>
-              <X size={16} />
-              Cancel
-            </button>
-          </div>
-        )}
+        <div className="header-left">
+          <h4>Bank Account Details</h4>
+          {bankDetails.verified && (
+            <div className="verified-badge">
+              <CheckCircle size={14} />
+              <span>Verified</span>
+            </div>
+          )}
+        </div>
+        
+        <div className="header-right">
+          {!isEditing ? (
+            <>
+              <button
+                className="edit-btn"
+                onClick={() => setIsEditing(true)}
+              >
+                <Edit2 size={16} />
+                Edit Bank Details
+              </button>
+              <button
+                className="history-btn"
+                onClick={handleHistoryClick}
+              >
+                <History size={16} />
+                Bank History
+              </button>
+              {!bankDetails.verified && (
+                <button
+                  className="verify-btn"
+                  onClick={handleVerify}
+                  disabled={verifying}
+                >
+                  <Shield size={16} />
+                  {verifying ? 'Verifying...' : 'Verify'}
+                </button>
+              )}
+            </>
+          ) : (
+            <div className="edit-actions">
+              <button 
+                className="save-btn" 
+                onClick={handleSave}
+                disabled={loading}
+              >
+                <Save size={16} />
+                {loading ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button className="cancel-btn" onClick={handleCancel}>
+                <X size={16} />
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="bank-fields-grid">
@@ -139,6 +263,7 @@ const BankDetailsForm = ({ bankDetails, onUpdate }) => {
               className="bank-select"
               value={editData.bankName}
               onChange={(e) => handleInputChange('bankName', e.target.value)}
+              disabled={loading}
             >
               <option value="">Select Bank</option>
               {bankOptions.map(bank => (
@@ -171,6 +296,7 @@ const BankDetailsForm = ({ bankDetails, onUpdate }) => {
               }}
               placeholder="Enter 9-18 digit account number"
               maxLength={18}
+              disabled={loading}
             />
           ) : (
             <div className="field-value account-number-value">
@@ -197,10 +323,35 @@ const BankDetailsForm = ({ bankDetails, onUpdate }) => {
               placeholder="e.g., SBIN0005943"
               maxLength={11}
               style={{ textTransform: 'uppercase' }}
+              disabled={loading}
             />
           ) : (
             <div className="field-value ifsc-value">
               {bankDetails.ifsc || 'Not specified'}
+            </div>
+          )}
+        </div>
+
+        {/* Account Type */}
+        <div className="bank-field">
+          <div className="field-label">
+            <Building size={16} />
+            <span>Account Type</span>
+          </div>
+          {isEditing ? (
+            <select
+              className="bank-select"
+              value={editData.accountType}
+              onChange={(e) => handleInputChange('accountType', e.target.value)}
+              disabled={loading}
+            >
+              {accountTypeOptions.map(type => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          ) : (
+            <div className="field-value account-type-value">
+              {bankDetails.accountType || 'Savings'}
             </div>
           )}
         </div>
@@ -218,6 +369,7 @@ const BankDetailsForm = ({ bankDetails, onUpdate }) => {
               onChange={(e) => handleInputChange('branch', e.target.value)}
               placeholder="Enter complete branch address"
               rows={3}
+              disabled={loading}
             />
           ) : (
             <div className="field-value branch-value">
@@ -227,6 +379,21 @@ const BankDetailsForm = ({ bankDetails, onUpdate }) => {
         </div>
       </div>
 
+      {/* Verification Status */}
+      {bankDetails.verified && (
+        <div className="verification-info">
+          <div className="verification-header">
+            <CheckCircle size={18} color="#10b981" />
+            <span>Verified Details</span>
+          </div>
+          <div className="verification-details">
+            <div>Verified by: {bankDetails.verifiedBy?.fullName || 'Manager'}</div>
+            <div>Verified on: {new Date(bankDetails.verifiedAt).toLocaleDateString()}</div>
+            {bankDetails.notes && <div>Notes: {bankDetails.notes}</div>}
+          </div>
+        </div>
+      )}
+
       {/* Example Note */}
       <div className="example-note">
         <div className="example-title">Example Format:</div>
@@ -234,32 +401,74 @@ const BankDetailsForm = ({ bankDetails, onUpdate }) => {
           <div>Bank: State Bank of India</div>
           <div>Account: 123456789012</div>
           <div>IFSC: SBIN0005943</div>
+          <div>Account Type: Savings</div>
           <div>Branch: SBI Main Branch, 123 MG Road, Bengaluru - 560001</div>
         </div>
       </div>
 
       {/* Bank History */}
-      {showHistory && bankDetails.history && bankDetails.history.length > 0 && (
+      {showHistory && (
         <div className="bank-history">
-          <h5>Bank Details History</h5>
-          <div className="history-list">
-            {bankDetails.history.map((record, index) => (
-              <div key={index} className="history-item">
-                <div className="history-date">
-                  {record.date} at {record.time}
-                </div>
-                <div className="history-details">
-                  <div>Bank: {record.bankName}</div>
-                  <div>Account: ****{record.accountNumber?.slice(-4)}</div>
-                  <div>IFSC: {record.ifsc}</div>
-                  <div>Branch: {record.branch}</div>
-                </div>
-                <div className="history-changed">
-                  Changed by: {record.changedBy}
-                </div>
-              </div>
-            ))}
+          <div className="history-header">
+            <h5>Bank Details History</h5>
+            <button 
+              className="close-history" 
+              onClick={() => setShowHistory(false)}
+            >
+              <X size={16} />
+            </button>
           </div>
+          
+          {historyLoading ? (
+            <div className="history-loading">
+              <div className="spinner small"></div>
+              <span>Loading history...</span>
+            </div>
+          ) : historyData.length === 0 ? (
+            <div className="no-history">
+              <History size={24} />
+              <p>No history found</p>
+            </div>
+          ) : (
+            <div className="history-list">
+              {historyData.map((record, index) => (
+                <div key={index} className="history-item">
+                  <div className="history-date">
+                    {new Date(record.createdAt).toLocaleDateString()} at {new Date(record.createdAt).toLocaleTimeString()}
+                  </div>
+                  <div className="history-details">
+                    <div className="change-type">
+                      <strong>{record.changeType}</strong> by {record.changedByName} ({record.changedByRole})
+                    </div>
+                    {record.previousBankName && (
+                      <div className="change-detail">
+                        <span className="label">Previous Bank:</span>
+                        <span className="value">{record.previousBankName}</span>
+                      </div>
+                    )}
+                    {record.newBankName && (
+                      <div className="change-detail">
+                        <span className="label">New Bank:</span>
+                        <span className="value">{record.newBankName}</span>
+                      </div>
+                    )}
+                    {record.newAccountNumber && (
+                      <div className="change-detail">
+                        <span className="label">Account:</span>
+                        <span className="value">****{record.newAccountNumber?.slice(-4)}</span>
+                      </div>
+                    )}
+                    {record.reason && (
+                      <div className="change-detail">
+                        <span className="label">Reason:</span>
+                        <span className="value">{record.reason}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -274,6 +483,14 @@ const styles = `
   padding: 20px;
 }
 
+.bank-details-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+  color: #4a5568;
+}
+
 .bank-details-header {
   display: flex;
   justify-content: space-between;
@@ -283,7 +500,36 @@ const styles = `
   border-bottom: 2px solid #f7fafc;
 }
 
-.edit-btn, .history-btn, .save-btn, .cancel-btn {
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-left h4 {
+  margin: 0;
+  color: #2d3748;
+  font-size: 18px;
+}
+
+.verified-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #d1fae5;
+  color: #065f46;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.header-right {
+  display: flex;
+  gap: 10px;
+}
+
+.edit-btn, .history-btn, .verify-btn, .save-btn, .cancel-btn {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -301,7 +547,7 @@ const styles = `
   color: white;
 }
 
-.edit-btn:hover {
+.edit-btn:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
 }
@@ -315,6 +561,21 @@ const styles = `
   background: #e2e8f0;
 }
 
+.verify-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.verify-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+}
+
+.verify-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .edit-actions {
   display: flex;
   gap: 12px;
@@ -325,9 +586,14 @@ const styles = `
   color: white;
 }
 
-.save-btn:hover {
+.save-btn:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 4px 15px rgba(72, 187, 120, 0.3);
+}
+
+.save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .cancel-btn {
@@ -410,8 +676,41 @@ const styles = `
   color: #667eea;
 }
 
+.account-type-value {
+  font-weight: 500;
+  color: #5a67d8;
+}
+
 .branch-value {
   line-height: 1.5;
+}
+
+.verification-info {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 20px 0;
+  border-left: 4px solid #10b981;
+}
+
+.verification-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #065f46;
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.verification-details {
+  color: #047857;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.verification-details div {
+  margin-bottom: 4px;
 }
 
 .example-note {
@@ -445,17 +744,56 @@ const styles = `
   border-top: 2px solid #f7fafc;
 }
 
-.bank-history h5 {
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.history-header h5 {
   color: #2d3748;
   font-size: 16px;
   font-weight: 600;
-  margin-bottom: 16px;
+  margin: 0;
+}
+
+.close-history {
+  background: none;
+  border: none;
+  color: #718096;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.close-history:hover {
+  color: #4a5568;
+}
+
+.history-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+  color: #4a5568;
+  justify-content: center;
+}
+
+.no-history {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 20px;
+  color: #718096;
 }
 
 .history-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .history-item {
@@ -472,19 +810,47 @@ const styles = `
   margin-bottom: 8px;
 }
 
-.history-details {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 8px;
+.change-type {
+  color: #2d3748;
   font-size: 13px;
-  color: #4a5568;
   margin-bottom: 8px;
 }
 
-.history-changed {
-  color: #667eea;
-  font-size: 12px;
+.change-detail {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.change-detail .label {
+  color: #4a5568;
   font-weight: 500;
+  min-width: 80px;
+}
+
+.change-detail .value {
+  color: #2d3748;
+  flex: 1;
+}
+
+.spinner {
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #3498db;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  animation: spin 1s linear infinite;
+}
+
+.spinner.small {
+  width: 16px;
+  height: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 `;
 
