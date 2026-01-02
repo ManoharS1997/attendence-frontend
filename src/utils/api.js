@@ -1,4 +1,3 @@
-// src/utils/api.js
 import axios from "axios";
 
 /* =========================
@@ -39,34 +38,58 @@ export const getEmployees = async () => {
 /* =========================
    PAYSLIPS
 ========================= */
+
+// Check if payslip exists (employee + month + year)
+export const checkExistingPayslip = async (employeeId, month, year) => {
+  try {
+    const res = await api.get(
+      `/payslips/check/${employeeId}/${month}/${year}`
+    );
+    return res.data.exists;
+  } catch (error) {
+    if (error.response?.status === 404) {
+      return false;
+    }
+    console.error("Error checking existing payslip:", error);
+    return false;
+  }
+};
+
+// Generate payslip (manager/admin)
 export const generatePayslip = async (data) => {
   const res = await api.post("/payslips", data);
   return res.data;
 };
 
-export const getEmployeePayslips = async (employeeId) => {
-  const res = await api.get("/payslips/my", {
-    params: { employeeId },
-  });
+// Get logged-in employee payslips
+export const getEmployeePayslips = async () => {
+  const res = await api.get("/payslips/my");
   return res.data;
 };
 
-export const downloadPayslipPDF = async (payslipId) => {
-  const res = await api.get(`/payslips/${payslipId}/download`, {
-    responseType: "blob",
-  });
+// ✅ ONLY VALID DOWNLOAD METHOD (MATCHES BACKEND)
+export const downloadPayslipById = async (payslipId) => {
+  try {
+    const res = await api.get(`/payslips/${payslipId}/download`, {
+      responseType: "blob",
+    });
 
-  const blob = new Blob([res.data], { type: "application/pdf" });
-  const url = window.URL.createObjectURL(blob);
+    const blob = new Blob([res.data], { type: "application/pdf" });
+    const url = window.URL.createObjectURL(blob);
 
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `Payslip_${payslipId}.pdf`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Payslip_${payslipId}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 
-  window.URL.revokeObjectURL(url);
+    window.URL.revokeObjectURL(url);
+    return true;
+  } catch (error) {
+    console.error("Error downloading payslip:", error);
+    throw error;
+  }
 };
 
 export default api;

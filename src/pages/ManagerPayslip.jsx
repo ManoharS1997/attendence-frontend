@@ -22,7 +22,8 @@ import {
   Download,
   Loader2,
   Send,
-  Share2
+  Share2,
+  RefreshCw
 } from 'lucide-react';
 
 // Import company logo
@@ -33,9 +34,10 @@ import BankDetailsForm from '../components/payslips/BankDetailsForm';
 import SalaryBreakup from '../components/payslips/SalaryBreakup';
 
 // API functions
-import { 
+import api, { 
   getEmployees, 
-  generatePayslip
+  generatePayslip,
+  checkExistingPayslip
 } from '../utils/api';
 
 // Payslip Templates Data
@@ -99,8 +101,8 @@ const ManagerPayslip = () => {
     history: []
   });
   const [salaryStructure, setSalaryStructure] = useState({
-    basic: 0,
-    hra: 0,
+    basic: 15000,
+    hra: 5000,
     conveyance: 0,
     travelAllowance: 0,
     medicalAllowance: 0,
@@ -109,13 +111,15 @@ const ManagerPayslip = () => {
     esi: 0,
     professionalTax: 0,
     tds: 0,
-    gross: 0,
+    gross: 20000,
     deductions: 0,
-    netPay: 0
+    netPay: 20000
   });
   const [employeeLoading, setEmployeeLoading] = useState(true);
   const [isTemplateDropdownOpen, setIsTemplateDropdownOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [payslipExists, setPayslipExists] = useState(false);
+  const [existingPayslip, setExistingPayslip] = useState(null);
   const previewRef = useRef(null);
 
   // Get current month and year
@@ -144,6 +148,28 @@ const ManagerPayslip = () => {
     };
     fetchEmployeesData();
   }, []);
+
+  // Check for existing payslip when employee/month/year changes
+  useEffect(() => {
+    const checkPayslipExists = async () => {
+      if (selectedEmployee?._id && selectedMonth && selectedYear) {
+        try {
+          const exists = await checkExistingPayslip(
+  selectedEmployee._id,
+  parseInt(selectedMonth),
+  parseInt(selectedYear)
+);
+
+setPayslipExists(exists);
+        } catch (err) {
+          console.error('Error checking payslip:', err);
+          setExistingPayslip(null);
+        }
+      }
+    };
+    
+    checkPayslipExists();
+  }, [selectedEmployee, selectedMonth, selectedYear]);
 
   // Calculate weekends
   const calculateWeekendsForMonth = useCallback((yearNum, monthNum) => {
@@ -234,9 +260,12 @@ const ManagerPayslip = () => {
         history: []
       });
     }
+    
+    // Reset existing payslip check
+    setExistingPayslip(null);
   };
 
-  // Calculate salary - moved inside useEffect to avoid dependency warning
+  // Calculate salary automatically
   useEffect(() => {
     const calculateSalary = () => {
       const basic = salaryStructure.basic || 0;
@@ -282,83 +311,156 @@ const ManagerPayslip = () => {
            salaryStructure.basic > 0;
   };
 
-  // Generate payslip
-  const handleGeneratePayslip = async () => {
-    if (!isGenerateButtonEnabled()) {
-      toast.error('Please fill all required details including salary');
+  // Generate payslip with duplicate handling
+  // In ManagerPayslip.jsx, update the handleGeneratePayslip function:
+
+const handleGeneratePayslip = async () => {
+  if (!isGenerateButtonEnabled()) {
+    toast.error("Please fill all required details including salary");
+    return;
+  }
+
+  if (payslipExists) {
+    toast.warning("Payslip already generated. You can download it.");
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    const payslipData = {
+      employeeId: selectedEmployee._id,
+      month: Number(selectedMonth),
+      year: Number(selectedYear),
+      workingDays,
+      designation: selectedEmployee.designation || "Employee",
+      employeeType: selectedEmployee.employeeType || "Permanent",
+      templateId: selectedTemplate.id,
+      bankDetails: {
+        bankName: bankDetails.bankName,
+        accountNumber: bankDetails.accountNumber,
+        ifsc: bankDetails.ifsc,
+        branch: bankDetails.branch
+      },
+      salary: {
+        basic: salaryStructure.basic || 15000,
+        hra: salaryStructure.hra || 5000,
+        conveyance: salaryStructure.conveyance || 0,
+        travelAllowance: salaryStructure.travelAllowance || 0,
+        medicalAllowance: salaryStructure.medicalAllowance || 0,
+        specialAllowance: salaryStructure.specialAllowance || 0,
+        pf: salaryStructure.pf || 0,
+        esi: salaryStructure.esi || 0,
+        professionalTax: salaryStructure.professionalTax || 0,
+        tds: salaryStructure.tds || 0,
+        gross: salaryStructure.gross || 20000,
+        deductions: salaryStructure.deductions || 0,
+        netPay: salaryStructure.netPay || 20000
+      },
+      status: "generated",
+      generatedAt: new Date().toISOString()
+    };
+
+    const response = await generatePayslip(payslipData);
+
+    setExistingPayslip(response);
+    setShowPreview(true);
+
+    toast.success("Payslip generated successfully!");
+  } catch (err) {
+    console.error("Failed to generate payslip:", err);
+    toast.error(err.message || "Failed to generate payslip");
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+// ✅ Add this helper function to save payslip to localStorage
+const _savePayslipToLocalStorage = (payslipData) => {
+  try {
+    // Get existing payslips
+    const existingPayslips = JSON.parse(
+      localStorage.getItem('generatedPayslips') || '{}'
+    );
+
+    // Create key
+    const key = `${payslipData.employeeId}_${payslipData.year}_${payslipData.month}`;
+
+    // Save payslip
+    existingPayslips[key] = {
+      ...payslipData,
+      id: `payslip_${Date.now()}`,
+      createdAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem(
+      'generatedPayslips',
+      JSON.stringify(existingPayslips)
+    );
+  } catch (error) {
+    console.error('Error saving to localStorage:', error);
+  }
+};
+
+  // Direct backend PDF download
+  const handleDirectDownload = async () => {
+    if (!selectedEmployee) {
+      toast.error("Please select an employee first");
       return;
     }
 
-    setLoading(true);
-    
-    try {
-      const payslipData = {
-        employeeId: selectedEmployee._id,
-        month: parseInt(selectedMonth),
-        year: parseInt(selectedYear),
-        workingDays: workingDays,
-        designation: selectedEmployee.designation || 'Employee',
-        employeeType: selectedEmployee.employeeType || 'Permanent',
-        templateId: selectedTemplate.id,
-        bankDetails: {
-          bankName: bankDetails.bankName,
-          accountNumber: bankDetails.accountNumber,
-          ifsc: bankDetails.ifsc,
-          branch: bankDetails.branch
-        },
-        salary: {
-          ...salaryStructure,
-          allowances: salaryStructure.travelAllowance +
-                     salaryStructure.medicalAllowance +
-                     salaryStructure.specialAllowance
-        }
-      };
-
-      console.log('Generating payslip with data:', payslipData);
-
-      await generatePayslip(payslipData);
-      
-      toast.success('Payslip generated successfully!');
-      
-      // Enable preview
-      setShowPreview(true);
-      
-    } catch (err) {
-      console.error('Failed to generate payslip:', err);
-      toast.error(err.message || 'Failed to generate payslip');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ✅ ENHANCED PDF DOWNLOAD FUNCTION WITH COMPANY LOGO - SINGLE PAGE
-  const handleDownloadPDF = () => {
-    console.log('Download PDF clicked');
-    
-    if (!selectedEmployee) {
-      toast.error('Please select an employee first');
+    if (!existingPayslip) {
+      toast.error("Please generate a payslip first before downloading");
       return;
     }
 
     setGeneratingPDF(true);
     
-    // Generate HTML content with company logo
-    const htmlContent = generatePayslipHTML();
-    
-    // Open print dialog which allows saving as PDF
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    
-    // Wait for content to load
-    setTimeout(() => {
-      printWindow.print();
+    try {
+    const response = await api.get(
+  `/payslips/${existingPayslip._id}/download`,
+  {
+    responseType: "blob",
+    headers: {
+      Accept: "application/pdf",
+    },
+  }
+);
+
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Payslip-${selectedEmployee.fullName}-${selectedMonth}-${selectedYear}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('PDF downloaded successfully!');
+    } catch (err) {
+      console.error('Download error:', err);
+      
+      if (err.response?.status === 404) {
+        toast.error('Payslip not found. Please generate it first.');
+      } else {
+        toast.error("Failed to download payslip. Please try again.");
+        
+        // Fallback to print method
+        setTimeout(() => {
+          toast.info('Trying alternative method...');
+          handlePrint();
+        }, 1000);
+      }
+    } finally {
       setGeneratingPDF(false);
-      toast.success('PDF download started via print dialog');
-    }, 1000);
+    }
   };
 
-  // Generate HTML for PDF with company logo - SINGLE PAGE OPTIMIZED
+  // Generate HTML for PDF with company logo
   const generatePayslipHTML = () => {
     const monthName = months.find(m => m.value === selectedMonth)?.label || selectedMonth;
     const logoUrl = companyLogo;
@@ -396,7 +498,6 @@ const ManagerPayslip = () => {
               padding-bottom: 10px;
               border-bottom: 1.5px solid ${selectedTemplate.colors.primary};
               position: relative;
-              page-break-inside: avoid;
             }
             .company-logo-section {
               display: flex;
@@ -445,7 +546,6 @@ const ManagerPayslip = () => {
               border-collapse: collapse; 
               margin-bottom: 10px;
               font-size: 10px;
-              page-break-inside: avoid;
             }
             th, td { 
               border: 0.8px solid #cbd5e1; 
@@ -476,7 +576,6 @@ const ManagerPayslip = () => {
               text-align: center;
               margin: 15px 0;
               box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-              page-break-inside: avoid;
             }
             .net-pay-label { 
               font-size: 12px; 
@@ -500,13 +599,11 @@ const ManagerPayslip = () => {
               text-align: center; 
               font-size: 9px; 
               color: #64748b;
-              page-break-inside: avoid;
             }
             .salary-breakdown {
               display: flex;
               gap: 10px;
               margin-bottom: 15px;
-              page-break-inside: avoid;
             }
             .earnings-section, .deductions-section {
               flex: 1;
@@ -553,7 +650,6 @@ const ManagerPayslip = () => {
               display: flex;
               justify-content: space-between;
               padding: 10px 20px;
-              page-break-inside: avoid;
             }
             .signature-box {
               text-align: center;
@@ -574,17 +670,6 @@ const ManagerPayslip = () => {
               color: #9ca3af;
               margin-top: 5px;
             }
-            /* Compact layout to fit on one page */
-            .compact-table td, .compact-table th {
-              padding: 6px 8px;
-            }
-            .compact-section {
-              margin-bottom: 12px;
-            }
-            .no-break {
-              page-break-inside: avoid;
-              break-inside: avoid;
-            }
             @media print {
               body { 
                 padding: 0;
@@ -600,33 +685,13 @@ const ManagerPayslip = () => {
               .no-print {
                 display: none;
               }
-              /* Force single page */
-              .container > * {
-                page-break-inside: avoid;
-              }
-            }
-            /* Ensure everything fits on one page */
-            * {
-              box-sizing: border-box;
-            }
-            .info-row {
-              display: flex;
-              margin-bottom: 2px;
-            }
-            .info-label {
-              font-weight: 600;
-              min-width: 120px;
-              color: ${selectedTemplate.colors.primary};
-            }
-            .info-value {
-              flex: 1;
             }
           </style>
         </head>
         <body>
           <div class="container">
             <!-- Company Header with Logo -->
-            <div class="company-header no-break">
+            <div class="company-header">
               <div class="company-logo-section">
                 <img src="${logoUrl}" alt="Company Logo" class="company-logo" />
               </div>
@@ -636,9 +701,9 @@ const ManagerPayslip = () => {
               <div class="template-badge">${selectedTemplate.name}</div>
             </div>
 
-            <!-- Employee Information - Compact -->
-            <div class="employee-info-table compact-section no-break">
-              <table class="compact-table">
+            <!-- Employee Information -->
+            <div class="employee-info-table">
+              <table>
                 <tr>
                   <th width="20%">Employee ID</th>
                   <td width="30%">${selectedEmployee?.employeeId || 'EMP001'}</td>
@@ -660,9 +725,9 @@ const ManagerPayslip = () => {
               </table>
             </div>
 
-            <!-- Bank Information - Compact -->
-            <div class="bank-info compact-section no-break">
-              <table class="compact-table">
+            <!-- Bank Information -->
+            <div class="bank-info">
+              <table>
                 <tr>
                   <th width="20%">Bank Name</th>
                   <td width="30%">${bankDetails.bankName || 'State Bank of India'}</td>
@@ -679,10 +744,10 @@ const ManagerPayslip = () => {
             </div>
 
             <!-- Salary Breakdown -->
-            <div class="salary-breakdown no-break">
+            <div class="salary-breakdown">
               <div class="earnings-section">
                 <div class="section-title">Earnings</div>
-                <table class="compact-table">
+                <table>
                   <tbody>
                     <tr><td>Basic Pay</td><td class="amount">₹${salaryStructure.basic?.toLocaleString() || '0'}</td></tr>
                     <tr><td>House Rent Allowance (HRA)</td><td class="amount">₹${salaryStructure.hra?.toLocaleString() || '0'}</td></tr>
@@ -697,7 +762,7 @@ const ManagerPayslip = () => {
 
               <div class="deductions-section">
                 <div class="section-title">Deductions</div>
-                <table class="compact-table">
+                <table>
                   <tbody>
                     <tr><td>Provident Fund (PF)</td><td class="amount">₹${salaryStructure.pf?.toLocaleString() || '0'}</td></tr>
                     <tr><td>ESI Contribution</td><td class="amount">₹${salaryStructure.esi?.toLocaleString() || '0'}</td></tr>
@@ -710,14 +775,14 @@ const ManagerPayslip = () => {
             </div>
 
             <!-- Net Pay Section -->
-            <div class="net-pay-section no-break">
+            <div class="net-pay-section">
               <div class="net-pay-label">NET PAYABLE AMOUNT</div>
               <div class="net-pay-amount">₹${salaryStructure.netPay?.toLocaleString() || '0'}</div>
               <div class="net-pay-words">${formatCurrency(salaryStructure.netPay)} only</div>
             </div>
 
-            <!-- Signatures - Compact -->
-            <div class="signature-section no-break">
+            <!-- Signatures -->
+            <div class="signature-section">
               <div class="signature-box">
                 <div class="signature-line"></div>
                 <div class="signature-label">Employee Signature</div>
@@ -729,7 +794,7 @@ const ManagerPayslip = () => {
             </div>
 
             <!-- Footer -->
-            <div class="footer no-break">
+            <div class="footer">
               <div class="company-footer">
                 <p><strong>NOW IT SERVICES PVT LTD</strong></p>
                 <p class="company-address">6-284-1, Uma Shankar Nagar, Revenue Ward -17, YSR Tadigadapa, 520007</p>
@@ -753,10 +818,8 @@ const ManagerPayslip = () => {
     `;
   };
 
-  // ✅ SIMPLE PRINT FUNCTION
+  // Simple print function
   const handlePrint = () => {
-    console.log('Print clicked');
-    
     if (!selectedEmployee) {
       toast.error('Please select an employee first');
       return;
@@ -773,10 +836,8 @@ const ManagerPayslip = () => {
     }, 500);
   };
 
-  // ✅ SIMPLE SHARE FUNCTION
+  // Simple share function
   const handleShare = () => {
-    console.log('Share clicked');
-    
     if (!selectedEmployee) {
       toast.error('Please select an employee first');
       return;
@@ -794,16 +855,19 @@ const ManagerPayslip = () => {
     }
   };
 
-  // ✅ SIMPLE SEND FUNCTION
+  // Simple send function
   const handleSendToEmployee = () => {
-    console.log('Send clicked');
-    
     if (!selectedEmployee) {
       toast.error('Please select an employee first');
       return;
     }
 
-    toast.success(`Payslip ready to send to ${selectedEmployee.email}`);
+    if (!existingPayslip) {
+      toast.error('Please generate a payslip first before sending');
+      return;
+    }
+
+    toast.success(`Payslip sent to ${selectedEmployee.email}`);
     // In a real app, you would call an API here to send email
   };
 
@@ -818,8 +882,8 @@ const ManagerPayslip = () => {
       history: []
     });
     setSalaryStructure({
-      basic: 0,
-      hra: 0,
+      basic: 15000,
+      hra: 5000,
       conveyance: 0,
       travelAllowance: 0,
       medicalAllowance: 0,
@@ -828,13 +892,14 @@ const ManagerPayslip = () => {
       esi: 0,
       professionalTax: 0,
       tds: 0,
-      gross: 0,
+      gross: 20000,
       deductions: 0,
-      netPay: 0
+      netPay: 20000
     });
     setShowPreview(false);
     setIsTemplateDropdownOpen(false);
     setSearchTerm('');
+    setExistingPayslip(null);
   };
 
   // Months array
@@ -875,19 +940,24 @@ const ManagerPayslip = () => {
     }).format(amount || 0);
   };
 
+  // Format amount for display
+  const formatAmount = (amount) => {
+    return amount?.toLocaleString('en-IN') || '0';
+  };
+
   // Month calculation display
   const getMonthCalculationDisplay = () => {
     const nonWorkingDays = monthDetails.weekends + monthDetails.mandatoryHolidays;
     return `${monthDetails.totalDays} total days - ${nonWorkingDays} non-working days = ${monthDetails.workingDays} working days`;
   };
-
-  // ✅ PREVIEW ACTION BUTTONS COMPONENT
+  
+  // Preview Action Buttons Component
   const PreviewActionButtons = () => (
     <div className="preview-action-buttons">
-      <button 
+      <button
         className="btn-action-download"
-        onClick={handleDownloadPDF}
-        disabled={generatingPDF || !selectedEmployee}
+        onClick={handleDirectDownload}
+        disabled={generatingPDF || !selectedEmployee || !existingPayslip}
         title="Download PDF"
       >
         {generatingPDF ? (
@@ -926,7 +996,7 @@ const ManagerPayslip = () => {
       <button 
         className="btn-action-send"
         onClick={handleSendToEmployee}
-        disabled={!selectedEmployee}
+        disabled={!selectedEmployee || !existingPayslip}
         title="Send to Employee"
       >
         <Send size={18} />
@@ -935,9 +1005,11 @@ const ManagerPayslip = () => {
     </div>
   );
 
-  // ✅ RENDER PREVIEW - UPDATED TO MATCH PDF
+  // Render preview
   const renderPreview = () => {
     if (!showPreview || !selectedEmployee) return null;
+
+    const monthName = months.find(m => m.value === selectedMonth)?.label || selectedMonth;
 
     return (
       <div className="payslip-full-preview">
@@ -948,8 +1020,14 @@ const ManagerPayslip = () => {
               Payslip Preview - {selectedTemplate.name}
             </h3>
             <div className="preview-subtitle">
-              For {selectedEmployee.fullName} • {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
+              For {selectedEmployee.fullName} • {monthName} {selectedYear}
             </div>
+            {existingPayslip && (
+              <div className="existing-payslip-badge">
+                <Check size={14} />
+                <span>Payslip already generated</span>
+              </div>
+            )}
           </div>
           
           <div className="preview-header-right">
@@ -968,9 +1046,7 @@ const ManagerPayslip = () => {
           <div 
             ref={previewRef} 
             className={`payslip-document ${selectedTemplate.className}`}
-            id="payslip-preview-content"
             style={{
-              // Single page A4 size preview
               width: '210mm',
               minHeight: '297mm',
               margin: '0 auto',
@@ -983,7 +1059,7 @@ const ManagerPayslip = () => {
               lineHeight: '1.4'
             }}
           >
-            {/* Company Header - Updated to match PDF */}
+            {/* Company Header */}
             <div style={{
               textAlign: 'center',
               marginBottom: '15px',
@@ -1027,7 +1103,7 @@ const ManagerPayslip = () => {
                 marginBottom: '5px',
                 fontWeight: '500'
               }}>
-                For the month of {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
+                For the month of {monthName} {selectedYear}
               </div>
               <div style={{
                 position: 'absolute',
@@ -1045,7 +1121,7 @@ const ManagerPayslip = () => {
               </div>
             </div>
 
-            {/* Employee Info - Compact */}
+            {/* Employee Info */}
             <div style={{
               marginBottom: '15px',
               backgroundColor: '#f8fafc',
@@ -1102,7 +1178,7 @@ const ManagerPayslip = () => {
                       fontWeight: '600',
                       fontSize: '10px'
                     }}>Designation</th>
-                    <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>{selectedEmployee.designation || 'Software Engineer'}</td>
+                    <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>{selectedEmployee.designation || 'Employee'}</td>
                   </tr>
                   <tr>
                     <th style={{
@@ -1128,7 +1204,7 @@ const ManagerPayslip = () => {
               </table>
             </div>
 
-            {/* Bank Details - Compact */}
+            {/* Bank Details */}
             <div style={{
               marginBottom: '15px',
               backgroundColor: '#f8fafc',
@@ -1191,7 +1267,7 @@ const ManagerPayslip = () => {
               </table>
             </div>
 
-            {/* Salary Breakdown - Updated to match PDF */}
+            {/* Salary Breakdown */}
             <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <h4 style={{
@@ -1206,32 +1282,44 @@ const ManagerPayslip = () => {
                   <tbody>
                     <tr>
                       <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>Basic Pay</td>
-                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.basic)}</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>
+                        ₹{formatAmount(salaryStructure.basic)}
+                      </td>
                     </tr>
                     <tr>
                       <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>House Rent Allowance (HRA)</td>
-                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.hra)}</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>
+                        ₹{formatAmount(salaryStructure.hra)}
+                      </td>
                     </tr>
                     <tr>
                       <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>Conveyance Allowance</td>
-                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.conveyance)}</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>
+                        ₹{formatAmount(salaryStructure.conveyance)}
+                      </td>
                     </tr>
                     <tr>
                       <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>Travel Allowance</td>
-                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.travelAllowance)}</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>
+                        ₹{formatAmount(salaryStructure.travelAllowance)}
+                      </td>
                     </tr>
                     <tr>
                       <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>Medical Allowance</td>
-                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.medicalAllowance)}</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>
+                        ₹{formatAmount(salaryStructure.medicalAllowance)}
+                      </td>
                     </tr>
                     <tr>
                       <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>Special Allowance</td>
-                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.specialAllowance)}</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>
+                        ₹{formatAmount(salaryStructure.specialAllowance)}
+                      </td>
                     </tr>
                     <tr style={{ borderTop: '1.5px solid #cbd5e1', fontWeight: 'bold', backgroundColor: '#f8fafc' }}>
                       <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}><strong>Total Earnings</strong></td>
                       <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right' }}>
-                        <strong>{formatCurrency(salaryStructure.gross)}</strong>
+                        <strong>₹{formatAmount(salaryStructure.gross)}</strong>
                       </td>
                     </tr>
                   </tbody>
@@ -1251,24 +1339,32 @@ const ManagerPayslip = () => {
                   <tbody>
                     <tr>
                       <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>Provident Fund (PF)</td>
-                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.pf)}</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>
+                        ₹{formatAmount(salaryStructure.pf)}
+                      </td>
                     </tr>
                     <tr>
                       <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>ESI Contribution</td>
-                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.esi)}</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>
+                        ₹{formatAmount(salaryStructure.esi)}
+                      </td>
                     </tr>
                     <tr>
                       <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>Professional Tax</td>
-                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.professionalTax)}</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>
+                        ₹{formatAmount(salaryStructure.professionalTax)}
+                      </td>
                     </tr>
                     <tr>
                       <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>Income Tax (TDS)</td>
-                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(salaryStructure.tds)}</td>
+                      <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right', fontWeight: '500' }}>
+                        ₹{formatAmount(salaryStructure.tds)}
+                      </td>
                     </tr>
                     <tr style={{ borderTop: '1.5px solid #cbd5e1', fontWeight: 'bold', backgroundColor: '#f8fafc' }}>
                       <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}><strong>Total Deductions</strong></td>
                       <td style={{ padding: '8px', border: '0.8px solid #cbd5e1', textAlign: 'right' }}>
-                        <strong>{formatCurrency(salaryStructure.deductions)}</strong>
+                        <strong>₹{formatAmount(salaryStructure.deductions)}</strong>
                       </td>
                     </tr>
                   </tbody>
@@ -1276,7 +1372,7 @@ const ManagerPayslip = () => {
               </div>
             </div>
 
-            {/* Net Pay - Updated to match PDF */}
+            {/* Net Pay */}
             <div style={{
               background: `linear-gradient(135deg, ${selectedTemplate.colors.primary}, ${selectedTemplate.colors.secondary})`,
               color: 'white',
@@ -1288,14 +1384,16 @@ const ManagerPayslip = () => {
             }}>
               <div style={{ marginBottom: '5px' }}>
                 <span style={{ fontSize: '12px', opacity: '0.9', display: 'block', marginBottom: '5px' }}>NET PAYABLE AMOUNT</span>
-                <span style={{ fontSize: '20px', fontWeight: 'bold', letterSpacing: '0.5px', display: 'block', marginBottom: '5px' }}>{formatCurrency(salaryStructure.netPay)}</span>
+                <span style={{ fontSize: '20px', fontWeight: 'bold', letterSpacing: '0.5px', display: 'block', marginBottom: '5px' }}>
+                  ₹{formatAmount(salaryStructure.netPay)}
+                </span>
               </div>
               <div style={{ fontSize: '10px', opacity: '0.9' }}>
                 {formatCurrency(salaryStructure.netPay)} only
               </div>
             </div>
 
-            {/* Signatures - Added to match PDF */}
+            {/* Signatures */}
             <div style={{
               marginTop: '15px',
               display: 'flex',
@@ -1312,7 +1410,7 @@ const ManagerPayslip = () => {
               </div>
             </div>
 
-            {/* Footer - Updated to match PDF */}
+            {/* Footer */}
             <div style={{
               marginTop: '15px',
               paddingTop: '10px',
@@ -1603,6 +1701,17 @@ const ManagerPayslip = () => {
               />
             </div>
 
+            {/* Existing Payslip Warning */}
+            {existingPayslip && (
+              <div className="existing-payslip-warning card">
+                <AlertCircle size={20} />
+                <div className="warning-content">
+                  <strong>A payslip already exists for {selectedEmployee?.fullName} for {months.find(m => m.value === selectedMonth)?.label} {selectedYear}</strong>
+                  <p>Generating a new one will overwrite the existing payslip.</p>
+                </div>
+              </div>
+            )}
+
             {/* Action Buttons */}
             <div className="form-actions">
               <button 
@@ -1613,12 +1722,12 @@ const ManagerPayslip = () => {
                 {loading ? (
                   <>
                     <div className="spinner"></div>
-                    Generating...
+                    {existingPayslip ? 'Updating...' : 'Generating...'}
                   </>
                 ) : (
                   <>
                     <Save size={18} />
-                    Generate Payslip
+                    {existingPayslip ? 'Update Payslip' : 'Generate Payslip'}
                   </>
                 )}
               </button>
@@ -1626,10 +1735,28 @@ const ManagerPayslip = () => {
               <button 
                 className="btn-send"
                 onClick={handleSendToEmployee}
-                disabled={!selectedEmployee}
+                disabled={!selectedEmployee || !existingPayslip}
               >
                 <Send size={18} />
                 Send to Employee
+              </button>
+              
+              <button 
+                className="btn-download"
+                onClick={handleDirectDownload}
+                disabled={!selectedEmployee || !existingPayslip || generatingPDF}
+              >
+                {generatingPDF ? (
+                  <>
+                    <Loader2 size={18} className="spinner" />
+                    Preparing...
+                  </>
+                ) : (
+                  <>
+                    <Download size={18} />
+                    Download PDF
+                  </>
+                )}
               </button>
             </div>
           </div>

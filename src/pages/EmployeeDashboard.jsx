@@ -247,7 +247,6 @@ export default function EmployeeDashboard() {
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [payslips, setPayslips] = useState([]);
-  const [previewPayslip, setPreviewPayslip] = useState(null);
   const [loadingSave, setLoadingSave] = useState(false);
   const [lastAlertAttendanceId, setLastAlertAttendanceId] = useState(null);
 
@@ -288,10 +287,10 @@ export default function EmployeeDashboard() {
       const res = await api.get("/tasks/my");
       console.log("Employee /tasks/my result:", res.data);
       setTasks(res.data || []);
-    } catch (err) {
-      console.error("Error loading my tasks", err?.response || err);
+    } catch (error) {
+      console.error("Error loading my tasks", error?.response || error);
       alert(
-        err?.response?.data?.message ||
+        error?.response?.data?.message ||
           "Error loading tasks. Please ensure backend GET /tasks/my allows employee role and returns assigned/created tasks."
       );
       setTasks([]);
@@ -301,9 +300,10 @@ export default function EmployeeDashboard() {
   const loadPayslips = useCallback(async () => {
     try {
       const res = await api.get("/payslips/my");
+      console.log("Payslips API response:", res.data);
       setPayslips(res.data || []);
-    } catch (err) {
-      console.error("Failed to load payslips", err);
+    } catch (error) {
+      console.error("Failed to load payslips", error);
       setPayslips([]);
     }
   }, []);
@@ -377,8 +377,8 @@ export default function EmployeeDashboard() {
 
     try {
       window.alert(message);
-    } catch (err) {
-      console.error("Error showing employee alert popup:", err);
+    } catch (error) {
+      console.error("Error showing employee alert popup:", error);
     }
 
     setLastAlertAttendanceId(latest._id);
@@ -685,9 +685,9 @@ export default function EmployeeDashboard() {
 
       await loadAttendance();
       await loadSummary();
-    } catch (err) {
-      console.error(err);
-      alert(err.response?.data?.message || "Error saving attendance");
+    } catch (error) {
+      console.error(error);
+      alert(error.response?.data?.message || "Error saving attendance");
     } finally {
       setLoadingSave(false);
     }
@@ -775,9 +775,9 @@ export default function EmployeeDashboard() {
 
       resetTaskForm(true);
       loadTasks();
-    } catch (err) {
-      console.error("Employee create/update task error", err?.response || err);
-      alert(err.response?.data?.message || "Error saving task");
+    } catch (error) {
+      console.error("Employee create/update task error", error?.response || error);
+      alert(error.response?.data?.message || "Error saving task");
     }
   };
 
@@ -821,92 +821,29 @@ export default function EmployeeDashboard() {
     </select>
   );
 
-  // ✅ PAYSLIP DOWNLOAD FUNCTION
   const handleDownloadPayslip = async (payslipId) => {
   try {
-    console.log('Downloading payslip ID:', payslipId);
-    
-    // Get token
-    const token = localStorage.getItem('token');
-    if (!token) {
-      alert('Please login again');
-      return;
-    }
-
-    console.log('Token exists, making request to backend...');
-    
-    // Use the same api instance that works for other endpoints
     const response = await api.get(`/payslips/${payslipId}/download`, {
-      responseType: 'blob',
-      headers: {
-        'Accept': 'application/pdf'
-      }
+      responseType: "blob",
     });
 
-    console.log('Response received:', response.status);
-
-    // Create blob
-    const blob = new Blob([response.data], { type: 'application/pdf' });
-    
-    // Generate filename
-    const payslip = payslips.find(p => p._id === payslipId);
-    const monthName = monthNames[payslip?.month - 1] || payslip?.month || '';
-    const filename = `Payslip-${user.fullName}-${monthName}-${payslip?.year || ''}.pdf`;
-    
-    // Create download link
+    const blob = new Blob([response.data], { type: "application/pdf" });
     const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
+
+    const link = document.createElement("a");
     link.href = url;
-    link.download = filename;
+    link.download = `Payslip_${payslipId}.pdf`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-    
-    console.log('PDF download initiated');
 
-  } catch (err) {
-    console.error('Payslip download failed:', err);
-    console.error('Error details:', err.response?.data || err.message);
-    
-    // Try alternative method if axios fails
-    tryAlternativeDownload(payslipId);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Error downloading payslip:", error);
+    alert("Failed to download payslip.");
   }
 };
 
-// Alternative download method using fetch directly
-const tryAlternativeDownload = async (payslipId) => {
-  try {
-    console.log('Trying alternative download method...');
-    
-    const token = localStorage.getItem('token');
-    const response = await fetch(`http://localhost:5000/api/payslips/${payslipId}/download`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/pdf'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Payslip-${payslipId}.pdf`;
-    link.click();
-    window.URL.revokeObjectURL(url);
-    
-    console.log('Alternative download successful');
-    
-  } catch (fetchErr) {
-    console.error('Alternative download also failed:', fetchErr);
-    alert(`Failed to download payslip. Please check:\n1. Backend is running on port 5000\n2. You have proper permissions\n3. Check browser console for details`);
-  }
-};
 
   return (
     <div className="page">
@@ -2019,7 +1956,7 @@ const tryAlternativeDownload = async (payslipId) => {
             </main>
           )}
 
-          {/* PAYSLIPS TAB */}
+          {/* PAYSLIPS TAB - FIXED VERSION */}
           {activeTab === "payslips" && (
             <main className="layout single-column">
               <section className="full-width">
@@ -2055,15 +1992,11 @@ const tryAlternativeDownload = async (payslipId) => {
                               </td>
                               <td>
                                 <button
-                                  className="primary-btn"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleDownloadPayslip(p._id);
-                                  }}
+                                  className="primary-btn small-btn"
+                                  onClick={() => handleDownloadPayslip(p._id)}
                                   style={{ padding: '6px 12px', fontSize: '12px' }}
                                 >
-                                  📥 Download PDF
+                                  Download
                                 </button>
                               </td>
                             </tr>
@@ -2074,110 +2007,15 @@ const tryAlternativeDownload = async (payslipId) => {
                   )}
                 </div>
                 
-                {/* PAYSLIP PREVIEW MODAL */}
-                {previewPayslip && (
-                  <div
-                    style={{
-                      position: "fixed",
-                      inset: 0,
-                      background: "rgba(0,0,0,0.55)",
-                      zIndex: 9999,
-                      display: "flex",
-                      justifyContent: "center",
-                      alignItems: "center"
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "92%",
-                        height: "92%",
-                        background: "#f5f7fb",
-                        borderRadius: 12,
-                        display: "flex",
-                        flexDirection: "column"
-                      }}
-                    >
-                      {/* HEADER */}
-                      <div
-                        style={{
-                          padding: "14px 18px",
-                          background: "#fff",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center"
-                        }}
-                      >
-                        <div>
-                          <h3 style={{ margin: 0 }}>
-                            Payslip Preview – Professional Blue
-                          </h3>
-                          <small>
-                            For {user.fullName} •{" "}
-                            {monthNames[previewPayslip.month - 1]} {previewPayslip.year}
-                          </small>
-                        </div>
-
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <button
-                            className="primary-btn"
-                            onClick={() => handleDownloadPayslip(previewPayslip._id)}
-                          >
-                            ⬇ Download PDF
-                          </button>
-                          <button
-                            className="outline-btn"
-                            onClick={() => setPreviewPayslip(null)}
-                          >
-                            ✖ Close
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* BODY */}
-                      <div style={{ flex: 1, padding: 12 }}>
-                        <iframe
-                          title="Payslip Preview"
-                          src={`/api/payslips/${previewPayslip._id}/preview`}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            border: "none",
-                            borderRadius: 8,
-                            background: "#fff"
-                          }}
-                        />
-                      </div>
-
-                      {/* FOOTER */}
-                      <div
-                        style={{
-                          padding: "12px 18px",
-                          background: "#fff",
-                          display: "flex",
-                          justifyContent: "center",
-                          gap: 12
-                        }}
-                      >
-                        <button
-                          className="primary-btn"
-                          onClick={() => handleDownloadPayslip(previewPayslip._id)}
-                        >
-                          ⬇ Download PDF
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Information note */}
+                {/* PAYSLIP INFORMATION - FIXED SPELLING */}
                 <div className="card" style={{ marginTop: '16px' }}>
                   <h3>Payslip Information</h3>
-                  <p className="note">
-                    • Payslips are generated by Manager at the end of each month<br />
-                    • Download the PDF to view complete salary details including Basic Pay, Allowances, Deductions, and Net Pay<br />
-                    • The PDF format matches the professional payslip shown to Manager<br />
-                    • Contact HR/Manager if you have any questions about your payslip
-                  </p>
+                  <div className="note">
+                    <p>• Payslips are generated by Manager at the end of each month</p>
+                    <p>• Download the PDF to view complete salary details including Basic Pay, Allowances, Deductions, and Net Pay</p>
+                    <p>• The PDF format matches the professional payslip shown to Manager</p>
+                    <p>• Contact HR/Manager if you have any questions about your payslip</p>
+                  </div>
                 </div>
               </section>
             </main>
@@ -2219,10 +2057,10 @@ const tryAlternativeDownload = async (payslipId) => {
                       <strong>Hours Worked</strong>
                       <div>{metrics.hoursWorked}</div>
                     </div>
-                   <div className="mini-kpi">
-  <strong>Pending Requests</strong>
-  <div>{metrics.pendingRequests}</div>
-</div>
+                    <div className="mini-kpi">
+                      <strong>Pending Requests</strong>
+                      <div>{metrics.pendingRequests}</div>
+                    </div>
                   </div>
                 </div>
 
