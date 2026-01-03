@@ -88,8 +88,54 @@ export default function AdminDashboard() {
   const [summaries, setSummaries] = useState([]);
   const [projects, setProjects] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [payslips, setPayslips] = useState([]);
 const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
-const [payslips, setPayslips] = useState([]);
+
+// ===== ADMIN PAYSLIP SEARCH & FILTER STATE =====
+const [searchText, setSearchText] = useState("");
+
+// ===== LOAD ALL PAYSLIPS FOR ADMIN (NO EMPLOYEE FILTER) =====
+useEffect(() => {
+  if (activeTab === "payslips") {
+    api
+      .get("/payslips")
+      .then((res) => {
+        setPayslips(res.data || []);
+      })
+      .catch((err) => {
+        console.error("Failed to load payslips", err);
+        setPayslips([]);
+      });
+  }
+}, [activeTab]);
+
+// ===== BUILD EMPLOYEE DROPDOWN FROM PAYSLIPS =====
+const employeeOptions = useMemo(() => {
+  const map = new Map();
+  payslips.forEach((p) => {
+    if (p.employee?._id) {
+      map.set(p.employee._id, p.employee);
+    }
+  });
+  return Array.from(map.values());
+}, [payslips]);
+
+// ===== FILTER PAYSLIPS (SEARCH + EMPLOYEE) =====
+const filteredPayslips = useMemo(() => {
+  return payslips.filter((p) => {
+    const matchesEmployee =
+      !selectedEmployeeId || p.employee?._id === selectedEmployeeId;
+
+    const text = searchText.toLowerCase();
+    const matchesSearch =
+      !text ||
+      p.employee?.fullName?.toLowerCase().includes(text) ||
+      p.employee?.email?.toLowerCase().includes(text) ||
+      p.employeeId?.toLowerCase().includes(text);
+
+    return matchesEmployee && matchesSearch;
+  });
+}, [payslips, selectedEmployeeId, searchText]);
 
 // --- Admin Payslip helpers ---
 const selectedEmployee = useMemo(() => {
@@ -222,13 +268,15 @@ const selectedEmployee = useMemo(() => {
 const loadEmployees = useCallback(async () => {
   try {
     const res = await api.get("/employees");
-    setEmployees(res.data?.employees || res.data?.data || res.data || []);
+    console.log("EMPLOYEES API RESPONSE:", res.data);
 
+    setEmployees(res.data?.employees || res.data?.data || res.data || []);
   } catch (err) {
     console.error("Failed to load employees", err);
     setEmployees([]);
   }
 }, []);
+
 
 const loadEmployeePayslips = useCallback(async () => {
   if (!selectedEmployeeId) {
@@ -246,6 +294,7 @@ const loadEmployeePayslips = useCallback(async () => {
     setPayslips([]);
   }
 }, [selectedEmployeeId]);
+
 
 
   useEffect(() => {
@@ -266,6 +315,7 @@ useEffect(() => {
     loadEmployeePayslips();
   }
 }, [activeTab, selectedEmployeeId, loadEmployeePayslips]);
+
 
 
   useEffect(() => {
@@ -608,7 +658,8 @@ useEffect(() => {
             <div className="sidebar-role">Admin</div>
           </div>
           <nav className="sidebar-nav">
-            <button
+        
+<button
               className={activeTab === "dashboard" ? "nav-item active" : "nav-item"}
               onClick={() => setActiveTab("dashboard")}
             >
@@ -621,7 +672,12 @@ useEffect(() => {
             >
               Timesheet Management
             </button>
-  
+      <button
+  className={activeTab === "payslips" ? "nav-item active" : "nav-item"}
+  onClick={() => setActiveTab("payslips")}
+>
+  Payslips
+</button>
           </nav>
         </aside>
 
@@ -1061,20 +1117,42 @@ useEffect(() => {
         <label style={{ fontSize: 13 }}>
           Select Employee:
           <select
-            value={selectedEmployeeId}
-            onChange={(e) => setSelectedEmployeeId(e.target.value)}
-            style={{ marginLeft: 8, minWidth: 260 }}
-          >
-            <option value="">-- Select Employee --</option>
-            {employees.map((e) => (
-              <option key={e._id} value={e._id}>
-                {e.fullName} ({e.email})
-              </option>
-            ))}
-          </select>
+  value={selectedEmployeeId}
+  onChange={(e) => setSelectedEmployeeId(e.target.value)}
+  style={{ marginLeft: 8, minWidth: 260 }}
+>
+  <option value="">-- Select Employee --</option>
+
+  {employees.length === 0 && (
+    <option disabled>Loading employees...</option>
+  )}
+
+  {employeeOptions.map((e) => (
+  <option key={e._id} value={e._id}>
+    {e.fullName} ({e.email})
+  </option>
+))}
+
+</select>
+
+
         </label>
 
         <div className="table-wrapper" style={{ marginTop: 16 }}>
+          <input
+  type="text"
+  placeholder="Search by name, email, employee ID"
+  value={searchText}
+  onChange={(e) => setSearchText(e.target.value)}
+  style={{
+    marginBottom: 12,
+    padding: 8,
+    width: 300,
+    borderRadius: 6,
+    border: "1px solid #ccc"
+  }}
+/>
+
           <table>
             <thead>
               <tr>
@@ -1082,33 +1160,43 @@ useEffect(() => {
                 <th>Employee ID</th>
                 <th>Name</th>
                 <th>Email</th>
+                <th>Status</th>
                 <th>Net Pay</th>
                 <th>Download</th>
               </tr>
             </thead>
             <tbody>
-              {payslips.map((p) => (
+              {filteredPayslips.map((p) => (
                 <tr key={p._id}>
                   <td>
                     {monthNames[p.month - 1]} {p.year}
                   </td>
-                  <td>{p.employeeId}</td>
-                 <td>{selectedEmployee?.fullName || "-"}</td>
-<td>{selectedEmployee?.email || "-"}</td>
+                  <td>{p.employee?.employeeId || "-"}</td>
+<td>{p.employee?.fullName || "-"}</td>
+<td>{p.employee?.email || "-"}</td>
 
+
+<td>{p.status || "Generated"}</td>
                   <td>₹{p.salary?.netPay || 0}</td>
                   <td>
                     <button
-                      className="link-btn"
-                      onClick={() =>
-                        window.open(
-                          `/api/payslips/${p._id}/download`,
-                          "_blank"
-                        )
-                      }
-                    >
-                      ⬇ Download
-                    </button>
+  className="link-btn"
+  onClick={() =>
+    api.get(`/payslips/${p._id}/download`, { responseType: "blob" })
+      .then(res => {
+        const blob = new Blob([res.data], { type: "application/pdf" });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Payslip-${selectedEmployee?.fullName}-${p.month}-${p.year}.pdf`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      })
+  }
+>
+  ⬇ Download
+</button>
+
                   </td>
                 </tr>
               ))}
