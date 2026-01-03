@@ -1,5 +1,5 @@
 // src/components/payslips/BankDetailsForm.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback  } from 'react';
 import { Building, CreditCard, Lock, MapPin, Edit2, Save, X, History, CheckCircle, AlertCircle, Shield } from 'lucide-react';
 import { updateBankDetails, getBankDetails, getBankHistory, verifyBankDetails } from '../../utils/api';
 
@@ -73,25 +73,28 @@ const BankDetailsForm = ({ employeeId, onUpdateSuccess }) => {
 
   const accountTypeOptions = ['Savings', 'Current', 'Salary'];
 
-  // Load bank details
-  useEffect(() => {
-    if (employeeId) {
-      loadBankDetails();
-    }
-  }, [employeeId]);
 
-  const loadBankDetails = async () => {
-    try {
-      setLoading(true);
-      const data = await getBankDetails(employeeId);
-      setBankDetails(data);
-      setEditData(data);
-    } catch (error) {
-      console.error('Error loading bank details:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+
+
+ const loadBankDetails = useCallback(async () => {
+  if (!employeeId) return;
+
+  try {
+    setLoading(true);
+    const data = await getBankDetails(employeeId);
+    setBankDetails(data);
+    setEditData(data);
+  } catch (error) {
+    console.error('Error loading bank details:', error);
+  } finally {
+    setLoading(false);
+  }
+}, [employeeId]);
+
+useEffect(() => {
+  loadBankDetails();
+}, [loadBankDetails]);
+
 
   const loadBankHistory = async () => {
     try {

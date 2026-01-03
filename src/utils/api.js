@@ -37,6 +37,54 @@ export const getEmployees = async () => {
 };
 
 /* =========================
+   NEW: DESIGNATIONS FUNCTION
+========================= */
+export const getDesignations = async () => {
+  try {
+    const res = await api.get("/employees/designations");
+    return res.data;
+  } catch {
+    try {
+      const employees = await getEmployees();
+      const designationsSet = new Set();
+      
+      employees.forEach(employee => {
+        if (employee.designation) {
+          designationsSet.add(employee.designation);
+        }
+      });
+      
+      return Array.from(designationsSet).map(designation => ({
+        value: designation,
+        label: designation
+      }));
+    } catch {
+      return [
+        { value: "Software Engineer", label: "Software Engineer" },
+        { value: "Senior Software Engineer", label: "Senior Software Engineer" },
+        { value: "Frontend Developer", label: "Frontend Developer" },
+        { value: "Backend Developer", label: "Backend Developer" },
+        { value: "Full Stack Developer", label: "Full Stack Developer" },
+        { value: "DevOps Engineer", label: "DevOps Engineer" },
+        { value: "QA Engineer", label: "QA Engineer" },
+        { value: "UI/UX Designer", label: "UI/UX Designer" },
+        { value: "Project Manager", label: "Project Manager" },
+        { value: "Product Manager", label: "Product Manager" },
+        { value: "HR Manager", label: "HR Manager" },
+        { value: "Accountant", label: "Accountant" },
+        { value: "Marketing Manager", label: "Marketing Manager" },
+        { value: "Sales Executive", label: "Sales Executive" },
+        { value: "Business Analyst", label: "Business Analyst" },
+        { value: "Data Scientist", label: "Data Scientist" },
+        { value: "Network Engineer", label: "Network Engineer" },
+        { value: "System Administrator", label: "System Administrator" },
+        { value: "Technical Support", label: "Technical Support" }
+      ];
+    }
+  }
+};
+
+/* =========================
    PAYSLIPS
 ========================= */
 
@@ -46,7 +94,7 @@ export const checkExistingPayslip = async (employeeId, month, year) => {
     const res = await api.get(
       `/payslips/check/${employeeId}/${month}/${year}`
     );
-    return res.data.exists;
+    return res.data;
   } catch (error) {
     if (error.response?.status === 404) {
       return false;
@@ -150,6 +198,34 @@ export const getEmployeesWithBankDetails = async () => {
     return res.data;
   } catch (error) {
     console.error("Error fetching employees with bank details:", error);
+    throw error;
+  }
+};
+
+/* =========================
+   NEW: SEND PAYSLIP TO EMPLOYEE FUNCTION
+========================= */
+// Add this function to fix the error
+export const sendPayslipToEmployee = async (payslipId) => {
+  try {
+    const res = await api.post(`/payslips/${payslipId}/send`);
+    return res.data;
+  } catch (error) {
+    console.error("Error sending payslip:", error);
+    throw error;
+  }
+};
+
+/* =========================
+   NEW: UPDATE EMPLOYEE BANK DETAILS FUNCTION
+========================= */
+// Add this function to fix the error
+export const updateEmployeeBankDetails = async (employeeId, bankDetails) => {
+  try {
+    const res = await api.put(`/employees/${employeeId}/bank-details`, bankDetails);
+    return res.data;
+  } catch (error) {
+    console.error("Error updating bank details:", error);
     throw error;
   }
 };

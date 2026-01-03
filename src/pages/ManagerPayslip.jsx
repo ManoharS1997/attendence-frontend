@@ -263,6 +263,9 @@ setPayslipExists(exists);
     
     // Reset existing payslip check
     setExistingPayslip(null);
+     setPayslipExists(false);
+
+  setLoading(true);
   };
 
   // Calculate salary automatically
@@ -304,11 +307,8 @@ setPayslipExists(exists);
 
   // Check if Generate Payslip button should be enabled
   const isGenerateButtonEnabled = () => {
-    return selectedEmployee && 
-           bankDetails.bankName && 
-           bankDetails.accountNumber && 
-           bankDetails.ifsc &&
-           salaryStructure.basic > 0;
+    return selectedEmployee && salaryStructure.basic > 0;
+
   };
 
   // Generate payslip with duplicate handling
@@ -316,15 +316,11 @@ setPayslipExists(exists);
 
 const handleGeneratePayslip = async () => {
   if (!isGenerateButtonEnabled()) {
-    toast.error("Please fill all required details including salary");
+    toast.error("Please select employee, fill bank details and salary");
     return;
   }
 
-  if (payslipExists) {
-    toast.warning("Payslip already generated. You can download it.");
-    return;
-  }
-
+  
   setLoading(true);
 
   try {
@@ -336,6 +332,9 @@ const handleGeneratePayslip = async () => {
       designation: selectedEmployee.designation || "Employee",
       employeeType: selectedEmployee.employeeType || "Permanent",
       templateId: selectedTemplate.id,
+
+      overwrite: true,
+
       bankDetails: {
         bankName: bankDetails.bankName,
         accountNumber: bankDetails.accountNumber,
@@ -366,7 +365,11 @@ const handleGeneratePayslip = async () => {
     setExistingPayslip(response);
     setShowPreview(true);
 
-    toast.success("Payslip generated successfully!");
+    toast.success(
+  payslipExists
+    ? "Payslip regenerated successfully!"
+    : "Payslip generated successfully!"
+);
   } catch (err) {
     console.error("Failed to generate payslip:", err);
     toast.error(err.message || "Failed to generate payslip");
@@ -957,7 +960,7 @@ const _savePayslipToLocalStorage = (payslipData) => {
       <button
         className="btn-action-download"
         onClick={handleDirectDownload}
-        disabled={generatingPDF || !selectedEmployee || !existingPayslip}
+        // disabled={generatingPDF || !selectedEmployee || !existingPayslip}
         title="Download PDF"
       >
         {generatingPDF ? (
@@ -976,7 +979,7 @@ const _savePayslipToLocalStorage = (payslipData) => {
       <button 
         className="btn-action-print"
         onClick={handlePrint}
-        disabled={!selectedEmployee}
+        // disabled={!selectedEmployee}
         title="Print"
       >
         <Printer size={18} />
@@ -986,7 +989,7 @@ const _savePayslipToLocalStorage = (payslipData) => {
       <button 
         className="btn-action-share"
         onClick={handleShare}
-        disabled={!selectedEmployee}
+        // disabled={!selectedEmployee}
         title="Share"
       >
         <Share2 size={18} />
@@ -996,7 +999,7 @@ const _savePayslipToLocalStorage = (payslipData) => {
       <button 
         className="btn-action-send"
         onClick={handleSendToEmployee}
-        disabled={!selectedEmployee || !existingPayslip}
+        // disabled={!selectedEmployee || !existingPayslip}
         title="Send to Employee"
       >
         <Send size={18} />
@@ -1007,7 +1010,8 @@ const _savePayslipToLocalStorage = (payslipData) => {
 
   // Render preview
   const renderPreview = () => {
-    if (!showPreview || !selectedEmployee) return null;
+    if (!showPreview) return null;
+
 
     const monthName = months.find(m => m.value === selectedMonth)?.label || selectedMonth;
 
@@ -1477,7 +1481,8 @@ const _savePayslipToLocalStorage = (payslipData) => {
         </div>
       </div>
 
-      {showPreview && renderPreview()}
+      {renderPreview()}
+
 
       {!showPreview && (
         <>
@@ -1641,18 +1646,19 @@ const _savePayslipToLocalStorage = (payslipData) => {
                 </div>
               ) : (
                 <>
-                  <div className="employee-search-container">
-                    <div className="search-input-wrapper">
-                      <Search size={18} className="search-icon" />
-                      <input
-                        type="text"
-                        className="employee-search-input"
-                        placeholder="Search employees..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                      />
-                    </div>
-                  </div>
+                <div className="employee-search-container">
+  <div className="search-input-wrapper">
+    <Search size={18} className="search-icon" />
+    <input
+      type="text"
+      className="employee-search-input"
+      placeholder="Search by name, email, ID, or designation"
+      value={searchTerm}
+      onChange={(e) => setSearchTerm(e.target.value)}
+    />
+  </div>
+</div>
+
                   
                   <div className="employee-select-enhanced">
                     <label>Select Employee</label>
@@ -1682,11 +1688,12 @@ const _savePayslipToLocalStorage = (payslipData) => {
                 <Building size={20} className="section-icon" />
                 <h3>Bank Details</h3>
               </div>
-              <BankDetailsForm
-                bankDetails={bankDetails}
-                onUpdate={setBankDetails}
-                employeeId={selectedEmployee?._id}
-              />
+            <BankDetailsForm
+  employeeId={selectedEmployee?._id}
+  onChange={(data) => setBankDetails(data)}
+/>
+
+
             </div>
 
             {/* Salary Structure */}
@@ -1714,15 +1721,16 @@ const _savePayslipToLocalStorage = (payslipData) => {
 
             {/* Action Buttons */}
             <div className="form-actions">
-              <button 
-                className="btn-generate"
-                onClick={handleGeneratePayslip}
-                disabled={!isGenerateButtonEnabled() || loading}
-              >
+             <button 
+  className="btn-generate"
+  onClick={handleGeneratePayslip}
+  // disabled={loading || !isGenerateButtonEnabled()}
+>
+
                 {loading ? (
                   <>
                     <div className="spinner"></div>
-                    {existingPayslip ? 'Updating...' : 'Generating...'}
+                    Generating...
                   </>
                 ) : (
                   <>
@@ -1733,19 +1741,21 @@ const _savePayslipToLocalStorage = (payslipData) => {
               </button>
               
               <button 
-                className="btn-send"
-                onClick={handleSendToEmployee}
-                disabled={!selectedEmployee || !existingPayslip}
-              >
+  className="btn-send"
+  onClick={handleSendToEmployee}
+  // disabled={!existingPayslip}
+>
+
                 <Send size={18} />
                 Send to Employee
               </button>
               
               <button 
-                className="btn-download"
-                onClick={handleDirectDownload}
-                disabled={!selectedEmployee || !existingPayslip || generatingPDF}
-              >
+  className="btn-download"
+  onClick={handleDirectDownload}
+  // disabled={!existingPayslip || generatingPDF}
+>
+
                 {generatingPDF ? (
                   <>
                     <Loader2 size={18} className="spinner" />
