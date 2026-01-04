@@ -10,6 +10,8 @@
     "preview": "vite preview --host 0.0.0.0 --port 4173"
   },
   "dependencies": {
+    "@fortawesome/free-solid-svg-icons": "^7.1.0",
+    "@fortawesome/react-fontawesome": "^3.1.1",
     "axios": "^1.13.2",
     "lucide-react": "^0.562.0",
     "react": "^19.2.0",
