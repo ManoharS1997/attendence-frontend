@@ -1,0 +1,249 @@
+/* ================================
+   LEAVE SUMMARY – PROFESSIONAL
+   ================================ */
+
+.leave-card,
+.leave-card-pro {
+  background: linear-gradient(180deg, #ffffff 0%, #f6f9ff 100%);
+  border-left: 4px solid #1677ff;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(24, 144, 255, 0.08);
+}
+
+.leave-summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.leave-summary-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #e6f0ff;
+}
+
+.leave-summary-table tr td:first-child {
+  font-weight: 600;
+  color: #002766;
+}
+
+.leave-summary-table tr td:last-child {
+  text-align: right;
+  font-weight: 700;
+  color: #003a8c;
+}
+
+.leave-summary-table tr.highlight {
+  background: linear-gradient(90deg, #e6fffb, #f0ffff);
+  color: #006d75;
+}
+/* ================================
+   KPI CARDS – DASHBOARD
+   ================================ */
+
+.mini-kpi {
+  background: linear-gradient(135deg, #f0f5ff, #ffffff);
+  border: 1px solid #d6e4ff;
+  border-radius: 14px;
+  padding: 16px 12px;
+  text-align: center;
+  box-shadow: 0 6px 20px rgba(24, 144, 255, 0.12);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mini-kpi strong {
+  color: #003a8c;
+  font-size: 13px;
+}
+
+.mini-kpi div {
+  margin-top: 6px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1677ff;
+}
+
+.mini-kpi:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(24, 144, 255, 0.18);
+}
+/* ================================
+   PUBLIC HOLIDAY CALENDAR – GRID FIX
+   ================================ */
+
+.holiday-calendar {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 8px;
+  table-layout: fixed;
+}
+
+.holiday-calendar td,
+.holiday-calendar th {
+  width: 14.28%;
+  text-align: center;
+}
+
+/* ================================
+   TABLES – CLEAN ENTERPRISE LOOK
+   ================================ */
+
+.table-wrapper table th {
+  background: #f5f8ff;
+  color: #002766;
+  font-weight: 600;
+}
+
+.table-wrapper table td {
+  font-size: 13px;
+}
+
+.table-wrapper table tr:hover {
+  background: #f0f5ff;
+}
+/* ================================
+   DAY TYPE COLORS – PROFESSIONAL
+   ================================ */
+
+.holiday-cell.working-day {
+  background: #ff7875 !important;
+  color: #ffffff !important;
+}
+
+/* Sunday */
+.holiday-cell.sunday {
+  background: linear-gradient(135deg, #434343, #262626);
+  color: #ffffff;
+}
+
+/* 2nd Saturday */
+.holiday-cell.second-saturday {
+  background: linear-gradient(135deg, #8c8c8c, #595959);
+  color: #ffffff;
+}
+
+/* Mandatory Holiday */
+.holiday-cell.mandatory {
+  background: linear-gradient(135deg, #ff7875, #ff4d4f);
+  color: #ffffff;
+}
+
+/* Optional – Not Taken */
+.holiday-cell.optional-not-taken {
+  background: linear-gradient(135deg, #ffe58f, #faad14);
+  color: #874d00;
+}
+
+/* Optional – Taken */
+.holiday-cell.optional-taken {
+  background: linear-gradient(135deg, #69c0ff, #1677ff);
+  color: #ffffff;
+}
+.holiday-cell div:first-child {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.holiday-cell div:last-child {
+  font-size: 11px;
+  opacity: 0.95;
+  line-height: 1.2;
+}
+/* =====================================================
+   COLOR OVERRIDES ONLY — NO LAYOUT CHANGES
+   ===================================================== */
+
+/* ---------- KPI CARDS ---------- */
+.mini-kpi {
+  background: linear-gradient(135deg, #eef4ff, #ffffff);
+  border-color: #c7dbff;
+}
+
+.mini-kpi strong {
+  color: #003a8c;
+}
+
+.mini-kpi div {
+  color: #0958d9;
+}
+
+/* ---------- LEAVE SUMMARY ---------- */
+.leave-card,
+.leave-card-pro {
+  background: linear-gradient(180deg, #ffffff, #f4f8ff);
+  border-left-color: #0958d9;
+}
+
+.leave-summary-table tr.highlight {
+  background: linear-gradient(90deg, #e6fffb, #f0ffff);
+  color: #006d75;
+}
+
+/* ---------- PUBLIC HOLIDAY TABLE HEADER ---------- */
+.holiday-calendar th {
+  background: #eef4ff;
+  color: #003a8c;
+}
+
+.holiday-cell.working-day {
+  background: #ff7875 !important;
+  color: #ffffff !important;
+}
+
+/* ---------- SUNDAY ---------- */
+.holiday-cell.sunday {
+  background: #3a3a3a !important;
+  color: #ffffff !important;
+}
+
+/* ---------- 2ND SATURDAY ---------- */
+.holiday-cell.second-saturday {
+  background: #6b6b6b !important;
+  color: #ffffff !important;
+}
+
+/* ---------- MANDATORY HOLIDAY ---------- */
+.holiday-cell.mandatory {
+  background: #ff7875 !important;
+  color: #ffffff !important;
+}
+
+/* ---------- OPTIONAL – NOT TAKEN ---------- */
+.holiday-cell.optional-not-taken {
+  background: #ffd666 !important;
+  color: #874d00 !important;
+}
+
+/* ---------- OPTIONAL – TAKEN ---------- */
+.holiday-cell.optional-taken {
+  background: #69c0ff !important;
+  color: #ffffff !important;
+}
+
+/* ---------- TABLE HEADERS ---------- */
+.table-wrapper table th {
+  background: #f4f8ff;
+  color: #003a8c;
+}
+/* =====================================================
+   FORCE WORKING DAY COLOR — SAME AS REPUBLIC DAY
+   (NO LAYOUT / NO LOGIC CHANGES)
+   ===================================================== */
+
+/* Case 1: td has working-day class directly */
+td.working-day {
+  background: #ff7875 !important;
+  color: #ffffff !important;
+}
+
+/* Case 2: holiday-cell wrapper */
+.holiday-cell.working-day {
+  background: #ff7875 !important;
+  color: #ffffff !important;
+}
+
+/* Case 3: fallback – normal calendar day (not sunday/sat/holiday) */
+.holiday-calendar td:not(.sunday):not(.second-saturday):not(.mandatory):not(.optional-not-taken):not(.optional-taken) {
+  background: #ff7875 !important;
+  color: #ffffff !important;
+}

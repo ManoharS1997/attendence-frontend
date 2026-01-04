@@ -4,6 +4,7 @@ import api from "../utils/api";
 import ChangePasswordCard from "../components/ChangePasswordCard";
 import logo from "../assets/Company Logo.png";
 import { buildHolidayCalendar } from "../utils/holidays";
+import "../../styles/employeeDashboard.css";
 
 const STATUS_OPTIONS = [
   "PRESENT FULL DAY",
@@ -269,7 +270,7 @@ useEffect(() => {
 
   const { user, logout } = useAuth();
 
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useState("timesheet");
   const [{ month, year }, setMonthYear] = useState(getCurrentMonth);
 
   const [date, setDate] = useState(formatToday());
@@ -1226,53 +1227,51 @@ useEffect(() => {
                   </div>
                 </div>
 
-                <div className="card leave-card">
-                  <h2>Leave Summary</h2>
-                  {summary ? (
-                    <>
-                      <ul className="summary-list">
-                        <li>
-                          <span>Total Leave Entitlement:</span>
-                          <span>{summary.totalLeaveEntitlement}</span>
-                        </li>
-                        <li>
-                          <span>Public Holidays:</span>
-                          <span>{summary.publicHolidays}</span>
-                        </li>
-                        <li>
-                          <span>Weekend Holidays:</span>
-                          <span>{summary.weekendHolidays}</span>
-                        </li>
-                        <li>
-                          <span>2025 Carry Forward Leaves:</span>
-                          <span>{summary.carryForward2025}</span>
-                        </li>
-                        <li>
-                          <span>Leaves Taken:</span>
-                          <span>{summary.leavesTaken}</span>
-                        </li>
-                        <li>
-                          <span>Balance Leaves:</span>
-                          <span>{summary.balanceLeaves}</span>
-                        </li>
-                        <li>
-                          <span>Total Half Days:</span>
-                          <span>{summary.totalHalfDays}</span>
-                        </li>
-                        <li>
-                          <span>Balance Leaves After Half Days:</span>
-                          <span>{summary.balanceAfterHalfDays}</span>
-                        </li>
-                      </ul>
-                      <p className="note">
-                        * These values are read-only; only Manager can update
-                        them in the system.
-                      </p>
-                    </>
-                  ) : (
-                    <p className="empty">No summary yet for {monthLabel}</p>
-                  )}
-                </div>
+                <div className="card leave-card-pro">
+  <h2>Leave Summary</h2>
+
+  {summary ? (
+    <table className="leave-summary-table">
+      <tbody>
+        <tr>
+          <td>Total Leave Entitlement</td>
+          <td>{summary.totalLeaveEntitlement}</td>
+        </tr>
+        <tr>
+          <td>Public Holidays</td>
+          <td>{summary.publicHolidays}</td>
+        </tr>
+        <tr>
+          <td>Weekend Holidays</td>
+          <td>{summary.weekendHolidays}</td>
+        </tr>
+        <tr>
+          <td>Carry Forward (2025)</td>
+          <td>{summary.carryForward2025}</td>
+        </tr>
+        <tr>
+          <td>Leaves Taken</td>
+          <td>{summary.leavesTaken}</td>
+        </tr>
+        <tr className="highlight">
+          <td>Balance Leaves</td>
+          <td>{summary.balanceLeaves}</td>
+        </tr>
+        <tr>
+          <td>Total Half Days</td>
+          <td>{summary.totalHalfDays}</td>
+        </tr>
+        <tr>
+          <td>Balance After Half Days</td>
+          <td>{summary.balanceAfterHalfDays}</td>
+        </tr>
+      </tbody>
+    </table>
+  ) : (
+    <p className="empty">No summary available</p>
+  )}
+</div>
+
 
                 <div className="card">
                   <h2>Public Holidays – {monthLabel}</h2>
