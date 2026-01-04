@@ -223,6 +223,50 @@ const computeWorkingDaysExcludingHolidays = (startStr, endStr) => {
 };
 
 export default function EmployeeDashboard() {
+    // 🔹 Today info & tagline (Top-right header)
+  const getTodayInfo = () => {
+    const now = new Date();
+    return {
+      day: now.toLocaleDateString("en-IN", { weekday: "long" }),
+      date: now.getDate(),
+      month: now.toLocaleDateString("en-IN", { month: "long" }),
+      year: now.getFullYear()
+    };
+  };
+
+    // 🔹 Today info & tagline (Top-right header)
+  const TAGLINES = [
+  "Consistency builds professional excellence.",
+  "Every workday is a step toward mastery.",
+  "Discipline today creates success tomorrow.",
+  "Quality work speaks louder than words.",
+  "Focus, commitment, and growth define professionals.",
+  "Building careers. Strengthening organizations.",
+  "Professionalism, trust, and excellence.",
+  "Committed to people. Focused on results.",
+  "Your success is our business.",
+  "Empowering professionals, transforming futures"
+];
+
+
+  const getTaglineOfTheDay = useCallback(() => {
+  return TAGLINES[new Date().getDate() % TAGLINES.length];
+}, []);
+
+
+  const [todayInfo, setTodayInfo] = useState(getTodayInfo());
+const [tagline, setTagline] = useState(getTaglineOfTheDay());
+
+useEffect(() => {
+  const interval = setInterval(() => {
+    setTodayInfo(getTodayInfo());
+    setTagline(getTaglineOfTheDay());
+  }, 60 * 1000);
+
+  return () => clearInterval(interval);
+}, [getTaglineOfTheDay]);
+
+
   const { user, logout } = useAuth();
 
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -893,12 +937,64 @@ export default function EmployeeDashboard() {
 
         <div className="main-area">
           <header className="topbar">
+            {/* 🔹 Today Info – Professional Animated Badge */}
+<div
+  style={{
+    position: "absolute",
+    right: 130,
+    top: "7%",
+    transform: "translateY(-50%)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-end",
+    padding: "8px 14px",
+    borderRadius: 12,
+    background:
+      "linear-gradient(135deg, #e6f7ff 0%, #f0faff 60%, #ffffff 100%)",
+    border: "1px solid #bae7ff",
+    boxShadow: "0 6px 18px rgba(24, 144, 255, 0.15)",
+    animation: "fadeSlideIn 0.6s ease-out"
+  }}
+>
+  <div
+    style={{
+      fontSize: 13,
+      fontWeight: 700,
+      color: "#0050b3",
+      letterSpacing: "0.3px"
+    }}
+  >
+    {todayInfo.day}, {todayInfo.date} {todayInfo.month} {todayInfo.year}
+  </div>
+
+  <div
+    style={{
+      marginTop: 2,
+      fontSize: 12,
+      fontStyle: "italic",
+      color: "#096dd9",
+      opacity: 0.9,
+      whiteSpace: "nowrap"
+    }}
+  >
+    “{tagline}”
+  </div>
+</div>
+
+
+
+
             <div>
               <strong>{user.fullName}</strong> (Employee) — {user.email}
             </div>
-            <button onClick={logout} className="outline-btn">
-              Logout
-            </button>
+            <button
+  onClick={logout}
+  className="outline-btn"
+  style={{ marginLeft: 24 }}
+>
+  Logout
+</button>
+
           </header>
 
           {/* TIMESHEET TAB */}
