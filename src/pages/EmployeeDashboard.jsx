@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import api from "../utils/api";
 import ChangePasswordCard from "../components/ChangePasswordCard";
@@ -63,6 +63,16 @@ const monthNames = [
   "November",
   "December"
 ];
+
+// Get current and previous years for dropdown
+const getYearOptions = () => {
+  const currentYear = new Date().getFullYear();
+  const years = [];
+  for (let i = currentYear; i >= currentYear - 5; i--) {
+    years.push(i);
+  }
+  return years;
+};
 
 const getCurrentMonth = () => {
   const now = new Date();
@@ -224,7 +234,7 @@ const computeWorkingDaysExcludingHolidays = (startStr, endStr) => {
 };
 
 export default function EmployeeDashboard() {
-    // 🔹 Today info & tagline (Top-right header)
+  // 🔹 Today info & tagline (Top-right header)
   const getTodayInfo = () => {
     const now = new Date();
     return {
@@ -235,43 +245,47 @@ export default function EmployeeDashboard() {
     };
   };
 
-    // 🔹 Today info & tagline (Top-right header)
+  // 🔹 Taglines array
   const TAGLINES = [
-  "Consistency builds professional excellence.",
-  "Every workday is a step toward mastery.",
-  "Discipline today creates success tomorrow.",
-  "Quality work speaks louder than words.",
-  "Focus, commitment, and growth define professionals.",
-  "Building careers. Strengthening organizations.",
-  "Professionalism, trust, and excellence.",
-  "Committed to people. Focused on results.",
-  "Your success is our business.",
-  "Empowering professionals, transforming futures"
-];
+    "Consistency builds professional excellence.",
+    "Every workday is a step toward mastery.",
+    "Discipline today creates success tomorrow.",
+    "Quality work speaks louder than words.",
+    "Focus, commitment, and growth define professionals.",
+    "Building careers. Strengthening organizations.",
+    "Professionalism, trust, and excellence.",
+    "Committed to people. Focused on results.",
+    "Your success is our business.",
+    "Empowering professionals, transforming futures"
+  ];
 
-
-  const getTaglineOfTheDay = useCallback(() => {
+ const getTaglineOfTheDay = useCallback(() => {
   return TAGLINES[new Date().getDate() % TAGLINES.length];
-}, []);
-
+}, [TAGLINES]);
 
   const [todayInfo, setTodayInfo] = useState(getTodayInfo());
-const [tagline, setTagline] = useState(getTaglineOfTheDay());
+  const [tagline, setTagline] = useState(getTaglineOfTheDay());
+  const [extraHoursBalance, setExtraHoursBalance] = useState(0);
+  const [compOffBalance, setCompOffBalance] = useState(0);
+  const [yearOptions] = useState(getYearOptions());
+  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
+  const [lastVisitedMonthYear, setLastVisitedMonthYear] = useState(null);
+  const [showNextMonthPopup, setShowNextMonthPopup] = useState(false);
+  const popupShownRef = useRef(false);
 
-useEffect(() => {
-  const interval = setInterval(() => {
-    setTodayInfo(getTodayInfo());
-    setTagline(getTaglineOfTheDay());
-  }, 60 * 1000);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTodayInfo(getTodayInfo());
+      setTagline(getTaglineOfTheDay());
+    }, 60 * 1000);
 
-  return () => clearInterval(interval);
-}, [getTaglineOfTheDay]);
-
+    return () => clearInterval(interval);
+  }, [getTaglineOfTheDay]);
 
   const { user, logout } = useAuth();
 
   const [activeTab, setActiveTab] = useState("timesheet");
-  const [{ month, year }, setMonthYear] = useState(getCurrentMonth);
+  const [{ month, year }, setMonthYear] = useState(getCurrentMonth());
 
   const [date, setDate] = useState(formatToday());
   const [status, setStatus] = useState("PRESENT FULL DAY");
@@ -294,6 +308,7 @@ useEffect(() => {
   const [payslips, setPayslips] = useState([]);
   const [loadingSave, setLoadingSave] = useState(false);
   const [lastAlertAttendanceId, setLastAlertAttendanceId] = useState(null);
+  const [taskError, setTaskError] = useState("");
 
   const [taskForm, setTaskForm] = useState({
     projectId: "",
@@ -312,13 +327,31 @@ useEffect(() => {
   });
   const [editingTaskId, setEditingTaskId] = useState(null);
 
-  const loadAttendance = useCallback(async () => {
-    const res = await api.get("/attendance/my", { params: { month, year } });
-    setAttendance(res.data || []);
-  }, [month, year]);
+  // Load extra hours and comp-off balance
+  const loadExtraHoursAndCompOff = useCallback(async () => {
+    try {
+      const res = await api.get("/attendance/extra-hours-balance");
+      if (res.data) {
+        setExtraHoursBalance(res.data.extraHours || 0);
+        setCompOffBalance(res.data.compOff || 0);
+      }
+    } catch (error) {
+      console.error("Error loading extra hours balance:", error);
+    }
+  }, []);
 
-  const loadSummary = useCallback(async () => {
-    const res = await api.get("/leave/summary/me", { params: { month, year } });
+ const loadAttendance = useCallback(async (selectedMonth = month, selectedYear = year) => {
+  const res = await api.get("/attendance/my", {
+    params: { month: selectedMonth, year: selectedYear }
+  });
+
+  // 🔁 FORCE state change even if array reference is same
+  setAttendance([...(res.data || [])]);
+}, [month, year]);
+
+
+  const loadSummary = useCallback(async (selectedMonth = month, selectedYear = year) => {
+    const res = await api.get("/leave/summary/me", { params: { month: selectedMonth, year: selectedYear } });
     setSummary(res.data || null);
   }, [month, year]);
 
@@ -334,10 +367,6 @@ useEffect(() => {
       setTasks(res.data || []);
     } catch (error) {
       console.error("Error loading my tasks", error?.response || error);
-      alert(
-        error?.response?.data?.message ||
-          "Error loading tasks. Please ensure backend GET /tasks/my allows employee role and returns assigned/created tasks."
-      );
       setTasks([]);
     }
   }, []);
@@ -345,7 +374,6 @@ useEffect(() => {
   const loadPayslips = useCallback(async () => {
     try {
       const res = await api.get("/payslips/my");
-      console.log("Payslips API response:", res.data);
       setPayslips(res.data || []);
     } catch (error) {
       console.error("Failed to load payslips", error);
@@ -353,13 +381,38 @@ useEffect(() => {
     }
   }, []);
 
+  // Check if next month is opened for the first time
   useEffect(() => {
-    const id = setTimeout(() => {
-      loadAttendance();
-      loadSummary();
-    }, 0);
-    return () => clearTimeout(id);
-  }, [loadAttendance, loadSummary]);
+    const current = new Date();
+    const currentMonth = current.getMonth() + 1;
+    const currentYear = current.getFullYear();
+    
+    const selected = new Date(parseInt(year), parseInt(month) - 1, 1);
+    const selectedMonth = selected.getMonth() + 1;
+    const selectedYear = selected.getFullYear();
+    
+    const isNextMonth = (selectedYear > currentYear) || 
+                       (selectedYear === currentYear && selectedMonth > currentMonth);
+    
+    const key = `${month}-${year}`;
+    
+    if (isNextMonth && !popupShownRef.current && key !== lastVisitedMonthYear) {
+      setShowNextMonthPopup(true);
+      popupShownRef.current = true;
+      setLastVisitedMonthYear(key);
+    }
+    
+    if (!isNextMonth) {
+      popupShownRef.current = false;
+    }
+  }, [month, year, lastVisitedMonthYear]);
+
+ useEffect(() => {
+  loadAttendance();
+  loadSummary();
+  loadExtraHoursAndCompOff();
+}, [loadAttendance, loadSummary, loadExtraHoursAndCompOff]);
+
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -369,11 +422,8 @@ useEffect(() => {
   }, [loadAttendance]);
 
   useEffect(() => {
-    const id = setTimeout(() => {
-      loadProjects();
-      loadTasks();
-    }, 0);
-    return () => clearTimeout(id);
+    loadProjects();
+    loadTasks();
   }, [loadProjects, loadTasks]);
 
   useEffect(() => {
@@ -382,8 +432,25 @@ useEffect(() => {
     }
   }, [activeTab, loadPayslips]);
 
+  // Calculate real-time attendance metrics
+  useEffect(() => {
+    if (attendance.length === 0) return;
+    
+    const todayFormatted = formatToday();
+    const todayAttendance = attendance.find(a => a.date === todayFormatted);
+    
+    if (todayAttendance) {
+      // Update dashboard in real-time when attendance changes
+      loadSummary();
+      loadExtraHoursAndCompOff();
+    }
+  }, [attendance, loadSummary, loadExtraHoursAndCompOff]);
+
   useEffect(() => {
     if (!attendance || attendance.length === 0) return;
+  // 🔁 FORCE refresh leave summary & balances on ANY attendance change
+  loadSummary();
+  loadExtraHoursAndCompOff();
 
     const decided = attendance
       .filter(
@@ -416,18 +483,27 @@ useEffect(() => {
         : latest.status || "attendance request";
 
     const message =
-      decision === "APPROVED"
-        ? `Your ${label} for ${latest.date} was APPROVED by Manager.`
-        : `Your ${label} for ${latest.date} was REJECTED by Manager.`;
+  decision === "APPROVED"
+    ? `Your ${label} for ${latest.date} was APPROVED by Manager.`
+    : `Your ${label} for ${latest.date} was REJECTED by Manager.`;
 
-    try {
-      window.alert(message);
-    } catch (error) {
-      console.error("Error showing employee alert popup:", error);
-    }
+// Show popup only if user is on the same month
+const [_, mm, yyyy] = latest.date.split("-"); // Use _ to indicate intentionally unused
+if (`${mm}-${yyyy}` === `${month}-${year}`) {
+  setTimeout(() => {
+    alert(message);
+  }, 100);
+}
 
-    setLastAlertAttendanceId(latest._id);
-  }, [attendance, lastAlertAttendanceId]);
+     setLastAlertAttendanceId(latest._id);
+}, [
+  attendance,
+  loadSummary,
+  loadExtraHoursAndCompOff,
+  lastAlertAttendanceId,
+  month,
+  year
+]);
 
   const metrics = (() => {
     let presentDays = 0;
@@ -435,8 +511,17 @@ useEffect(() => {
     let leavesTaken = 0;
     let hoursWorked = 0;
     let pendingRequests = 0;
+    let extraHours = 0;
+    let compOffRequests = 0;
 
     attendance.forEach((a) => {
+
+     // ❗ IMPORTANT: Exclude ONLY rejected records
+if (a.managerDecision?.status === "REJECTED") {
+  return;
+}
+
+
       if (a.status === "PRESENT FULL DAY") presentDays += 1;
       if (HALF_DAY_STATUSES.includes(a.status)) {
         halfDays += 1;
@@ -446,6 +531,12 @@ useEffect(() => {
       }
       if (a.managerDecision?.status === "PENDING" && a.isLeaveRequest) {
         pendingRequests += 1;
+      }
+      
+      
+      
+      if (a.status === "COMPOFF") {
+        compOffRequests += 1;
       }
 
       const isPresentLike =
@@ -458,8 +549,9 @@ useEffect(() => {
     });
 
     hoursWorked = Math.round(hoursWorked * 10) / 10;
+    extraHours = Math.round(extraHours * 10) / 10;
 
-    return { presentDays, halfDays, leavesTaken, hoursWorked, pendingRequests };
+    return { presentDays, halfDays, leavesTaken, hoursWorked, pendingRequests, extraHours, compOffRequests };
   })();
 
   const holidays = buildHolidayCalendar(month, year);
@@ -664,85 +756,125 @@ useEffect(() => {
     ) : null;
 
   const handleSaveAttendance = async (e) => {
-    e.preventDefault();
-    try {
-      setLoadingSave(true);
+  e.preventDefault();
+  try {
+    setLoadingSave(true);
 
-      if (isSystemHoliday) {
-        alert(
-          "This date is configured as a system holiday (Sunday / 2nd Saturday / Public Holiday). Attendance marking is disabled."
-        );
+    if (isSystemHoliday) {
+      alert(
+        "This date is configured as a system holiday (Sunday / 2nd Saturday / Public Holiday). Attendance marking is disabled."
+      );
+      setLoadingSave(false);
+      return;
+    }
+
+    const payload = {
+      date,
+      status,
+      workInTime,
+      workOutTime,
+      note
+    };
+
+    // Calculate extra hours if worked more than 8 hours
+    if (status === "PRESENT FULL DAY") {
+      const hours = diffHours(workInTime, workOutTime);
+      if (hours > 8) {
+        payload.extraHours = hours - 8;
+      }
+    }
+
+    if (status === "COMPOFF") {
+      const {
+        hours,
+        workedDate,
+        workedTime,
+        compOffDate,
+        compOffTime
+      } = extraWork;
+
+      if (
+        !hours ||
+        Number(hours) <= 0 ||
+        !workedDate ||
+        !workedTime ||
+        !compOffDate ||
+        !compOffTime
+      ) {
         setLoadingSave(false);
+        alert(
+          "For Comp-off requests, please enter:\n\n• Extra work hours\n• Worked date and time (for example, the Sunday you worked)\n• Comp-off date and time (when you plan to take the compensatory off)"
+        );
         return;
       }
 
-      const payload = {
-        date,
-        status,
-        workInTime,
-        workOutTime,
-        note
+      payload.isLeaveRequest = true;
+      payload.extraWork = {
+        hours: Number(hours),
+        workedDate,
+        workedTime,
+        compOffDate: compOffDate || date,
+        compOffTime
       };
-
-      if (status === "COMPOFF") {
-        const {
-          hours,
-          workedDate,
-          workedTime,
-          compOffDate,
-          compOffTime
-        } = extraWork;
-
-        if (
-          !hours ||
-          Number(hours) <= 0 ||
-          !workedDate ||
-          !workedTime ||
-          !compOffDate ||
-          !compOffTime
-        ) {
-          setLoadingSave(false);
-          alert(
-            "For Comp-off requests, please enter:\n\n• Extra work hours\n• Worked date and time (for example, the Sunday you worked)\n• Comp-off date and time (when you plan to take the compensatory off)"
-          );
-          return;
-        }
-
-        payload.isLeaveRequest = true;
-        payload.extraWork = {
-          hours: Number(hours),
-          workedDate,
-          workedTime,
-          compOffDate: compOffDate || date,
-          compOffTime
-        };
-      }
-
-      await api.post("/attendance", payload);
-
-      if (APPROVAL_STATUSES.includes(status)) {
-        alert(
-          "Attendance / leave change sent to Manager for approval. It will reflect in your dashboard and project views after Manager approval."
-        );
-      } else {
-        alert("Attendance saved");
-      }
-
-      await loadAttendance();
-      await loadSummary();
-    } catch (error) {
-      console.error(error);
-      alert(error.response?.data?.message || "Error saving attendance");
-    } finally {
-      setLoadingSave(false);
     }
-  };
+
+    await api.post("/attendance", payload);
+
+    // Immediately refresh all data
+    await Promise.all([
+      loadAttendance(),
+      loadSummary(),
+      loadExtraHoursAndCompOff()
+    ]);
+
+    if (APPROVAL_STATUSES.includes(status)) {
+      alert(
+        "Attendance / leave change sent to Manager for approval. It will reflect in your dashboard and project views after Manager approval."
+      );
+    } else {
+      alert("Attendance saved successfully!");
+    }
+
+    // Reset form to today's date
+    setDate(formatToday());
+    setStatus("PRESENT FULL DAY");
+    setWorkInTime("10:00");
+    setWorkOutTime("18:00");
+    setNote("");
+    setExtraWork({
+      hours: 2,
+      workedDate: "",
+      workedTime: "18:00",
+      compOffDate: "",
+      compOffTime: "10:00"
+    });
+
+  } catch (error) {
+    console.error(error);
+    alert(error.response?.data?.message || "Error saving attendance");
+  } finally {
+    setLoadingSave(false);
+  }
+};
 
   const handleMonthChange = (e) => {
     const [m, y] = e.target.value.split("-");
     setMonthYear({ month: m, year: y });
     setLastAlertAttendanceId(null);
   };
+
+  const handleYearChange = (e) => {
+  const y = e.target.value;
+  setSelectedYear(y);
+
+  // Always reset to January when year changes
+  setMonthYear({
+    month: "01",
+    year: y
+  });
+
+  setLastAlertAttendanceId(null);
+};
 
   const monthLabel = `${monthNames[Number(month) - 1]}, ${year}`;
 
@@ -752,10 +884,14 @@ useEffect(() => {
     const factor = HALF_DAY_STATUSES.includes(a.status) ? 0.5 : 1;
     const baseHours = diffHours(a.workInTime, a.workOutTime);
     const workedHours = isPresentLike ? baseHours * factor : 0;
+    
+    // Calculate extra hours for this day
+    const extraHours = (status === "PRESENT FULL DAY" && baseHours > 8) ? baseHours - 8 : 0;
 
     return {
       ...a,
-      workedHours
+      workedHours,
+      extraHours
     };
   });
 
@@ -781,50 +917,66 @@ useEffect(() => {
       prioritySource: "CLIENT",
       hoursAllocated: PRIORITY_DEFAULT_HOURS.P3
     }));
+    setTaskError("");
   };
 
   const handleCreateOrUpdateTask = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
+  setTaskError("");
 
-    if (!taskForm.projectId) {
-      alert("Please select a project");
-      return;
+  if (!taskForm.projectId) {
+    setTaskError("Please select a project");
+    return;
+  }
+
+  if (!taskForm.recentRequirement || taskForm.recentRequirement.trim().length === 0) {
+    setTaskError("Please enter a requirement description");
+    return;
+  }
+
+  if (!taskForm.hoursAllocated || taskForm.hoursAllocated <= 0) {
+    setTaskError("Please enter estimated hours greater than 0");
+    return;
+  }
+
+  const finalDays = taskForm.noOfDays || 0;
+
+  try {
+    const payload = {
+      ...taskForm,
+            // 🔧 BACKEND COMPATIBILITY FIX
+      estimatedHours: Number(taskForm.hoursAllocated),
+
+      projectId: taskForm.projectId,
+      noOfDays: finalDays,
+      hoursAllocated: Number(taskForm.hoursAllocated), // Ensure it's a number
+      assignedUserId: user._id || user.id,
+      createdBy: user.fullName || user.email
+    };
+
+    // Make sure hoursAllocated is always sent
+    if (!payload.hoursAllocated || payload.hoursAllocated === 0) {
+      // Set default based on priority
+      payload.hoursAllocated = PRIORITY_DEFAULT_HOURS[taskForm.clientPriority] || 8;
     }
 
-    const finalDays = taskForm.noOfDays || 0;
-
-    try {
-      const payload = {
-        ...taskForm,
-        projectId: taskForm.projectId,
-        noOfDays: finalDays,
-        hoursAllocated: Number(taskForm.hoursAllocated) || 0,
-        assignedUserId: user._id || user.id,
-        createdBy: user.fullName || user.email
-      };
-
-      if (
-        !payload.recentRequirement ||
-        !payload.recentRequirement.trim().length
-      ) {
-        payload.recentRequirement = "Requirement not specified";
-      }
-
-      if (!editingTaskId) {
-        await api.post("/tasks", payload);
-        alert("Task / requirement added");
-      } else {
-        await api.patch(`/tasks/${editingTaskId}`, payload);
-        alert("Task updated");
-      }
-
-      resetTaskForm(true);
-      loadTasks();
-    } catch (error) {
-      console.error("Employee create/update task error", error?.response || error);
-      alert(error.response?.data?.message || "Error saving task");
+    if (!editingTaskId) {
+      await api.post("/tasks", payload);
+      alert("Task / requirement added successfully");
+    } else {
+      await api.patch(`/tasks/${editingTaskId}`, payload);
+      alert("Task updated successfully");
     }
-  };
+
+    resetTaskForm(true);
+    // Force reload tasks
+    await loadTasks();
+    
+  } catch (error) {
+    console.error("Employee create/update task error", error?.response || error);
+    setTaskError(error.response?.data?.message || "Error saving task. Please check your input.");
+  }
+};
 
   const startEditTask = (t) => {
     const createdByMe =
@@ -852,43 +1004,77 @@ useEffect(() => {
     });
   };
 
-  const monthSelect = (
-    <select value={`${month}-${year}`} onChange={handleMonthChange}>
-      {Array.from({ length: 12 }).map((_, i) => {
-        const m = String(i + 1).padStart(2, "0");
-        const value = `${m}-${year}`;
-        return (
-          <option key={value} value={value}>
-            {monthNames[i]}, {year}
+  const monthYearSelect = (
+    <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+      <select value={`${month}-${year}`} onChange={handleMonthChange}>
+        {Array.from({ length: 12 }).map((_, i) => {
+          const m = String(i + 1).padStart(2, "0");
+          const value = `${m}-${year}`;
+          return (
+            <option key={value} value={value}>
+              {monthNames[i]}, {year}
+            </option>
+          );
+        })}
+      </select>
+      <select value={selectedYear} onChange={handleYearChange} style={{ marginLeft: "10px" }}>
+        {yearOptions.map((y) => (
+          <option key={y} value={y}>
+            {y}
           </option>
-        );
-      })}
-    </select>
+        ))}
+      </select>
+    </div>
   );
 
   const handleDownloadPayslip = async (payslipId) => {
-  try {
-    const response = await api.get(`/payslips/${payslipId}/download`, {
-      responseType: "blob",
-    });
+    try {
+      const response = await api.get(`/payslips/${payslipId}/download`, {
+        responseType: "blob",
+      });
 
-    const blob = new Blob([response.data], { type: "application/pdf" });
-    const url = window.URL.createObjectURL(blob);
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
 
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `Payslip_${payslipId}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Payslip_${payslipId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
-    window.URL.revokeObjectURL(url);
-  } catch (error) {
-    console.error("Error downloading payslip:", error);
-    alert("Failed to download payslip.");
-  }
-};
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error downloading payslip:", error);
+      alert("Failed to download payslip.");
+    }
+  };
 
+  // Next month popup
+  const NextMonthPopup = () => {
+    if (!showNextMonthPopup) return null;
+
+    return (
+      <div className="popup-overlay">
+        <div className="popup-content">
+          <h3>Next Month View</h3>
+          <p>You are viewing {monthLabel}. This is a future month view. Please note:</p>
+          <ul>
+            <li>Attendance cannot be marked for future dates</li>
+            <li>You can view holiday calendar for planning</li>
+            <li>Tasks and projects will be visible as usual</li>
+          </ul>
+          <button 
+            className="primary-btn" 
+            onClick={() => setShowNextMonthPopup(false)}
+            style={{ marginTop: '10px' }}
+          >
+            OK, Got it
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="page">
@@ -939,64 +1125,63 @@ useEffect(() => {
         <div className="main-area">
           <header className="topbar">
             {/* 🔹 Today Info – Professional Animated Badge */}
-<div
-  style={{
-    position: "absolute",
-    right: 130,
-    top: "7%",
-    transform: "translateY(-50%)",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-end",
-    padding: "8px 14px",
-    borderRadius: 12,
-    background:
-      "linear-gradient(135deg, #e6f7ff 0%, #f0faff 60%, #ffffff 100%)",
-    border: "1px solid #bae7ff",
-    boxShadow: "0 6px 18px rgba(24, 144, 255, 0.15)",
-    animation: "fadeSlideIn 0.6s ease-out"
-  }}
->
-  <div
-    style={{
-      fontSize: 13,
-      fontWeight: 700,
-      color: "#0050b3",
-      letterSpacing: "0.3px"
-    }}
-  >
-    {todayInfo.day}, {todayInfo.date} {todayInfo.month} {todayInfo.year}
-  </div>
+            <div
+              style={{
+                position: "absolute",
+                right: 400,
+                top: "4.5%",
+                transform: "translateY(-50%)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-end",
+                padding: "8px 14px",
+                borderRadius: 12,
+                background:
+                  "linear-gradient(135deg, #e6f7ff 0%, #f0faff 60%, #ffffff 100%)",
+                border: "1px solid #bae7ff",
+                boxShadow: "0 6px 18px rgba(24, 144, 255, 0.15)",
+                animation: "fadeSlideIn 0.6s ease-out"
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: "#0050b3",
+                  letterSpacing: "0.3px"
+                }}
+              >
+                {todayInfo.day}, {todayInfo.date} {todayInfo.month} {todayInfo.year}
+              </div>
 
-  <div
-    style={{
-      marginTop: 2,
-      fontSize: 12,
-      fontStyle: "italic",
-      color: "#096dd9",
-      opacity: 0.9,
-      whiteSpace: "nowrap"
-    }}
-  >
-    “{tagline}”
-  </div>
-</div>
-
-
-
+              <div
+                style={{
+                  marginTop: 2,
+                  fontSize: 12,
+                  fontStyle: "italic",
+                  color: "#096dd9",
+                  opacity: 0.9,
+                  whiteSpace: "nowrap"
+                }}
+              >
+                "{tagline}"
+              </div>
+            </div>
 
             <div>
               <strong>{user.fullName}</strong> (Employee) — {user.email}
             </div>
             <button
-  onClick={logout}
-  className="outline-btn"
-  style={{ marginLeft: 24 }}
->
-  Logout
-</button>
-
+              onClick={logout}
+              className="outline-btn"
+              style={{ marginLeft: 24 }}
+            >
+              Logout
+            </button>
           </header>
+
+          {/* Next Month Popup */}
+          <NextMonthPopup />
 
           {/* TIMESHEET TAB */}
           {activeTab === "timesheet" && (
@@ -1193,85 +1378,95 @@ useEffect(() => {
                 <div className="card">
                   <div className="card-header-row">
                     <h2>My Dashboard – {monthLabel}</h2>
-                    {monthSelect}
+                    {monthYearSelect}
                   </div>
 
                   <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(5, 1fr)",
-                      gap: 12,
-                      fontSize: 13
-                    }}
-                  >
-                    <div className="mini-kpi">
-                      <strong>Present Days</strong>
-                      <div>{metrics.presentDays}</div>
-                    </div>
-                    <div className="mini-kpi">
-                      <strong>Half Days</strong>
-                      <div>{metrics.halfDays}</div>
-                    </div>
-                    <div className="mini-kpi">
-                      <strong>Leaves Taken</strong>
-                      <div>{metrics.leavesTaken}</div>
-                    </div>
-                    <div className="mini-kpi">
-                      <strong>Hours Worked</strong>
-                      <div>{metrics.hoursWorked}</div>
-                    </div>
-                    <div className="mini-kpi">
-                      <strong>Pending Requests</strong>
-                      <div>{metrics.pendingRequests}</div>
-                    </div>
-                  </div>
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(7, 1fr)",
+    gap: 12,
+    fontSize: 13
+  }}
+>
+  <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
+    <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Present Days</strong>
+    <div style={{ color: "white" }}>{metrics.presentDays}</div>
+  </div>
+  <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
+    <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Half Days</strong>
+    <div style={{ color: "white" }}>{metrics.halfDays}</div>
+  </div>
+  <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
+    <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Leaves Taken</strong>
+    <div style={{ color: "white" }}>{metrics.leavesTaken}</div>
+  </div>
+  <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
+    <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Hours Worked</strong>
+    <div style={{ color: "white" }}>{metrics.hoursWorked}</div>
+  </div>
+  <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
+    <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Pending Requests</strong>
+    <div style={{ color: "white" }}>{metrics.pendingRequests}</div>
+  </div>
+  <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
+    <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Extra Hours</strong>
+    <div style={{ color: "white" }}>{extraHoursBalance.toFixed(1)}</div>
+  </div>
+  <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
+    <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Comp-off Balance</strong>
+    <div style={{ color: "white" }}>{compOffBalance}</div>
+  </div>
+</div>
                 </div>
 
-                <div className="card leave-card-pro">
-  <h2>Leave Summary</h2>
-
-  {summary ? (
-    <table className="leave-summary-table">
-      <tbody>
-        <tr>
-          <td>Total Leave Entitlement</td>
-          <td>{summary.totalLeaveEntitlement}</td>
-        </tr>
-        <tr>
-          <td>Public Holidays</td>
-          <td>{summary.publicHolidays}</td>
-        </tr>
-        <tr>
-          <td>Weekend Holidays</td>
-          <td>{summary.weekendHolidays}</td>
-        </tr>
-        <tr>
-          <td>Carry Forward (2025)</td>
-          <td>{summary.carryForward2025}</td>
-        </tr>
-        <tr>
-          <td>Leaves Taken</td>
-          <td>{summary.leavesTaken}</td>
-        </tr>
-        <tr className="highlight">
-          <td>Balance Leaves</td>
-          <td>{summary.balanceLeaves}</td>
-        </tr>
-        <tr>
-          <td>Total Half Days</td>
-          <td>{summary.totalHalfDays}</td>
-        </tr>
-        <tr>
-          <td>Balance After Half Days</td>
-          <td>{summary.balanceAfterHalfDays}</td>
-        </tr>
-      </tbody>
-    </table>
-  ) : (
-    <p className="empty">No summary available</p>
-  )}
-</div>
-
+                <div className="card table-shadow-card">
+                  <h2 style={{ color: '#ffffff' }}>Leave & Balance Summary</h2>
+                  <table className="leave-summary-table-compact">
+                    <tbody>
+                      <tr>
+                        <td>Total Leave Entitlement</td>
+                        <td>{summary?.totalLeaveEntitlement || 0}</td>
+                      </tr>
+                      <tr>
+                        <td>Public Holidays</td>
+                        <td>{summary?.publicHolidays || 0}</td>
+                      </tr>
+                      <tr>
+                        <td>Weekend Holidays</td>
+                        <td>{summary?.weekendHolidays || 0}</td>
+                      </tr>
+                      <tr>
+                        <td>Carry Forward (2025)</td>
+                        <td>{summary?.carryForward2025 || 0}</td>
+                      </tr>
+                      <tr>
+                        <td>Leaves Taken</td>
+                        <td>{summary?.leavesTaken || 0}</td>
+                      </tr>
+                      <tr className="highlight">
+                        <td>Balance Leaves</td>
+                        <td>{summary?.balanceLeaves || 0}</td>
+                      </tr>
+                      <tr>
+                        <td>Total Half Days</td>
+                        <td>{summary?.totalHalfDays || 0}</td>
+                      </tr>
+                      <tr>
+                        <td>Balance After Half Days</td>
+                        <td>{summary?.balanceAfterHalfDays || 0}</td>
+                      </tr>
+                      <tr style={{ background: "#fff3cd" }}>
+                        <td><strong>Extra Hours Balance</strong></td>
+                        <td><strong>{extraHoursBalance.toFixed(1)} hrs</strong></td>
+                      </tr>
+                      <tr style={{ background: "#d4edda" }}>
+                        <td><strong>Comp-off Balance</strong></td>
+                        <td><strong>{compOffBalance} days</strong></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
 
                 <div className="card">
                   <h2>Public Holidays – {monthLabel}</h2>
@@ -1347,6 +1542,20 @@ useEffect(() => {
                           />
                           Optional – Taken
                         </span>
+                        <span>
+                          <span
+                            style={{
+                              display: "inline-block",
+                              width: 12,
+                              height: 12,
+                              borderRadius: 2,
+                              background: "#ffffff",
+                              marginRight: 4,
+                              border: "1px solid #d9d9d9"
+                            }}
+                          />
+                          Working Day
+                        </span>
                       </div>
 
                       <table className="holiday-calendar">
@@ -1404,20 +1613,22 @@ useEffect(() => {
                                     ? "TAKEN"
                                     : "NOT_TAKEN";
 
-                                let bg = "transparent";
-                                let border =
-                                  "1px solid rgba(255,255,255,0.15)";
-                                let color = "#fff";
+                                let bg = "#ffffff";
+                                let border = "1px solid #d9d9d9";
+                                let color = "#000000";
 
                                 if (isMandatory) {
                                   bg = "#ff7875";
+                                  color = "#ffffff";
                                 } else if (isOptional) {
                                   bg =
                                     taken === "TAKEN"
                                       ? "#40a9ff"
                                       : "#faad14";
+                                  color = taken === "TAKEN" ? "#ffffff" : "#000000";
                                 } else if (isSunday || isSecondSaturday) {
                                   bg = "#434343";
+                                  color = "#ffffff";
                                 }
 
                                 const label =
@@ -1438,7 +1649,8 @@ useEffect(() => {
                                       color,
                                       verticalAlign: "top",
                                       padding: 4,
-                                      minWidth: 40
+                                      minWidth: 40,
+                                      borderRadius: 4
                                     }}
                                   >
                                     <div
@@ -1545,8 +1757,8 @@ useEffect(() => {
                   </div>
                 </div>
 
-                <div className="card">
-                  <h2>My Attendance (This Month)</h2>
+                <div className="card table-shadow-card">
+                  <h2>Attendance Report</h2>
                   <div className="table-wrapper small-table">
                     <table>
                       <thead>
@@ -1555,17 +1767,21 @@ useEffect(() => {
                           <th>Status</th>
                           <th>In</th>
                           <th>Out</th>
+                          <th>Hours</th>
+                          <th>Extra Hours</th>
                           <th>Manager Decision</th>
                           <th>Note / Extra Work</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {attendance.map((a) => (
+                        {timesheetRows.map((a) => (
                           <tr key={a._id}>
                             <td>{a.date}</td>
                             <td>{a.status}</td>
                             <td>{a.workInTime}</td>
                             <td>{a.workOutTime}</td>
+                            <td>{a.workedHours.toFixed(1)}</td>
+                            <td>{a.extraHours > 0 ? `${a.extraHours.toFixed(1)} hrs` : "-"}</td>
                             <td>{a.managerDecision?.status || "-"}</td>
                             <td>
                               {a.status === "COMPOFF" && a.extraWork ? (
@@ -1593,7 +1809,7 @@ useEffect(() => {
                 <div className="card">
                   <div className="card-header-row">
                     <h2>Timesheet – {monthLabel}</h2>
-                    {monthSelect}
+                    {monthYearSelect}
                   </div>
                   <div className="table-wrapper small-table">
                     <table>
@@ -1604,6 +1820,7 @@ useEffect(() => {
                           <th>In</th>
                           <th>Out</th>
                           <th>Hours</th>
+                          <th>Extra Hours</th>
                           <th>Manager Decision</th>
                         </tr>
                       </thead>
@@ -1614,7 +1831,8 @@ useEffect(() => {
                             <td>{r.status}</td>
                             <td>{r.workInTime}</td>
                             <td>{r.workOutTime}</td>
-                            <td>{r.workedHours}</td>
+                            <td>{r.workedHours.toFixed(1)}</td>
+                            <td>{r.extraHours > 0 ? `${r.extraHours.toFixed(1)} hrs` : "-"}</td>
                             <td>{r.managerDecision?.status || "-"}</td>
                           </tr>
                         ))}
@@ -1627,6 +1845,11 @@ useEffect(() => {
                   <p className="note">
                     Total hours (present days only):{" "}
                     <strong>{Math.round(totalTimesheetHours * 10) / 10}</strong>
+                    {metrics.extraHours > 0 && (
+                      <span style={{ marginLeft: '10px', color: '#d48806' }}>
+                        Extra hours this month: <strong>{metrics.extraHours.toFixed(1)} hrs</strong>
+                      </span>
+                    )}
                   </p>
                 </div>
               </section>
@@ -1643,6 +1866,18 @@ useEffect(() => {
                       ? "Update Task / Requirement"
                       : "Add Project Task / Requirement"}
                   </h2>
+                  {taskError && (
+                    <div className="error-message" style={{ 
+                      backgroundColor: '#fff2f0', 
+                      border: '1px solid #ffccc7', 
+                      padding: '10px', 
+                      borderRadius: '4px',
+                      marginBottom: '15px',
+                      color: '#ff4d4f'
+                    }}>
+                      {taskError}
+                    </div>
+                  )}
                   <form
                     className="form-grid"
                     onSubmit={handleCreateOrUpdateTask}
@@ -1657,6 +1892,7 @@ useEffect(() => {
                             projectId: e.target.value
                           })
                         }
+                        required
                       >
                         <option value="">-- Select project --</option>
                         {projects.map((p) => (
@@ -1679,6 +1915,7 @@ useEffect(() => {
                           })
                         }
                         placeholder="Enter requirement details (supports long text)..."
+                        required
                       />
                     </label>
 
@@ -1811,6 +2048,7 @@ useEffect(() => {
                             noOfDays: Number(e.target.value)
                           })
                         }
+                        min="0"
                       />
                     </label>
 
@@ -1866,6 +2104,9 @@ useEffect(() => {
                             hoursAllocated: Number(e.target.value)
                           })
                         }
+                        min="0"
+                        step="0.5"
+                        required
                       />
                     </label>
 
@@ -1960,7 +2201,7 @@ useEffect(() => {
                           <th>Start</th>
                           <th>Close</th>
                           <th>Working Days</th>
-                          <th>Est. Hrs</th>
+                          <th>Est. Hrs</th> {/* Fixed spelling */}
                           <th>Client Priority</th>
                           <th>Given By</th>
                           <th>Created By</th>
@@ -1999,7 +2240,8 @@ useEffect(() => {
                               <td>{t.originalClosureDate || "-"}</td>
                               <td>{t.estimatedDate || "-"}</td>
                               <td>{t.noOfDays || 0}</td>
-                              <td>{t.hoursAllocated || 0}</td>
+                              <td>{Number(t.hoursAllocated ?? t.estimatedHours ?? 0)}</td>
+
                               <td>
                                 {meta ? (
                                   <span
@@ -2051,7 +2293,7 @@ useEffect(() => {
             </main>
           )}
 
-          {/* PAYSLIPS TAB - FIXED VERSION */}
+          {/* PAYSLIPS TAB */}
           {activeTab === "payslips" && (
             <main className="layout single-column">
               <section className="full-width">
@@ -2102,7 +2344,6 @@ useEffect(() => {
                   )}
                 </div>
                 
-                {/* PAYSLIP INFORMATION - FIXED SPELLING */}
                 <div className="card" style={{ marginTop: '16px' }}>
                   <h3>Payslip Information</h3>
                   <div className="note">
@@ -2125,13 +2366,13 @@ useEffect(() => {
                 <div className="card">
                   <div className="card-header-row">
                     <h2>My Dashboard – {monthLabel}</h2>
-                    {monthSelect}
+                    {monthYearSelect}
                   </div>
 
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "repeat(5, 1fr)",
+                      gridTemplateColumns: "repeat(7, 1fr)",
                       gap: 12,
                       fontSize: 13
                     }}
@@ -2156,10 +2397,18 @@ useEffect(() => {
                       <strong>Pending Requests</strong>
                       <div>{metrics.pendingRequests}</div>
                     </div>
+                    <div className="mini-kpi" style={{ background: "#fff3cd", borderColor: "#ffeaa7" }}>
+                      <strong>Extra Hours</strong>
+                      <div>{extraHoursBalance.toFixed(1)}</div>
+                    </div>
+                    <div className="mini-kpi" style={{ background: "#d4edda", borderColor: "#c3e6cb" }}>
+                      <strong>Comp-off Balance</strong>
+                      <div>{compOffBalance}</div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="card">
+                <div className="card table-shadow-card">
                   <h2>Attendance Report</h2>
                   <div className="table-wrapper small-table">
                     <table>
@@ -2170,6 +2419,7 @@ useEffect(() => {
                           <th>In</th>
                           <th>Out</th>
                           <th>Hours</th>
+                          <th>Extra Hours</th>
                           <th>Manager Decision</th>
                         </tr>
                       </thead>
@@ -2180,7 +2430,8 @@ useEffect(() => {
                             <td>{r.status}</td>
                             <td>{r.workInTime}</td>
                             <td>{r.workOutTime}</td>
-                            <td>{r.workedHours}</td>
+                            <td>{r.workedHours.toFixed(1)}</td>
+                            <td>{r.extraHours > 0 ? `${r.extraHours.toFixed(1)} hrs` : "-"}</td>
                             <td>{r.managerDecision?.status || "-"}</td>
                           </tr>
                         ))}
@@ -2192,52 +2443,55 @@ useEffect(() => {
                   </div>
                 </div>
 
-                <div className="card leave-card">
-                  <h2>Leave Summary</h2>
-                  {summary ? (
-                    <>
-                      <ul className="summary-list">
-                        <li>
-                          <span>Total Leave Entitlement:</span>
-                          <span>{summary.totalLeaveEntitlement}</span>
-                        </li>
-                        <li>
-                          <span>Public Holidays:</span>
-                          <span>{summary.publicHolidays}</span>
-                        </li>
-                        <li>
-                          <span>Weekend Holidays:</span>
-                          <span>{summary.weekendHolidays}</span>
-                        </li>
-                        <li>
-                          <span>2025 Carry Forward Leaves:</span>
-                          <span>{summary.carryForward2025}</span>
-                        </li>
-                        <li>
-                          <span>Leaves Taken:</span>
-                          <span>{summary.leavesTaken}</span>
-                        </li>
-                        <li>
-                          <span>Balance Leaves:</span>
-                          <span>{summary.balanceLeaves}</span>
-                        </li>
-                        <li>
-                          <span>Total Half Days:</span>
-                          <span>{summary.totalHalfDays}</span>
-                        </li>
-                        <li>
-                          <span>Balance Leaves After Half Days:</span>
-                          <span>{summary.balanceAfterHalfDays}</span>
-                        </li>
-                      </ul>
-                      <p className="note">
-                        This is a read-only report. Any change will be done by
-                        the Manager from their dashboard.
-                      </p>
-                    </>
-                  ) : (
-                    <p className="empty">No summary for {monthLabel}</p>
-                  )}
+                <div className="card table-shadow-card">
+                  <h2>Leave & Balance Summary</h2>
+                  <table className="leave-summary-table-compact">
+                    <tbody>
+                      <tr>
+                        <td>Total Leave Entitlement</td>
+                        <td>{summary?.totalLeaveEntitlement || 0}</td>
+                      </tr>
+                      <tr>
+                        <td>Public Holidays</td>
+                        <td>{summary?.publicHolidays || 0}</td>
+                      </tr>
+                      <tr>
+                        <td>Weekend Holidays</td>
+                        <td>{summary?.weekendHolidays || 0}</td>
+                      </tr>
+                      <tr>
+                        <td>2025 Carry Forward Leaves</td>
+                        <td>{summary?.carryForward2025 || 0}</td>
+                      </tr>
+                      <tr>
+                        <td>Leaves Taken</td>
+                        <td>{summary?.leavesTaken || 0}</td>
+                      </tr>
+                      <tr className="highlight">
+                        <td>Balance Leaves</td>
+                        <td>{summary?.balanceLeaves || 0}</td>
+                      </tr>
+                      <tr>
+                        <td>Total Half Days</td>
+                        <td>{summary?.totalHalfDays || 0}</td>
+                      </tr>
+                      <tr>
+                        <td>Balance After Half Days</td>
+                        <td>{summary?.balanceAfterHalfDays || 0}</td>
+                      </tr>
+                      <tr style={{ background: "#fff3cd" }}>
+                        <td><strong>Extra Hours Balance</strong></td>
+                        <td><strong>{extraHoursBalance.toFixed(1)} hrs</strong></td>
+                      </tr>
+                      <tr style={{ background: "#d4edda" }}>
+                        <td><strong>Comp-off Balance</strong></td>
+                        <td><strong>{compOffBalance} days</strong></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <p className="note" style={{ marginTop: 12, fontSize: 12 }}>
+                    This is a read-only report. Any change will be done by the Manager from their dashboard.
+                  </p>
                 </div>
               </section>
             </main>

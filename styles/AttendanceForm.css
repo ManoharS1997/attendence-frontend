@@ -1,0 +1,668 @@
+/* AttendanceForm.css */
+.mark-card {
+  position: relative;
+}
+
+.notification-popup {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: #4CAF50;
+  color: white;
+  padding: 15px 20px;
+  border-radius: 5px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 1000;
+  animation: slideIn 0.3s ease;
+  max-width: 400px;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.notification-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+}
+
+.close-notification {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.close-notification:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+.quick-date-selector {
+  margin-bottom: 15px;
+  padding: 10px;
+  background: #f5f5f5;
+  border-radius: 5px;
+}
+
+.quick-date-selector p {
+  margin: 0 0 8px 0;
+  font-weight: 600;
+  color: #333;
+}
+
+.quick-dates {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.date-chip {
+  padding: 6px 12px;
+  background: #e0e0e0;
+  border: 1px solid #ccc;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.date-chip:hover {
+  background: #d0d0d0;
+  border-color: #999;
+}
+
+.date-chip.active {
+  background: #4CAF50;
+  color: white;
+  border-color: #4CAF50;
+}
+
+.status-select {
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  width: 100%;
+}
+
+.badge-row {
+  margin: 10px 0;
+}
+
+.status-badge {
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.status-badge.requires-approval {
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeaa7;
+}
+
+.status-badge.auto-approved {
+  background: #d1ecf1;
+  color: #0c5460;
+  border: 1px solid #bee5eb;
+}
+
+.extra-hours-display {
+  background: #e8f5e9;
+  padding: 10px;
+  border-radius: 4px;
+  border-left: 4px solid #4CAF50;
+}
+
+.extra-hours-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.extra-hours-label {
+  font-weight: 600;
+  color: #2e7d32;
+}
+
+.extra-hours-value {
+  background: #4CAF50;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.comp-off-note {
+  color: #ff9800;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.extra-hours-form {
+  background: #fff8e1;
+  padding: 15px;
+  border-radius: 5px;
+  border: 1px solid #ffecb3;
+}
+
+.extra-hours-form h4 {
+  margin-top: 0;
+  color: #ff9800;
+}
+
+.extra-hours-details {
+  display: grid;
+  gap: 10px;
+}
+
+.extra-hours-note {
+  color: #666;
+  font-size: 12px;
+  margin-top: 10px;
+}
+
+.compoff-box {
+  background: #e3f2fd;
+  padding: 15px;
+  border-radius: 5px;
+  border: 1px solid #bbdefb;
+}
+
+.compoff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-bottom: 10px;
+}
+
+.compoff-instructions {
+  color: #1976d2;
+  font-size: 12px;
+  padding: 8px;
+  background: #e1f5fe;
+  border-radius: 4px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.primary-btn {
+  flex: 1;
+  padding: 12px;
+  background: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.primary-btn:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
+}
+
+.secondary-btn {
+  flex: 1;
+  padding: 12px;
+  background: #f5f5f5;
+  color: #333;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #ffffff;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.instructions-panel {
+  margin-top: 20px;
+  padding: 15px;
+  background: #f9f9f9;
+  border-radius: 5px;
+  border-left: 4px solid #2196f3;
+}
+
+.instructions-panel h4 {
+  margin-top: 0;
+  color: #2196f3;
+}
+
+.instructions-panel ul {
+  margin: 10px 0 0 0;
+  padding-left: 20px;
+}
+
+.instructions-panel li {
+  margin-bottom: 5px;
+  font-size: 14px;
+  color: #555;
+}
+
+/* EmployeeTimesheetCard.css */
+.timesheet-card {
+  margin-top: 20px;
+}
+
+.timesheet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.timesheet-filters {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-group label {
+  font-weight: 600;
+  color: #555;
+}
+
+.year-select,
+.month-select {
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  min-width: 120px;
+}
+
+.project-info {
+  background: #e8f5e9;
+  padding: 15px;
+  border-radius: 5px;
+  margin-bottom: 20px;
+  border-left: 4px solid #4CAF50;
+}
+
+.project-info h3 {
+  margin: 0 0 10px 0;
+  color: #2e7d32;
+}
+
+.project-dates {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.project-dates span {
+  background: white;
+  padding: 4px 10px;
+  border-radius: 3px;
+  font-size: 14px;
+  border: 1px solid #c8e6c9;
+}
+
+.no-project-warning {
+  background: #fff3cd;
+  padding: 15px;
+  border-radius: 5px;
+  margin-bottom: 20px;
+  border-left: 4px solid #ffc107;
+  color: #856404;
+}
+
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.summary-card {
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  text-align: center;
+  border-top: 4px solid #2196f3;
+}
+
+.summary-title {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.summary-value {
+  font-size: 28px;
+  font-weight: bold;
+  color: #2196f3;
+  margin-bottom: 5px;
+}
+
+.summary-subtitle {
+  font-size: 12px;
+  color: #999;
+}
+
+.progress-bar {
+  height: 6px;
+  background: #e0e0e0;
+  border-radius: 3px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #4CAF50;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.extra-hours-summary {
+  background: #fff8e1;
+  padding: 15px;
+  border-radius: 5px;
+  margin-bottom: 20px;
+  border: 1px solid #ffecb3;
+}
+
+.extra-hours-summary h4 {
+  margin-top: 0;
+  color: #ff9800;
+  margin-bottom: 15px;
+}
+
+.extra-hours-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.extra-hours-card {
+  background: white;
+  padding: 12px;
+  border-radius: 6px;
+  text-align: center;
+  border-top: 4px solid #ff9800;
+}
+
+.extra-hours-card.approved {
+  border-top-color: #4CAF50;
+}
+
+.extra-hours-card.pending {
+  border-top-color: #ff9800;
+}
+
+.extra-hours-card.compoff {
+  border-top-color: #2196f3;
+}
+
+.extra-hours-title {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 5px;
+}
+
+.extra-hours-value {
+  font-size: 20px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 3px;
+}
+
+.extra-hours-note {
+  font-size: 11px;
+  color: #999;
+}
+
+.timesheet-details {
+  margin-top: 20px;
+}
+
+.timesheet-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.timesheet-table th {
+  background: #f5f5f5;
+  padding: 10px;
+  text-align: left;
+  border-bottom: 2px solid #ddd;
+  font-weight: 600;
+  color: #333;
+}
+
+.timesheet-table td {
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.holiday-row {
+  background: #f9f9f9;
+}
+
+.holiday-row td {
+  color: #999;
+}
+
+.status-indicator {
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-indicator.PRESENT {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-indicator.LEAVE {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-indicator.HOLIDAY {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.extra-hours-indicator {
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.extra-hours-indicator.approved {
+  background: #d4edda;
+  color: #155724;
+}
+
+.extra-hours-indicator.pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.checkmark {
+  color: #28a745;
+}
+
+.approval-status {
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.approval-status.approved {
+  background: #d4edda;
+  color: #155724;
+}
+
+.approval-status.pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.approval-status.auto {
+  background: #e2e3e5;
+  color: #383d41;
+}
+
+.total-label {
+  text-align: right;
+}
+
+.empty-message {
+  text-align: center;
+  padding: 30px;
+  color: #999;
+  font-style: italic;
+}
+
+.timesheet-legend {
+  margin-top: 20px;
+  padding: 10px 15px;
+  background: #f9f9f9;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.legend-title {
+  font-weight: 600;
+  color: #555;
+}
+
+.legend-items {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.legend-color.working-day {
+  background: #d4edda;
+}
+
+.legend-color.holiday {
+  background: #d1ecf1;
+}
+
+.legend-color.extra-hours {
+  background: #fff3cd;
+}
+
+.legend-color.compoff {
+  background: #e2e3e5;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .timesheet-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .timesheet-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .filter-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .summary-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .extra-hours-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .timesheet-table {
+    font-size: 12px;
+  }
+  
+  .timesheet-table th,
+  .timesheet-table td {
+    padding: 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .summary-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .extra-hours-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+}
