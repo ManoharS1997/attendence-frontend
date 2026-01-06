@@ -246,7 +246,9 @@ export default function EmployeeDashboard() {
   };
 
   // 🔹 Taglines array
-  const TAGLINES = [
+ // 🔹 Taglines array (memoized)
+const TAGLINES = React.useMemo(
+  () => [
     "Consistency builds professional excellence.",
     "Every workday is a step toward mastery.",
     "Discipline today creates success tomorrow.",
@@ -257,21 +259,35 @@ export default function EmployeeDashboard() {
     "Committed to people. Focused on results.",
     "Your success is our business.",
     "Empowering professionals, transforming futures"
-  ];
+  ],
+  []
+);
 
- const getTaglineOfTheDay = useCallback(() => {
+const getTaglineOfTheDay = useCallback(() => {
   return TAGLINES[new Date().getDate() % TAGLINES.length];
 }, [TAGLINES]);
 
-  const [todayInfo, setTodayInfo] = useState(getTodayInfo());
-  const [tagline, setTagline] = useState(getTaglineOfTheDay());
-  const [extraHoursBalance, setExtraHoursBalance] = useState(0);
-  const [compOffBalance, setCompOffBalance] = useState(0);
-  const [yearOptions] = useState(getYearOptions());
-  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
-  const [lastVisitedMonthYear, setLastVisitedMonthYear] = useState(null);
-  const [showNextMonthPopup, setShowNextMonthPopup] = useState(false);
-  const popupShownRef = useRef(false);
+
+ const [todayInfo, setTodayInfo] = useState(getTodayInfo());
+const [tagline, setTagline] = useState(getTaglineOfTheDay());
+const [compOffBalance, setCompOffBalance] = useState(0);
+const [yearOptions] = useState(getYearOptions());
+const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
+const [lastVisitedMonthYear, setLastVisitedMonthYear] = useState(null);
+const [showNextMonthPopup, setShowNextMonthPopup] = useState(false);
+const popupShownRef = useRef(false);
+
+
+  // 🔹 Shared metrics state for all tabs
+  const [sharedMetrics, setSharedMetrics] = useState({
+    presentDays: 0,
+    halfDays: 0,
+    leavesTaken: 0,
+    hoursWorked: 0,
+    pendingRequests: 0,
+    extraHours: 0,
+    compOffRequests: 0
+  });
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -328,27 +344,25 @@ export default function EmployeeDashboard() {
   const [editingTaskId, setEditingTaskId] = useState(null);
 
   // Load extra hours and comp-off balance
-  const loadExtraHoursAndCompOff = useCallback(async () => {
-    try {
-      const res = await api.get("/attendance/extra-hours-balance");
-      if (res.data) {
-        setExtraHoursBalance(res.data.extraHours || 0);
-        setCompOffBalance(res.data.compOff || 0);
-      }
-    } catch (error) {
-      console.error("Error loading extra hours balance:", error);
+ const loadExtraHoursAndCompOff = useCallback(async () => {
+  try {
+    const res = await api.get("/attendance/extra-hours-balance");
+    if (res.data) {
+      // ❌ removed setExtraHoursBalance (state no longer exists)
+      setCompOffBalance(res.data.compOff || 0);
     }
-  }, []);
+  } catch (error) {
+    console.error("Error loading extra hours balance:", error);
+  }
+}, []);
 
- const loadAttendance = useCallback(async (selectedMonth = month, selectedYear = year) => {
-  const res = await api.get("/attendance/my", {
-    params: { month: selectedMonth, year: selectedYear }
-  });
 
-  // 🔁 FORCE state change even if array reference is same
-  setAttendance([...(res.data || [])]);
-}, [month, year]);
-
+  const loadAttendance = useCallback(async (selectedMonth = month, selectedYear = year) => {
+    const res = await api.get("/attendance/my", {
+      params: { month: selectedMonth, year: selectedYear }
+    });
+    setAttendance([...(res.data || [])]);
+  }, [month, year]);
 
   const loadSummary = useCallback(async (selectedMonth = month, selectedYear = year) => {
     const res = await api.get("/leave/summary/me", { params: { month: selectedMonth, year: selectedYear } });
@@ -381,6 +395,19 @@ export default function EmployeeDashboard() {
     }
   }, []);
 
+  // Force refresh all data
+  const forceRefreshAll = useCallback(async () => {
+    try {
+      await Promise.all([
+        loadAttendance(),
+        loadSummary(),
+        loadExtraHoursAndCompOff()
+      ]);
+    } catch (error) {
+      console.error("Error refreshing data:", error);
+    }
+  }, [loadAttendance, loadSummary, loadExtraHoursAndCompOff]);
+
   // Check if next month is opened for the first time
   useEffect(() => {
     const current = new Date();
@@ -407,12 +434,12 @@ export default function EmployeeDashboard() {
     }
   }, [month, year, lastVisitedMonthYear]);
 
- useEffect(() => {
-  loadAttendance();
-  loadSummary();
-  loadExtraHoursAndCompOff();
-}, [loadAttendance, loadSummary, loadExtraHoursAndCompOff]);
-
+  // Load initial data
+  useEffect(() => {
+    loadAttendance();
+    loadSummary();
+    loadExtraHoursAndCompOff();
+  }, [loadAttendance, loadSummary, loadExtraHoursAndCompOff]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -432,26 +459,85 @@ export default function EmployeeDashboard() {
     }
   }, [activeTab, loadPayslips]);
 
-  // Calculate real-time attendance metrics
+  // Update shared metrics whenever attendance changes
   useEffect(() => {
-    if (attendance.length === 0) return;
-    
-    const todayFormatted = formatToday();
-    const todayAttendance = attendance.find(a => a.date === todayFormatted);
-    
-    if (todayAttendance) {
-      // Update dashboard in real-time when attendance changes
-      loadSummary();
-      loadExtraHoursAndCompOff();
+    if (attendance.length === 0) {
+      setSharedMetrics({
+        presentDays: 0,
+        halfDays: 0,
+        leavesTaken: 0,
+        hoursWorked: 0,
+        pendingRequests: 0,
+        extraHours: 0,
+        compOffRequests: 0
+      });
+      return;
     }
-  }, [attendance, loadSummary, loadExtraHoursAndCompOff]);
+
+    let presentDays = 0;
+    let halfDays = 0;
+    let leavesTaken = 0;
+    let hoursWorked = 0;
+    let pendingRequests = 0;
+    let extraHours = 0;
+    let compOffRequests = 0;
+
+    attendance.forEach((a) => {
+      // ❗ IMPORTANT: Exclude ONLY rejected records
+      if (a.managerDecision?.status === "REJECTED") {
+        return;
+      }
+
+      if (a.status === "PRESENT FULL DAY") presentDays += 1;
+      if (HALF_DAY_STATUSES.includes(a.status)) {
+        halfDays += 1;
+      }
+      if (a.status === "EMERGENCY LEAVE" || a.status === "CASUAL LEAVE") {
+        leavesTaken += 1;
+      }
+      if (a.managerDecision?.status === "PENDING" && a.isLeaveRequest) {
+        pendingRequests += 1;
+      }
+      
+      if (a.status === "COMPOFF") {
+        compOffRequests += 1;
+      }
+
+      const isPresentLike =
+        a.status === "PRESENT FULL DAY" || HALF_DAY_STATUSES.includes(a.status);
+      const factor = HALF_DAY_STATUSES.includes(a.status) ? 0.5 : 1;
+      const baseHours = diffHours(a.workInTime, a.workOutTime);
+      const effective = isPresentLike ? baseHours * factor : 0;
+
+      hoursWorked += effective;
+      
+      // ✅ Calculate extra hours for this attendance
+      if (a.status === "PRESENT FULL DAY" && baseHours > 8) {
+        extraHours += (baseHours - 8);
+      }
+      // Also add any pre-calculated extra hours from the record
+      if (a.extraHours && a.extraHours > 0) {
+        extraHours += a.extraHours;
+      }
+    });
+
+    hoursWorked = Math.round(hoursWorked * 10) / 10;
+    extraHours = Math.round(extraHours * 10) / 10;
+
+    setSharedMetrics({
+      presentDays,
+      halfDays,
+      leavesTaken,
+      hoursWorked,
+      pendingRequests,
+      extraHours,
+      compOffRequests
+    });
+  }, [attendance]); // This will update whenever attendance changes
 
   useEffect(() => {
     if (!attendance || attendance.length === 0) return;
-  // 🔁 FORCE refresh leave summary & balances on ANY attendance change
-  loadSummary();
-  loadExtraHoursAndCompOff();
-
+    
     const decided = attendance
       .filter(
         (a) =>
@@ -483,81 +569,19 @@ export default function EmployeeDashboard() {
         : latest.status || "attendance request";
 
     const message =
-  decision === "APPROVED"
-    ? `Your ${label} for ${latest.date} was APPROVED by Manager.`
-    : `Your ${label} for ${latest.date} was REJECTED by Manager.`;
+      decision === "APPROVED"
+        ? `Your ${label} for ${latest.date} was APPROVED by Manager.`
+        : `Your ${label} for ${latest.date} was REJECTED by Manager.`;
 
-// Show popup only if user is on the same month
-const [_, mm, yyyy] = latest.date.split("-"); // Use _ to indicate intentionally unused
-if (`${mm}-${yyyy}` === `${month}-${year}`) {
-  setTimeout(() => {
-    alert(message);
-  }, 100);
-}
-
-     setLastAlertAttendanceId(latest._id);
-}, [
-  attendance,
-  loadSummary,
-  loadExtraHoursAndCompOff,
-  lastAlertAttendanceId,
-  month,
-  year
-]);
-
-  const metrics = (() => {
-  let presentDays = 0;
-  let halfDays = 0;
-  let leavesTaken = 0;
-  let hoursWorked = 0;
-  let pendingRequests = 0;
-  let extraHours = 0; // This was set to 0 but never calculated
-  let compOffRequests = 0;
-
-  attendance.forEach((a) => {
-    // ❗ IMPORTANT: Exclude ONLY rejected records
-    if (a.managerDecision?.status === "REJECTED") {
-      return;
+    const [_, mm, yyyy] = latest.date.split("-");
+    if (`${mm}-${yyyy}` === `${month}-${year}`) {
+      setTimeout(() => {
+        alert(message);
+      }, 100);
     }
 
-    if (a.status === "PRESENT FULL DAY") presentDays += 1;
-    if (HALF_DAY_STATUSES.includes(a.status)) {
-      halfDays += 1;
-    }
-    if (a.status === "EMERGENCY LEAVE" || a.status === "CASUAL LEAVE") {
-      leavesTaken += 1;
-    }
-    if (a.managerDecision?.status === "PENDING" && a.isLeaveRequest) {
-      pendingRequests += 1;
-    }
-    
-    if (a.status === "COMPOFF") {
-      compOffRequests += 1;
-    }
-
-    const isPresentLike =
-      a.status === "PRESENT FULL DAY" || HALF_DAY_STATUSES.includes(a.status);
-    const factor = HALF_DAY_STATUSES.includes(a.status) ? 0.5 : 1;
-    const baseHours = diffHours(a.workInTime, a.workOutTime);
-    const effective = isPresentLike ? baseHours * factor : 0;
-
-    hoursWorked += effective;
-    
-    // ✅ ADD THIS: Calculate extra hours for this attendance
-    if (a.status === "PRESENT FULL DAY" && baseHours > 8) {
-      extraHours += (baseHours - 8);
-    }
-    // Also add any pre-calculated extra hours from the record
-    if (a.extraHours && a.extraHours > 0) {
-      extraHours += a.extraHours;
-    }
-  });
-
-  hoursWorked = Math.round(hoursWorked * 10) / 10;
-  extraHours = Math.round(extraHours * 10) / 10;
-
-  return { presentDays, halfDays, leavesTaken, hoursWorked, pendingRequests, extraHours, compOffRequests };
-})();
+    setLastAlertAttendanceId(latest._id);
+  }, [attendance, lastAlertAttendanceId, month, year]);
 
   const holidays = buildHolidayCalendar(month, year);
   const calendarWeeks = buildMonthMatrix(month, year);
@@ -761,106 +785,103 @@ if (`${mm}-${yyyy}` === `${month}-${year}`) {
     ) : null;
 
   const handleSaveAttendance = async (e) => {
-  e.preventDefault();
-  try {
-    setLoadingSave(true);
+    e.preventDefault();
+    try {
+      setLoadingSave(true);
 
-    if (isSystemHoliday) {
-      alert(
-        "This date is configured as a system holiday (Sunday / 2nd Saturday / Public Holiday). Attendance marking is disabled."
-      );
-      setLoadingSave(false);
-      return;
-    }
-
-    const payload = {
-      date,
-      status,
-      workInTime,
-      workOutTime,
-      note
-    };
-
-    // ✅ Calculate extra hours if worked more than 8 hours
-    if (status === "PRESENT FULL DAY") {
-      const hours = diffHours(workInTime, workOutTime);
-      if (hours > 8) {
-        payload.extraHours = hours - 8; // Make sure this is included
-      }
-    }
-
-    if (status === "COMPOFF") {
-      const {
-        hours,
-        workedDate,
-        workedTime,
-        compOffDate,
-        compOffTime
-      } = extraWork;
-
-      if (
-        !hours ||
-        Number(hours) <= 0 ||
-        !workedDate ||
-        !workedTime ||
-        !compOffDate ||
-        !compOffTime
-      ) {
-        setLoadingSave(false);
+      if (isSystemHoliday) {
         alert(
-          "For Comp-off requests, please enter:\n\n• Extra work hours\n• Worked date and time (for example, the Sunday you worked)\n• Comp-off date and time (when you plan to take the compensatory off)"
+          "This date is configured as a system holiday (Sunday / 2nd Saturday / Public Holiday). Attendance marking is disabled."
         );
+        setLoadingSave(false);
         return;
       }
 
-      payload.isLeaveRequest = true;
-      payload.extraWork = {
-        hours: Number(hours),
-        workedDate,
-        workedTime,
-        compOffDate: compOffDate || date,
-        compOffTime
+      const payload = {
+        
+        date,
+        status,
+        workInTime,
+        workOutTime,
+        note
       };
+
+      // ✅ Calculate extra hours if worked more than 8 hours
+      if (status === "PRESENT FULL DAY") {
+        const hours = diffHours(workInTime, workOutTime);
+        if (hours > 8) {
+          payload.extraHours = hours - 8;
+        }
+      }
+
+      if (status === "COMPOFF") {
+        const {
+          hours,
+          workedDate,
+          workedTime,
+          compOffDate,
+          compOffTime
+        } = extraWork;
+
+        if (
+          !hours ||
+          Number(hours) <= 0 ||
+          !workedDate ||
+          !workedTime ||
+          !compOffDate ||
+          !compOffTime
+        ) {
+          setLoadingSave(false);
+          alert(
+            "For Comp-off requests, please enter:\n\n• Extra work hours\n• Worked date and time (for example, the Sunday you worked)\n• Comp-off date and time (when you plan to take the compensatory off)"
+          );
+          return;
+        }
+
+        payload.isLeaveRequest = true;
+        payload.extraWork = {
+          hours: Number(hours),
+          workedDate,
+          workedTime,
+          compOffDate: compOffDate || date,
+          compOffTime
+        };
+      }
+
+      await api.post("/attendance", payload);
+
+      // Immediately refresh all data
+      await forceRefreshAll();
+
+      if (APPROVAL_STATUSES.includes(status)) {
+        alert(
+          "Attendance / leave change sent to Manager for approval. It will reflect in your dashboard and project views after Manager approval."
+        );
+      } else {
+        alert("Attendance saved successfully!");
+      }
+
+      // Reset form to today's date
+      setDate(formatToday());
+      setStatus("PRESENT FULL DAY");
+      setWorkInTime("10:00");
+      setWorkOutTime("18:00");
+      setNote("");
+      setExtraWork({
+        hours: 2,
+        workedDate: "",
+        workedTime: "18:00",
+        compOffDate: "",
+        compOffTime: "10:00"
+      });
+
+    } catch (error) {
+      console.error(error);
+      alert(error.response?.data?.message || "Error saving attendance");
+    } finally {
+      setLoadingSave(false);
     }
-
-    await api.post("/attendance", payload);
-
-    // Immediately refresh all data
-    await Promise.all([
-      loadAttendance(),
-      loadSummary(),
-      loadExtraHoursAndCompOff()
-    ]);
-
-    if (APPROVAL_STATUSES.includes(status)) {
-      alert(
-        "Attendance / leave change sent to Manager for approval. It will reflect in your dashboard and project views after Manager approval."
-      );
-    } else {
-      alert("Attendance saved successfully!");
-    }
-
-    // Reset form to today's date
-    setDate(formatToday());
-    setStatus("PRESENT FULL DAY");
-    setWorkInTime("10:00");
-    setWorkOutTime("18:00");
-    setNote("");
-    setExtraWork({
-      hours: 2,
-      workedDate: "",
-      workedTime: "18:00",
-      compOffDate: "",
-      compOffTime: "10:00"
-    });
-
-  } catch (error) {
-    console.error(error);
-    alert(error.response?.data?.message || "Error saving attendance");
-  } finally {
-    setLoadingSave(false);
-  }
-};
+  };
 
   const handleMonthChange = (e) => {
     const [m, y] = e.target.value.split("-");
@@ -869,36 +890,33 @@ if (`${mm}-${yyyy}` === `${month}-${year}`) {
   };
 
   const handleYearChange = (e) => {
-  const y = e.target.value;
-  setSelectedYear(y);
-
-  // Always reset to January when year changes
-  setMonthYear({
-    month: "01",
-    year: y
-  });
-
-  setLastAlertAttendanceId(null);
-};
+    const y = e.target.value;
+    setSelectedYear(y);
+    setMonthYear({
+      month: "01",
+      year: y
+    });
+    setLastAlertAttendanceId(null);
+  };
 
   const monthLabel = `${monthNames[Number(month) - 1]}, ${year}`;
 
   const timesheetRows = attendance.map((a) => {
-  const isPresentLike =
-    a.status === "PRESENT FULL DAY" || HALF_DAY_STATUSES.includes(a.status);
-  const factor = HALF_DAY_STATUSES.includes(a.status) ? 0.5 : 1;
-  const baseHours = diffHours(a.workInTime, a.workOutTime);
-  const workedHours = isPresentLike ? baseHours * factor : 0;
-  
-  // Calculate extra hours for this day - IMPORTANT: Use a.extraHours if available
-  const extraHours = a.extraHours || ((a.status === "PRESENT FULL DAY" && baseHours > 8) ? baseHours - 8 : 0);
+    const isPresentLike =
+      a.status === "PRESENT FULL DAY" || HALF_DAY_STATUSES.includes(a.status);
+    const factor = HALF_DAY_STATUSES.includes(a.status) ? 0.5 : 1;
+    const baseHours = diffHours(a.workInTime, a.workOutTime);
+    const workedHours = isPresentLike ? baseHours * factor : 0;
+    
+    // Calculate extra hours for this day - IMPORTANT: Use a.extraHours if available
+    const extraHours = a.extraHours || ((a.status === "PRESENT FULL DAY" && baseHours > 8) ? baseHours - 8 : 0);
 
-  return {
-    ...a,
-    workedHours,
-    extraHours // Make sure this is included
-  };
-});
+    return {
+      ...a,
+      workedHours,
+      extraHours
+    };
+  });
 
   const totalTimesheetHours = timesheetRows.reduce(
     (sum, r) => sum + r.workedHours,
@@ -926,62 +944,63 @@ if (`${mm}-${yyyy}` === `${month}-${year}`) {
   };
 
   const handleCreateOrUpdateTask = async (e) => {
-  e.preventDefault();
-  setTaskError("");
+    e.preventDefault();
+    setTaskError("");
 
-  if (!taskForm.projectId) {
-    setTaskError("Please select a project");
-    return;
-  }
-
-  if (!taskForm.recentRequirement || taskForm.recentRequirement.trim().length === 0) {
-    setTaskError("Please enter a requirement description");
-    return;
-  }
-
-  if (!taskForm.hoursAllocated || taskForm.hoursAllocated <= 0) {
-    setTaskError("Please enter estimated hours greater than 0");
-    return;
-  }
-
-  const finalDays = taskForm.noOfDays || 0;
-
-  try {
-    const payload = {
-      ...taskForm,
-            // 🔧 BACKEND COMPATIBILITY FIX
-      estimatedHours: Number(taskForm.hoursAllocated),
-
-      projectId: taskForm.projectId,
-      noOfDays: finalDays,
-      hoursAllocated: Number(taskForm.hoursAllocated), // Ensure it's a number
-      assignedUserId: user._id || user.id,
-      createdBy: user.fullName || user.email
-    };
-
-    // Make sure hoursAllocated is always sent
-    if (!payload.hoursAllocated || payload.hoursAllocated === 0) {
-      // Set default based on priority
-      payload.hoursAllocated = PRIORITY_DEFAULT_HOURS[taskForm.clientPriority] || 8;
+    if (!taskForm.projectId) {
+      setTaskError("Please select a project");
+      return;
     }
 
-    if (!editingTaskId) {
-      await api.post("/tasks", payload);
-      alert("Task / requirement added successfully");
-    } else {
-      await api.patch(`/tasks/${editingTaskId}`, payload);
-      alert("Task updated successfully");
+    if (!taskForm.recentRequirement || taskForm.recentRequirement.trim().length === 0) {
+      setTaskError("Please enter a requirement description");
+      return;
     }
 
-    resetTaskForm(true);
-    // Force reload tasks
-    await loadTasks();
-    
-  } catch (error) {
-    console.error("Employee create/update task error", error?.response || error);
-    setTaskError(error.response?.data?.message || "Error saving task. Please check your input.");
-  }
+    if (!taskForm.hoursAllocated || taskForm.hoursAllocated <= 0) {
+      setTaskError("Please enter estimated hours greater than 0");
+      return;
+    }
+
+    const finalDays = taskForm.noOfDays || 0;
+
+    try {
+   const payload = {
+  ...taskForm,
+
+  projectId: taskForm.projectId,
+  noOfDays: finalDays,
+
+  // ✅ Estimated hours logic (CORRECT)
+  hoursAllocated:
+    Number(taskForm.hoursAllocated) > 0
+      ? Number(taskForm.hoursAllocated)
+      : PRIORITY_DEFAULT_HOURS[taskForm.clientPriority] || 8,
+
+  assignedUserId: user._id || user.id,
+  createdBy: user.fullName || user.email
 };
+
+     
+
+      if (!editingTaskId) {
+        await api.post("/tasks", payload);
+        alert("Task / requirement added successfully");
+      } else {
+        console.log("UPDATE PAYLOAD →", payload);
+
+        await api.patch(`/tasks/${editingTaskId}`, payload);
+        alert("Task updated successfully");
+      }
+
+      resetTaskForm(true);
+      await loadTasks();
+      
+    } catch (error) {
+      console.error("Employee create/update task error", error?.response || error);
+      setTaskError(error.response?.data?.message || "Error saving task. Please check your input.");
+    }
+  };
 
   const startEditTask = (t) => {
     const createdByMe =
@@ -1085,47 +1104,41 @@ if (`${mm}-${yyyy}` === `${month}-${year}`) {
     <div className="page">
       <div className="shell">
         <aside className="sidebar">
-          <div className="sidebar-header">
-            <div className="sidebar-logo">
-              <img src={logo} alt="NowIT Services" />
-            </div>
-            <div className="sidebar-role">Employee</div>
-          </div>
-          <nav className="sidebar-nav">
-            <button
-              className={
-                activeTab === "dashboard" ? "nav-item active" : "nav-item"
-              }
-              onClick={() => setActiveTab("dashboard")}
-            >
-              Dashboard
-            </button>
-            <button
-              className={
-                activeTab === "projects" ? "nav-item active" : "nav-item"
-              }
-              onClick={() => setActiveTab("projects")}
-            >
-              Project Management
-            </button>
-            <button
-              className={
-                activeTab === "timesheet" ? "nav-item active" : "nav-item"
-              }
-              onClick={() => setActiveTab("timesheet")}
-            >
-              Timesheet Management
-            </button>
-            <button
-              className={
-                activeTab === "payslips" ? "nav-item active" : "nav-item"
-              }
-              onClick={() => setActiveTab("payslips")}
-            >
-              Payslips
-            </button>
-          </nav>
-        </aside>
+  <div className="sidebar-header">
+    <img src={logo} alt="NSW IT Services" className="sidebar-logo" />
+  </div>
+
+  <nav className="sidebar-nav">
+    <button
+      className={activeTab === "dashboard" ? "nav-item active" : "nav-item"}
+      onClick={() => setActiveTab("dashboard")}
+    >
+      Dashboard
+    </button>
+
+    <button
+      className={activeTab === "projects" ? "nav-item active" : "nav-item"}
+      onClick={() => setActiveTab("projects")}
+    >
+      Project Management
+    </button>
+
+    <button
+      className={activeTab === "timesheet" ? "nav-item active" : "nav-item"}
+      onClick={() => setActiveTab("timesheet")}
+    >
+      Timesheet Management
+    </button>
+
+    <button
+      className={activeTab === "payslips" ? "nav-item active" : "nav-item"}
+      onClick={() => setActiveTab("payslips")}
+    >
+      Payslips
+    </button>
+  </nav>
+</aside>
+
 
         <div className="main-area">
           <header className="topbar">
@@ -1387,44 +1400,42 @@ if (`${mm}-${yyyy}` === `${month}-${year}`) {
                   </div>
 
                   <div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "repeat(7, 1fr)",
-    gap: 12,
-    fontSize: 13
-  }}
->
-  <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
-    <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Present Days</strong>
-    <div style={{ color: "white" }}>{metrics.presentDays}</div>
-  </div>
-  <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
-    <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Half Days</strong>
-    <div style={{ color: "white" }}>{metrics.halfDays}</div>
-  </div>
-  <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
-    <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Leaves Taken</strong>
-    <div style={{ color: "white" }}>{metrics.leavesTaken}</div>
-  </div>
-  <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
-    <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Hours Worked</strong>
-    <div style={{ color: "white" }}>{metrics.hoursWorked}</div>
-  </div>
-  <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
-    <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Pending Requests</strong>
-    <div style={{ color: "white" }}>{metrics.pendingRequests}</div>
-  </div>
-  {/* Updated: Show real-time calculated extra hours */}
-  <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
-    <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Extra Hours</strong>
-    <div style={{ color: "white" }}>{metrics.extraHours.toFixed(1)}</div>
-  </div>
-  {/* Updated: Show real-time comp-off balance */}
-  <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
-    <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Comp-off Balance</strong>
-    <div style={{ color: "white" }}>{compOffBalance}</div>
-  </div>
-</div>
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(7, 1fr)",
+                      gap: 12,
+                      fontSize: 13
+                    }}
+                  >
+                    <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
+                      <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Present Days</strong>
+                      <div style={{ color: "white" }}>{sharedMetrics.presentDays}</div>
+                    </div>
+                    <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
+                      <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Half Days</strong>
+                      <div style={{ color: "white" }}>{sharedMetrics.halfDays}</div>
+                    </div>
+                    <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
+                      <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Leaves Taken</strong>
+                      <div style={{ color: "white" }}>{sharedMetrics.leavesTaken}</div>
+                    </div>
+                    <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
+                      <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Hours Worked</strong>
+                      <div style={{ color: "white" }}>{sharedMetrics.hoursWorked}</div>
+                    </div>
+                    <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
+                      <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Pending Requests</strong>
+                      <div style={{ color: "white" }}>{sharedMetrics.pendingRequests}</div>
+                    </div>
+                    <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
+                      <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Extra Hours</strong>
+                      <div style={{ color: "white" }}>{sharedMetrics.extraHours.toFixed(1)}</div>
+                    </div>
+                    <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
+                      <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Comp-off Balance</strong>
+                      <div style={{ color: "white" }}>{compOffBalance}</div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="card table-shadow-card">
@@ -1465,7 +1476,7 @@ if (`${mm}-${yyyy}` === `${month}-${year}`) {
                       </tr>
                       <tr style={{ background: "#fff3cd" }}>
                         <td><strong>Extra Hours Balance</strong></td>
-                        <td><strong>{extraHoursBalance.toFixed(1)} hrs</strong></td>
+                        <td><strong>{sharedMetrics.extraHours.toFixed(1)} hrs</strong></td>
                       </tr>
                       <tr style={{ background: "#d4edda" }}>
                         <td><strong>Comp-off Balance</strong></td>
@@ -1781,38 +1792,37 @@ if (`${mm}-${yyyy}` === `${month}-${year}`) {
                         </tr>
                       </thead>
                       <tbody>
-  {timesheetRows.map((a) => {
-    // Use the extraHours from the calculated row
-    const rowExtraHours = a.extraHours || 0;
-    
-    return (
-      <tr key={a._id}>
-        <td>{a.date}</td>
-        <td>{a.status}</td>
-        <td>{a.workInTime}</td>
-        <td>{a.workOutTime}</td>
-        <td>{a.workedHours.toFixed(1)}</td>
-        <td>
-          {rowExtraHours > 0 ? `${rowExtraHours.toFixed(1)} hrs` : "-"}
-        </td>
-        <td>{a.managerDecision?.status || "-"}</td>
-        <td>
-          {a.status === "COMPOFF" && a.extraWork ? (
-            <>
-              Extra: {a.extraWork.hours} hrs on{" "}
-              {a.extraWork.workedDate}{" "}
-              {a.extraWork.workedTime} → Comp-off{" "}
-              {a.extraWork.compOffDate}{" "}
-              {a.extraWork.compOffTime}
-            </>
-          ) : (
-            a.note || "-"
-          )}
-        </td>
-      </tr>
-    );
-  })}
-</tbody>
+                        {timesheetRows.map((a) => {
+                          const rowExtraHours = a.extraHours || 0;
+                          
+                          return (
+                            <tr key={a._id}>
+                              <td>{a.date}</td>
+                              <td>{a.status}</td>
+                              <td>{a.workInTime}</td>
+                              <td>{a.workOutTime}</td>
+                              <td>{a.workedHours.toFixed(1)}</td>
+                              <td>
+                                {rowExtraHours > 0 ? `${rowExtraHours.toFixed(1)} hrs` : "-"}
+                              </td>
+                              <td>{a.managerDecision?.status || "-"}</td>
+                              <td>
+                                {a.status === "COMPOFF" && a.extraWork ? (
+                                  <>
+                                    Extra: {a.extraWork.hours} hrs on{" "}
+                                    {a.extraWork.workedDate}{" "}
+                                    {a.extraWork.workedTime} → Comp-off{" "}
+                                    {a.extraWork.compOffDate}{" "}
+                                    {a.extraWork.compOffTime}
+                                  </>
+                                ) : (
+                                  a.note || "-"
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
                     </table>
                     {attendance.length === 0 && (
                       <p className="empty">No attendance yet</p>
@@ -1859,9 +1869,9 @@ if (`${mm}-${yyyy}` === `${month}-${year}`) {
                   <p className="note">
                     Total hours (present days only):{" "}
                     <strong>{Math.round(totalTimesheetHours * 10) / 10}</strong>
-                    {metrics.extraHours > 0 && (
+                    {sharedMetrics.extraHours > 0 && (
                       <span style={{ marginLeft: '10px', color: '#d48806' }}>
-                        Extra hours this month: <strong>{metrics.extraHours.toFixed(1)} hrs</strong>
+                        Extra hours this month: <strong>{sharedMetrics.extraHours.toFixed(1)} hrs</strong>
                       </span>
                     )}
                   </p>
@@ -2215,7 +2225,7 @@ if (`${mm}-${yyyy}` === `${month}-${year}`) {
                           <th>Start</th>
                           <th>Close</th>
                           <th>Working Days</th>
-                          <th>Est. Hrs</th> {/* Fixed spelling */}
+                          <th>Est. Hrs</th>
                           <th>Client Priority</th>
                           <th>Given By</th>
                           <th>Created By</th>
@@ -2254,7 +2264,8 @@ if (`${mm}-${yyyy}` === `${month}-${year}`) {
                               <td>{t.originalClosureDate || "-"}</td>
                               <td>{t.estimatedDate || "-"}</td>
                               <td>{t.noOfDays || 0}</td>
-                              <td>{Number(t.hoursAllocated ?? t.estimatedHours ?? 0)}</td>
+                              <td>{Number(t.hoursAllocated || 0)}</td>
+
 
                               <td>
                                 {meta ? (
@@ -2393,27 +2404,27 @@ if (`${mm}-${yyyy}` === `${month}-${year}`) {
                   >
                     <div className="mini-kpi">
                       <strong>Present Days</strong>
-                      <div>{metrics.presentDays}</div>
+                      <div>{sharedMetrics.presentDays}</div>
                     </div>
                     <div className="mini-kpi">
                       <strong>Half Days</strong>
-                      <div>{metrics.halfDays}</div>
+                      <div>{sharedMetrics.halfDays}</div>
                     </div>
                     <div className="mini-kpi">
                       <strong>Leaves Taken</strong>
-                      <div>{metrics.leavesTaken}</div>
+                      <div>{sharedMetrics.leavesTaken}</div>
                     </div>
                     <div className="mini-kpi">
                       <strong>Hours Worked</strong>
-                      <div>{metrics.hoursWorked}</div>
+                      <div>{sharedMetrics.hoursWorked}</div>
                     </div>
                     <div className="mini-kpi">
                       <strong>Pending Requests</strong>
-                      <div>{metrics.pendingRequests}</div>
+                      <div>{sharedMetrics.pendingRequests}</div>
                     </div>
                     <div className="mini-kpi" style={{ background: "#fff3cd", borderColor: "#ffeaa7" }}>
                       <strong>Extra Hours</strong>
-                      <div>{extraHoursBalance.toFixed(1)}</div>
+                      <div>{sharedMetrics.extraHours.toFixed(1)}</div>
                     </div>
                     <div className="mini-kpi" style={{ background: "#d4edda", borderColor: "#c3e6cb" }}>
                       <strong>Comp-off Balance</strong>
@@ -2495,7 +2506,7 @@ if (`${mm}-${yyyy}` === `${month}-${year}`) {
                       </tr>
                       <tr style={{ background: "#fff3cd" }}>
                         <td><strong>Extra Hours Balance</strong></td>
-                        <td><strong>{extraHoursBalance.toFixed(1)} hrs</strong></td>
+                        <td><strong>{sharedMetrics.extraHours.toFixed(1)} hrs</strong></td>
                       </tr>
                       <tr style={{ background: "#d4edda" }}>
                         <td><strong>Comp-off Balance</strong></td>

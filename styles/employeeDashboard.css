@@ -720,3 +720,65 @@ input:invalid, select:invalid, textarea:invalid {
   background: #1890ff !important;
   color: white !important;
 }
+/* ================================
+   PROFESSIONAL LEFT SIDEBAR
+   ================================ */
+
+.sidebar {
+  width: 260px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  border-right: 1px solid #e6f0ff;
+  padding: 24px 18px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 6px 0 24px rgba(24, 144, 255, 0.06);
+}
+
+/* Logo */
+.sidebar-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 36px;
+}
+
+.sidebar-logo {
+  max-width: 160px;
+  height: auto;
+  object-fit: contain;
+}
+
+/* Navigation */
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Nav items */
+.nav-item {
+  text-align: left;
+  padding: 12px 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #003a8c;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+/* Hover */
+.nav-item:hover {
+  background: rgba(24, 144, 255, 0.08);
+  color: #0050b3;
+  transform: translateX(4px);
+}
+
+/* Active */
+.nav-item.active {
+  background: linear-gradient(135deg, #1890ff, #13c2c2);
+  color: #ffffff;
+  box-shadow: 0 6px 18px rgba(24, 144, 255, 0.35);
+}
