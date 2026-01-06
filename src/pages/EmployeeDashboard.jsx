@@ -978,7 +978,7 @@ const popupShownRef = useRef(false);
       : PRIORITY_DEFAULT_HOURS[taskForm.clientPriority] || 8,
 
   assignedUserId: user._id || user.id,
-  createdBy: user.fullName || user.email
+  createdBy: editingTaskId ? undefined : (user.fullName || user.email)
 };
 
      
@@ -2265,6 +2265,7 @@ const popupShownRef = useRef(false);
                               <td>{t.estimatedDate || "-"}</td>
                               <td>{t.noOfDays || 0}</td>
                               <td>{Number(t.hoursAllocated || 0)}</td>
+
 
 
                               <td>
