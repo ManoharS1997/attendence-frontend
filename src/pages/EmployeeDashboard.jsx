@@ -506,53 +506,58 @@ if (`${mm}-${yyyy}` === `${month}-${year}`) {
 ]);
 
   const metrics = (() => {
-    let presentDays = 0;
-    let halfDays = 0;
-    let leavesTaken = 0;
-    let hoursWorked = 0;
-    let pendingRequests = 0;
-    let extraHours = 0;
-    let compOffRequests = 0;
+  let presentDays = 0;
+  let halfDays = 0;
+  let leavesTaken = 0;
+  let hoursWorked = 0;
+  let pendingRequests = 0;
+  let extraHours = 0; // This was set to 0 but never calculated
+  let compOffRequests = 0;
 
-    attendance.forEach((a) => {
+  attendance.forEach((a) => {
+    // ❗ IMPORTANT: Exclude ONLY rejected records
+    if (a.managerDecision?.status === "REJECTED") {
+      return;
+    }
 
-     // ❗ IMPORTANT: Exclude ONLY rejected records
-if (a.managerDecision?.status === "REJECTED") {
-  return;
-}
+    if (a.status === "PRESENT FULL DAY") presentDays += 1;
+    if (HALF_DAY_STATUSES.includes(a.status)) {
+      halfDays += 1;
+    }
+    if (a.status === "EMERGENCY LEAVE" || a.status === "CASUAL LEAVE") {
+      leavesTaken += 1;
+    }
+    if (a.managerDecision?.status === "PENDING" && a.isLeaveRequest) {
+      pendingRequests += 1;
+    }
+    
+    if (a.status === "COMPOFF") {
+      compOffRequests += 1;
+    }
 
+    const isPresentLike =
+      a.status === "PRESENT FULL DAY" || HALF_DAY_STATUSES.includes(a.status);
+    const factor = HALF_DAY_STATUSES.includes(a.status) ? 0.5 : 1;
+    const baseHours = diffHours(a.workInTime, a.workOutTime);
+    const effective = isPresentLike ? baseHours * factor : 0;
 
-      if (a.status === "PRESENT FULL DAY") presentDays += 1;
-      if (HALF_DAY_STATUSES.includes(a.status)) {
-        halfDays += 1;
-      }
-      if (a.status === "EMERGENCY LEAVE" || a.status === "CASUAL LEAVE") {
-        leavesTaken += 1;
-      }
-      if (a.managerDecision?.status === "PENDING" && a.isLeaveRequest) {
-        pendingRequests += 1;
-      }
-      
-      
-      
-      if (a.status === "COMPOFF") {
-        compOffRequests += 1;
-      }
+    hoursWorked += effective;
+    
+    // ✅ ADD THIS: Calculate extra hours for this attendance
+    if (a.status === "PRESENT FULL DAY" && baseHours > 8) {
+      extraHours += (baseHours - 8);
+    }
+    // Also add any pre-calculated extra hours from the record
+    if (a.extraHours && a.extraHours > 0) {
+      extraHours += a.extraHours;
+    }
+  });
 
-      const isPresentLike =
-        a.status === "PRESENT FULL DAY" || HALF_DAY_STATUSES.includes(a.status);
-      const factor = HALF_DAY_STATUSES.includes(a.status) ? 0.5 : 1;
-      const baseHours = diffHours(a.workInTime, a.workOutTime);
-      const effective = isPresentLike ? baseHours * factor : 0;
+  hoursWorked = Math.round(hoursWorked * 10) / 10;
+  extraHours = Math.round(extraHours * 10) / 10;
 
-      hoursWorked += effective;
-    });
-
-    hoursWorked = Math.round(hoursWorked * 10) / 10;
-    extraHours = Math.round(extraHours * 10) / 10;
-
-    return { presentDays, halfDays, leavesTaken, hoursWorked, pendingRequests, extraHours, compOffRequests };
-  })();
+  return { presentDays, halfDays, leavesTaken, hoursWorked, pendingRequests, extraHours, compOffRequests };
+})();
 
   const holidays = buildHolidayCalendar(month, year);
   const calendarWeeks = buildMonthMatrix(month, year);
@@ -776,11 +781,11 @@ if (a.managerDecision?.status === "REJECTED") {
       note
     };
 
-    // Calculate extra hours if worked more than 8 hours
+    // ✅ Calculate extra hours if worked more than 8 hours
     if (status === "PRESENT FULL DAY") {
       const hours = diffHours(workInTime, workOutTime);
       if (hours > 8) {
-        payload.extraHours = hours - 8;
+        payload.extraHours = hours - 8; // Make sure this is included
       }
     }
 
@@ -879,21 +884,21 @@ if (a.managerDecision?.status === "REJECTED") {
   const monthLabel = `${monthNames[Number(month) - 1]}, ${year}`;
 
   const timesheetRows = attendance.map((a) => {
-    const isPresentLike =
-      a.status === "PRESENT FULL DAY" || HALF_DAY_STATUSES.includes(a.status);
-    const factor = HALF_DAY_STATUSES.includes(a.status) ? 0.5 : 1;
-    const baseHours = diffHours(a.workInTime, a.workOutTime);
-    const workedHours = isPresentLike ? baseHours * factor : 0;
-    
-    // Calculate extra hours for this day
-    const extraHours = (status === "PRESENT FULL DAY" && baseHours > 8) ? baseHours - 8 : 0;
+  const isPresentLike =
+    a.status === "PRESENT FULL DAY" || HALF_DAY_STATUSES.includes(a.status);
+  const factor = HALF_DAY_STATUSES.includes(a.status) ? 0.5 : 1;
+  const baseHours = diffHours(a.workInTime, a.workOutTime);
+  const workedHours = isPresentLike ? baseHours * factor : 0;
+  
+  // Calculate extra hours for this day - IMPORTANT: Use a.extraHours if available
+  const extraHours = a.extraHours || ((a.status === "PRESENT FULL DAY" && baseHours > 8) ? baseHours - 8 : 0);
 
-    return {
-      ...a,
-      workedHours,
-      extraHours
-    };
-  });
+  return {
+    ...a,
+    workedHours,
+    extraHours // Make sure this is included
+  };
+});
 
   const totalTimesheetHours = timesheetRows.reduce(
     (sum, r) => sum + r.workedHours,
@@ -1409,10 +1414,12 @@ if (a.managerDecision?.status === "REJECTED") {
     <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Pending Requests</strong>
     <div style={{ color: "white" }}>{metrics.pendingRequests}</div>
   </div>
+  {/* Updated: Show real-time calculated extra hours */}
   <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
     <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Extra Hours</strong>
-    <div style={{ color: "white" }}>{extraHoursBalance.toFixed(1)}</div>
+    <div style={{ color: "white" }}>{metrics.extraHours.toFixed(1)}</div>
   </div>
+  {/* Updated: Show real-time comp-off balance */}
   <div className="mini-kpi" style={{ background: "#1890ff", color: "white" }}>
     <strong style={{ color: "rgba(255, 255, 255, 0.9)" }}>Comp-off Balance</strong>
     <div style={{ color: "white" }}>{compOffBalance}</div>
@@ -1774,31 +1781,38 @@ if (a.managerDecision?.status === "REJECTED") {
                         </tr>
                       </thead>
                       <tbody>
-                        {timesheetRows.map((a) => (
-                          <tr key={a._id}>
-                            <td>{a.date}</td>
-                            <td>{a.status}</td>
-                            <td>{a.workInTime}</td>
-                            <td>{a.workOutTime}</td>
-                            <td>{a.workedHours.toFixed(1)}</td>
-                            <td>{a.extraHours > 0 ? `${a.extraHours.toFixed(1)} hrs` : "-"}</td>
-                            <td>{a.managerDecision?.status || "-"}</td>
-                            <td>
-                              {a.status === "COMPOFF" && a.extraWork ? (
-                                <>
-                                  Extra: {a.extraWork.hours} hrs on{" "}
-                                  {a.extraWork.workedDate}{" "}
-                                  {a.extraWork.workedTime} → Comp-off{" "}
-                                  {a.extraWork.compOffDate}{" "}
-                                  {a.extraWork.compOffTime}
-                                </>
-                              ) : (
-                                a.note || "-"
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
+  {timesheetRows.map((a) => {
+    // Use the extraHours from the calculated row
+    const rowExtraHours = a.extraHours || 0;
+    
+    return (
+      <tr key={a._id}>
+        <td>{a.date}</td>
+        <td>{a.status}</td>
+        <td>{a.workInTime}</td>
+        <td>{a.workOutTime}</td>
+        <td>{a.workedHours.toFixed(1)}</td>
+        <td>
+          {rowExtraHours > 0 ? `${rowExtraHours.toFixed(1)} hrs` : "-"}
+        </td>
+        <td>{a.managerDecision?.status || "-"}</td>
+        <td>
+          {a.status === "COMPOFF" && a.extraWork ? (
+            <>
+              Extra: {a.extraWork.hours} hrs on{" "}
+              {a.extraWork.workedDate}{" "}
+              {a.extraWork.workedTime} → Comp-off{" "}
+              {a.extraWork.compOffDate}{" "}
+              {a.extraWork.compOffTime}
+            </>
+          ) : (
+            a.note || "-"
+          )}
+        </td>
+      </tr>
+    );
+  })}
+</tbody>
                     </table>
                     {attendance.length === 0 && (
                       <p className="empty">No attendance yet</p>
