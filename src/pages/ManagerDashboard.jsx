@@ -377,10 +377,15 @@ const getTodayHolidayInfo = () => {
 };
 
 export default function ManagerDashboard() {
+
+    const CURRENT_YEAR = new Date().getFullYear().toString();
+
   const { user, logout } = useAuth();
 
   // ------- ALERT CENTER (bell icon) -------
   const [alerts, setAlerts] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+
 
   const addAlert = (message) => {
     if (!message) return;
@@ -456,7 +461,8 @@ export default function ManagerDashboard() {
 
   // ---------- LOGS (Manager View) ----------
   const [logs, setLogs] = useState([]);
-  const [logsError, setLogsError] = useState("");
+  const [logsError] = useState(null);
+
   const [logsLoading, setLogsLoading] = useState(false);
   const [logsView, setLogsView] = useState("ALL");
   const [logUserFilter, setLogUserFilter] = useState("ALL");
@@ -485,29 +491,41 @@ export default function ManagerDashboard() {
     setEmployees(res.data);
   }, []);
 
-  const loadAttendance = useCallback(
-    async () => {
-      const res = await api.get("/attendance", { params: { month, year } });
-      setAttendance(res.data);
-    },
-    [month, year]
-  );
+ const loadAttendance = useCallback(
+  async () => {
+    if (year !== CURRENT_YEAR) {
+      setAttendance([]);
+      return;
+    }
 
-  const loadSummaries = useCallback(
-    async () => {
-      try {
-        const res = await api.get("/leave/summary/all", {
-          params: { month, year }
-        });
-        setSummaries(res.data || []);
-      } catch (err) {
-        console.error("Error loading summaries:", err.response?.data || err.message);
-        setSummaries([]);
-        addAlert(`Error loading leave summaries: ${err.response?.data?.message || err.message}`);
-      }
-    },
-    [month, year]
-  );
+    const res = await api.get("/attendance", { params: { month, year } });
+    setAttendance(res.data || []);
+  },
+  [month, year]
+
+);
+
+
+ const loadSummaries = useCallback(
+  async () => {
+    if (year !== CURRENT_YEAR) {
+      setSummaries([]);
+      return;
+    }
+
+    try {
+      const res = await api.get("/leave/summary/all", {
+        params: { month, year }
+      });
+      setSummaries(res.data || []);
+    } catch {
+      setSummaries([]);
+    }
+  },
+  [month, year]
+
+);
+
 
   const loadProjects = useCallback(async () => {
     const res = await api.get("/projects");
@@ -545,27 +563,24 @@ export default function ManagerDashboard() {
   }, []);
 
   const loadLogs = useCallback(
-    async () => {
-      try {
-        setLogsLoading(true);
-        setLogsError("");
-        const res = await api.get("/logs", {
-          params: { month, year }
-        });
-        setLogs(res.data || []);
-      } catch (err) {
-        console.error("Error loading logs", err?.response || err);
-        setLogs([]);
-        setLogsError(
-          err?.response?.data?.message ||
-          "Error loading logs for this month"
-        );
-      } finally {
-        setLogsLoading(false);
-      }
-    },
-    [month, year]
-  );
+  async () => {
+    if (year !== CURRENT_YEAR) {
+      setLogs([]);
+      return;
+    }
+
+    try {
+      setLogsLoading(true);
+      const res = await api.get("/logs", { params: { month, year } });
+      setLogs(res.data || []);
+    } finally {
+      setLogsLoading(false);
+    }
+  },
+  [month, year]
+
+);
+
 
   useEffect(() => {
     const id = setTimeout(() => {
@@ -784,7 +799,16 @@ export default function ManagerDashboard() {
     setMonthYear({ month: m, year: y });
   };
 
+  const handleYearChange = (e) => {
+  const y = e.target.value;
+  setMonthYear({ month, year: y });
+};
+
+
   const monthLabel = `${monthNames[Number(month) - 1]}, ${year}`;
+
+  
+
 
   // Holidays for the currently selected month
   const holidays = buildHolidayCalendar(month, year) || [];
@@ -1179,7 +1203,7 @@ export default function ManagerDashboard() {
             <div className="sidebar-logo">
               <img src={logo} alt="NowIT Services" />
             </div>
-            <div className="sidebar-role">Manager</div>
+            
           </div>
           <nav className="sidebar-nav">
             <button
@@ -1232,56 +1256,194 @@ export default function ManagerDashboard() {
               <strong>{user.fullName}</strong> (Manager) — {user.email}
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <button
-                type="button"
-                className="outline-btn"
-                style={{ position: "relative", paddingInline: 10 }}
-                onClick={() => {
-                  if (!alerts.length) {
-                    try {
-                      window.alert("No alerts yet");
-                    } catch (err) {
-                      console.error("Manager alert history popup error:", err);
-                    }
-                    return;
-                  }
-                  try {
-                    window.alert(alerts.join("\n\n"));
-                  } catch (err) {
-                    console.error("Manager alert history popup error:", err);
-                  }
+            <div style={{ display: "flex", alignItems: "center", gap: 12, position: "relative" }}>
+  {/* Notification Dropdown */}
+  <div style={{ position: "relative" }}>
+    <button
+      type="button"
+      className="outline-btn"
+      style={{ position: "relative", paddingInline: 10 }}
+      onClick={() => {
+        setShowNotifications(!showNotifications);
+      }}
+    >
+      <span role="img" aria-label="alerts">
+        🔔
+      </span>
+      {alerts.length > 0 && (
+        <span
+          style={{
+            position: "absolute",
+            top: -4,
+            right: -4,
+            minWidth: 16,
+            height: 16,
+            borderRadius: 999,
+            background: "#ff4d4f",
+            color: "#fff",
+            fontSize: 10,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
+          {alerts.length}
+        </span>
+      )}
+    </button>
+    
+    {/* Notification Dropdown Panel */}
+   {showNotifications && (
+  <div
+    style={{
+      position: "absolute",
+      top: "100%",
+      right: 0,
+      width: 420,
+      maxHeight: 480,
+      background: "linear-gradient(180deg, #1f1f1f, #141414)",
+      border: "1px solid #2a2a2a",
+      borderRadius: 12,
+      boxShadow: "0 12px 30px rgba(0,0,0,0.55)",
+      zIndex: 1000,
+      overflow: "hidden",
+      marginTop: 10
+    }}
+  >
+
+        <div
+  style={{
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "14px 18px",
+    background: "rgba(255,255,255,0.03)",
+    borderBottom: "1px solid #2a2a2a"
+  }}
+>
+  <strong style={{ fontSize: 14, color: "#e6f7ff" }}>
+    Notifications ({alerts.length})
+  </strong>
+
+  <div style={{ display: "flex", gap: 10 }}>
+    {alerts.length > 0 && (
+      <button
+        type="button"
+        onClick={() => {
+          if (window.confirm("Clear all notifications?")) {
+            setAlerts([]);
+          }
+        }}
+        style={{
+          background: "rgba(255,77,79,0.12)",
+          border: "1px solid #ff4d4f",
+          color: "#ff7875",
+          padding: "4px 12px",
+          borderRadius: 6,
+          fontSize: 12,
+          cursor: "pointer"
+        }}
+      >
+        Clear All
+      </button>
+    )}
+
+    <button
+      type="button"
+      onClick={() => setShowNotifications(false)}
+      style={{
+        background: "transparent",
+        border: "none",
+        color: "#aaa",
+        fontSize: 18,
+        cursor: "pointer"
+      }}
+    >
+      ✕
+    </button>
+  </div>
+</div>
+
+        
+        <div style={{
+          maxHeight: 400,
+          overflowY: "auto",
+          padding: 0
+        }}>
+          {alerts.length === 0 ? (
+            <div style={{
+              padding: "40px 20px",
+              textAlign: "center",
+              color: "#999",
+              fontSize: 14
+            }}>
+              No notifications yet
+            </div>
+          ) : (
+            alerts.map((alert, index) => (
+              <div
+                key={index}
+                style={{
+                  padding: "12px 16px",
+                  borderBottom: "1px solid #333",
+                  background: index % 2 === 0 ? "#1a1a1a" : "#222",
+                  position: "relative"
                 }}
               >
-                <span role="img" aria-label="alerts">
-                  🔔
-                </span>
-                {alerts.length > 0 && (
-                  <span
-                    style={{
-                      position: "absolute",
-                      top: -4,
-                      right: -4,
-                      minWidth: 16,
-                      height: 16,
-                      borderRadius: 999,
-                      background: "#ff4d4f",
-                      color: "#fff",
-                      fontSize: 10,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center"
-                    }}
-                  >
-                    {alerts.length}
-                  </span>
-                )}
-              </button>
+                <div style={{
+                  fontSize: 13,
+                  lineHeight: 1.4,
+                  color: "#fff",
+                  marginBottom: 4,
+                  paddingRight: 20
+                }}>
+                  {alert.split('\n').map((line, i) => (
+                    <div key={i} style={{ marginBottom: 2 }}>
+                      {line}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newAlerts = [...alerts];
+                    newAlerts.splice(index, 1);
+                    setAlerts(newAlerts);
+                  }}
+                  style={{
+                    position: "absolute",
+                    top: 8,
+                    right: 8,
+                    background: "transparent",
+                    border: "none",
+                    color: "#ff4d4f",
+                    fontSize: 16,
+                    cursor: "pointer",
+                    width: 20,
+                    height: 20,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "50%",
+                    transition: "background 0.2s"
+                  }}
+                  onMouseOver={(e) => e.target.style.background = "rgba(255,77,79,0.2)"}
+                  onMouseOut={(e) => e.target.style.background = "transparent"}
+                >
+                  ×
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    )}
+  </div>
 
-              <button onClick={handleLogout} className="outline-btn">
-                Logout
-              </button>
-            </div>
+  <button onClick={handleLogout} className="outline-btn">
+    Logout
+  </button>
+</div>
           </header>
 
           {/* Global today-holiday banner for Manager */}
@@ -1517,21 +1679,40 @@ export default function ManagerDashboard() {
                 <div className="card">
                   <div className="card-header-row">
                     <h2>Monthly Leave Summary</h2>
-                    <select
-                      value={`${month}-${year}`}
-                      onChange={handleMonthChange}
-                      className="month-selector"
-                    >
-                      {Array.from({ length: 12 }).map((_, i) => {
-                        const m = String(i + 1).padStart(2, "0");
-                        const value = `${m}-${year}`;
-                        return (
-                          <option key={value} value={value}>
-                            {monthNames[i]}, {year}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+  {/* MONTH DROPDOWN */}
+  <select
+    value={month}
+    onChange={(e) =>
+      setMonthYear({ month: e.target.value, year })
+    }
+    className="month-selector"
+  >
+    {monthNames.map((m, i) => (
+      <option key={m} value={String(i + 1).padStart(2, "0")}>
+        {m}
+      </option>
+    ))}
+  </select>
+
+  {/* YEAR DROPDOWN */}
+  <select
+  value={year}
+  onChange={handleYearChange}
+  className="month-selector"
+>
+  {Array.from({ length: 6 }, (_, i) => {
+    const y = new Date().getFullYear() - 3 + i;
+    return (
+      <option key={y} value={String(y)}>
+        {y}
+      </option>
+    );
+  })}
+</select>
+
+</div>
+
                   </div>
                   <p style={{ fontSize: 12, marginBottom: 6 }}>
                     Auto-calculated from attendance for each employee in{" "}
@@ -2153,9 +2334,7 @@ export default function ManagerDashboard() {
                                   holidayTakenMap[dateKey] || "NOT_TAKEN";
 
                                 let bg = "transparent";
-                                let border =
-                                  "1px solid rgba(255,255,255,0.15)";
-                                let color = "#fff";
+let color = "#fff";
 
                                 if (isMandatory) {
                                   bg = "#ff7875";
@@ -2176,19 +2355,21 @@ export default function ManagerDashboard() {
                                       ? "2nd Saturday"
                                       : "");
 
-                                return (
-                                  <td
-                                    key={`d-${wi}-${di}`}
-                                    className="holiday-cell"
-                                    style={{
-                                      background: bg,
-                                      border,
-                                      color,
-                                      verticalAlign: "top",
-                                      padding: 4,
-                                      minWidth: 40
-                                    }}
-                                  >
+                               return (
+  <td
+    key={`d-${wi}-${di}`}
+    className="holiday-cell"
+    style={{
+      background: bg,
+      border: "1px solid rgba(255,255,255,0.15)",
+      color: bg === "transparent" ? "#000" : color,
+      verticalAlign: "top",
+      padding: 4,
+      minWidth: 40,
+      backgroundColor: bg === "transparent" ? "#ffffff" : bg,
+      fontWeight: bg === "transparent" ? "600" : "400"
+    }}
+  >
                                     <div
                                       style={{
                                         fontSize: 12,
