@@ -275,6 +275,11 @@ const [yearOptions] = useState(getYearOptions());
 const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
 const [lastVisitedMonthYear, setLastVisitedMonthYear] = useState(null);
 const [showNextMonthPopup, setShowNextMonthPopup] = useState(false);
+// 🎂 Birthday notification state
+const [showBirthdayBanner, setShowBirthdayBanner] = useState(false);
+const [birthdayManagerMessage, setBirthdayManagerMessage] = useState("");
+
+
 const popupShownRef = useRef(false);
 
 
@@ -440,6 +445,25 @@ const popupShownRef = useRef(false);
     loadSummary();
     loadExtraHoursAndCompOff();
   }, [loadAttendance, loadSummary, loadExtraHoursAndCompOff]);
+
+  // 🎂 Check if today is employee birthday (on login)
+useEffect(() => {
+  const checkBirthday = async () => {
+    try {
+      const res = await api.get("/birthdays/today");
+     if (res.data?.isBirthday) {
+  setShowBirthdayBanner(true);
+  setBirthdayManagerMessage(res.data?.managerMessage || "");
+}
+
+    } catch (err) {
+      console.error("Birthday check failed", err);
+    }
+  };
+
+  checkBirthday();
+}, []);
+
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -1142,6 +1166,89 @@ const popupShownRef = useRef(false);
 
         <div className="main-area">
           <header className="topbar">
+
+            {/* 🎉 Birthday Celebration Banner */}
+{showBirthdayBanner && (
+  <div
+    style={{
+      position: "fixed",
+      top: 20,
+      left: "50%",
+      transform: "translateX(-50%)",
+      zIndex: 9999,
+      padding: "20px 30px",
+      borderRadius: 20,
+      background:
+        "linear-gradient(135deg, #fff1b8, #ffe58f, #ffd666)",
+      boxShadow: "0 14px 34px rgba(255, 193, 7, 0.45)",
+      border: "2px solid #faad14",
+      animation: "birthdayPop 0.8s ease-out",
+      maxWidth: 520
+    }}
+  >
+    <div
+      style={{
+        fontSize: 21,
+        fontWeight: 800,
+        color: "#874d00",
+        textAlign: "center"
+      }}
+    >
+      🎂 Happy Birthday {user.fullName}! 🎉
+    </div>
+
+    <div
+      style={{
+        marginTop: 6,
+        fontSize: 14,
+        color: "#613400",
+        textAlign: "center"
+      }}
+    >
+      Wishing you a successful year filled with growth, health, and happiness ✨
+    </div>
+
+    {/* 🎯 Manager Message */}
+    {birthdayManagerMessage && (
+      <div
+        style={{
+          marginTop: 12,
+          padding: "10px 14px",
+          borderRadius: 12,
+          background: "rgba(255,255,255,0.7)",
+          border: "1px dashed #faad14",
+          fontSize: 13,
+          color: "#874d00",
+          textAlign: "center",
+          fontStyle: "italic"
+        }}
+      >
+        💬 <strong>Message from Manager:</strong>
+        <br />
+        “{birthdayManagerMessage}”
+      </div>
+    )}
+
+    <div style={{ textAlign: "center", marginTop: 14 }}>
+      <button
+        onClick={() => setShowBirthdayBanner(false)}
+        style={{
+          border: "none",
+          background: "#faad14",
+          color: "#fff",
+          padding: "6px 18px",
+          borderRadius: 999,
+          cursor: "pointer",
+          fontWeight: 600
+        }}
+      >
+        Thank You 🎈
+      </button>
+    </div>
+  </div>
+)}
+
+
             {/* 🔹 Today Info – Professional Animated Badge */}
             <div
               style={{

@@ -23,7 +23,6 @@ const monthNames = [
   "December"
 ];
 
-
 // Status includes ON_HOLD_FROM_COMPANY / ON_HOLD_FROM_CLIENT
 const TASK_STATUS = [
   "OPEN",
@@ -61,6 +60,14 @@ const PROJECT_ROLE_OPTIONS = [
   "DevOps",
   "Support"
 ];
+
+// Birthday months
+const BIRTHDAY_MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+
+const BIRTHDAY_DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
 const getCurrentMonth = () => {
   const now = new Date();
@@ -224,7 +231,6 @@ const calculateMonthsDiff = (startStr, endStr) => {
 };
 
 // convert between dd-mm-yyyy (stored) and yyyy-mm-dd (for <input type="date">)
-// convert between dd-mm-yyyy (stored) and yyyy-mm-dd (for <input type="date">)
 const toInputDate = (ddmmyyyy) => {
   if (!ddmmyyyy) return "";
   const [dd, mm, yyyy] = ddmmyyyy.split("-");
@@ -377,6 +383,37 @@ const getTodayHolidayInfo = () => {
   return { type, title, message, dateKey, tone, dateLabel };
 };
 
+// Helper function to calculate upcoming birthdays
+const getUpcomingBirthdays = (birthdaysList, daysAhead = 3) => {
+  const today = new Date();
+  const upcoming = [];
+  
+  birthdaysList.forEach(b => {
+    if (!b.month || !b.day) return;
+    
+    // Create birthday date for current year
+    const birthdayThisYear = new Date(
+      today.getFullYear(),
+      BIRTHDAY_MONTHS.indexOf(b.month),
+      b.day
+    );
+    
+    // Calculate difference in days
+    const diffInDays = Math.ceil((birthdayThisYear - today) / (1000 * 60 * 60 * 24));
+    
+    // Check if birthday is within the next X days (including today)
+    if (diffInDays >= 0 && diffInDays <= daysAhead) {
+      upcoming.push({
+        ...b,
+        daysUntil: diffInDays,
+        date: birthdayThisYear
+      });
+    }
+  });
+  
+  return upcoming.sort((a, b) => a.daysUntil - b.daysUntil);
+};
+
 export default function ManagerDashboard() {
 
     const CURRENT_YEAR = new Date().getFullYear().toString();
@@ -398,7 +435,7 @@ export default function ManagerDashboard() {
     }
   };
 
-  // Tabs: dashboard | projects | timesheet | logs
+  // Tabs: dashboard | projects | timesheet | logs | birthdays
   const [activeTab, setActiveTab] = useState("dashboard");
 
   const [employees, setEmployees] = useState([]);
@@ -475,6 +512,19 @@ export default function ManagerDashboard() {
   // Today holiday information
   const todayHolidayInfo = getTodayHolidayInfo();
 
+  // ---------- BIRTHDAYS ----------
+  const [birthdays, setBirthdays] = useState([]);
+  const [birthdayForm, setBirthdayForm] = useState({
+    employeeId: "",
+    month: "",
+    day: "",
+    year: new Date().getFullYear(),
+    note: ""
+  });
+  const [filterMonth, setFilterMonth] = useState("");
+  const [upcomingBirthdays, setUpcomingBirthdays] = useState([]);
+  const [employeeBirthdayMap, setEmployeeBirthdayMap] = useState({});
+
   // -------- LOGOUT HANDLER ----------
   const handleLogout = async () => {
     try {
@@ -498,6 +548,7 @@ export default function ManagerDashboard() {
       setAttendance([]);
       return;
     }
+    
 
     const res = await api.get("/attendance", { params: { month, year } });
     setAttendance(res.data || []);
@@ -582,14 +633,135 @@ export default function ManagerDashboard() {
 
 );
 
+  // -------- BIRTHDAY FUNCTIONS ----------
+  const loadBirthdays = useCallback(async () => {
+    try {
+      const res = await api.get("/birthdays");
+      setBirthdays(res.data || []);
+      
+      // Create employee-birthday map for quick lookup
+      const map = {};
+      res.data.forEach(b => {
+        map[b.employeeId] = b;
+      });
+      setEmployeeBirthdayMap(map);
+      
+      // Calculate upcoming birthdays
+      const upcoming = getUpcomingBirthdays(res.data, 7);
+      setUpcomingBirthdays(upcoming);
+    } catch (err) {
+      console.error("Error loading birthdays", err);
+      setBirthdays([]);
+      setUpcomingBirthdays([]);
+    }
+  }, []);
+
+  const handleCreateBirthday = async (e) => {
+    e.preventDefault();
+    
+    if (!birthdayForm.employeeId || !birthdayForm.month || !birthdayForm.day) {
+      addAlert("Please select employee, month, and day");
+      return;
+    }
+    
+    try {
+      // Check if employee already has birthday
+      const existing = birthdays.find(b => b.employeeId === birthdayForm.employeeId);
+      
+      if (existing) {
+        if (!window.confirm("This employee already has a birthday record. Update it?")) {
+          return;
+        }
+        // Update existing
+        await api.put(`/birthdays/${existing._id}`, birthdayForm);
+        addAlert("Birthday updated successfully!");
+      } else {
+        // Create new
+        await api.post("/birthdays", birthdayForm);
+        addAlert("Birthday recorded successfully!");
+      }
+      
+      // Reset form
+      setBirthdayForm({
+        employeeId: "",
+        month: "",
+        day: "",
+        year: new Date().getFullYear(),
+        note: ""
+      });
+      
+      // Reload birthdays
+      await loadBirthdays();
+      
+    } catch (err) {
+      console.error("Error saving birthday", err);
+      addAlert(err.response?.data?.message || "Error saving birthday");
+    }
+  };
+
+  const handleDeleteBirthday = async (id) => {
+    if (!window.confirm("Delete this birthday record?")) return;
+    
+    try {
+      await api.delete(`/birthdays/${id}`);
+      addAlert("Birthday record deleted");
+      await loadBirthdays();
+    } catch (err) {
+      console.error("Error deleting birthday", err);
+      addAlert("Error deleting birthday");
+    }
+  };
+
+  const sendBirthdayWish = async (birthdayId) => {
+    try {
+      await api.post(`/birthdays/${birthdayId}/wish`, {
+        wishedBy: user.fullName,
+        wishedByEmail: user.email
+      });
+      addAlert("Birthday wish sent to employee!");
+      await loadBirthdays();
+    } catch (err) {
+      console.error("Error sending birthday wish", err);
+      addAlert("Error sending birthday wish");
+    }
+  };
+
+  // Automatically send birthday wishes for today's birthdays
+  const autoSendBirthdayWishes = useCallback(async () => {
+    const today = new Date();
+    const todayMonth = BIRTHDAY_MONTHS[today.getMonth()];
+    const todayDay = today.getDate();
+    
+    const todaysBirthdays = birthdays.filter(b => 
+      b.month === todayMonth && b.day === todayDay && !b.wished
+    );
+    
+    for (const bd of todaysBirthdays) {
+      try {
+        await api.post(`/birthdays/${bd._id}/wish`, {
+          wishedBy: user.fullName,
+          wishedByEmail: user.email,
+          auto: true
+        });
+        console.log(`Auto birthday wish sent to ${bd.employeeName}`);
+      } catch (err) {
+        console.error(`Failed to auto-wish ${bd.employeeName}`, err);
+      }
+    }
+    
+    if (todaysBirthdays.length > 0) {
+      await loadBirthdays();
+    }
+  }, [birthdays, user]);
 
   useEffect(() => {
     const id = setTimeout(() => {
       loadEmployees();
       loadProjects();
+      loadBirthdays();
     }, 0);
     return () => clearTimeout(id);
-  }, [loadEmployees, loadProjects]);
+  }, [loadEmployees, loadProjects, loadBirthdays]);
 
   useEffect(() => {
     const id = setTimeout(() => {
@@ -638,6 +810,14 @@ export default function ManagerDashboard() {
     }, 0);
     return () => clearTimeout(id);
   }, [activeTab, loadLogs]);
+
+  // Auto send birthday wishes on component mount
+  useEffect(() => {
+    const id = setTimeout(() => {
+      autoSendBirthdayWishes();
+    }, 1000); // Wait 1 second after component mounts
+    return () => clearTimeout(id);
+  }, [autoSendBirthdayWishes]);
 
   // -------- EMPLOYEE CRUD / LEAVES ----------
   const handleCreateEmployee = async (e) => {
@@ -802,9 +982,6 @@ export default function ManagerDashboard() {
 
 
   const monthLabel = `${monthNames[Number(month) - 1]}, ${year}`;
-
-  
-
 
   // Holidays for the currently selected month
   const holidays = buildHolidayCalendar(month, year) || [];
@@ -1190,6 +1367,16 @@ export default function ManagerDashboard() {
     ).values()
   ).filter(Boolean);
 
+  // -------- BIRTHDAY FILTERING ----------
+  const filteredBirthdays = filterMonth
+    ? birthdays.filter(b => b.month === filterMonth)
+    : birthdays;
+
+  // Get employees without birthdays
+  const employeesWithoutBirthdays = employees.filter(emp => 
+    !employeeBirthdayMap[emp._id] && emp.isActive
+  );
+
   return (
     <div className="page">
       <div className="shell">
@@ -1243,6 +1430,13 @@ export default function ManagerDashboard() {
             >
               Logs &amp; Audit
             </button>
+            <button
+              className={activeTab === "birthdays" ? "nav-item active" : "nav-item"}
+              onClick={() => setActiveTab("birthdays")}
+            >
+              Birthdays
+            </button>
+
           </nav>
         </aside>
 
@@ -2881,7 +3075,7 @@ let color = "#fff";
                             </tr>
                           </thead>
                           <tbody>
-                            {projectTasks.map((t, index) => {
+                            {projectTasks.map((t) => {
                               const emp =
                                 t.assignedUser?.fullName ||
                                 employees.find(
@@ -2897,7 +3091,8 @@ let color = "#fff";
 
                               return (
                                 <tr key={t._id}>
-                                  <td>{index + 1}</td>
+                                  <td>-</td>
+
                                   <td
                                     style={{
                                       maxWidth: 260,
@@ -3410,6 +3605,348 @@ let color = "#fff";
                   <p className="note">
                     Reports are view-only. Update data using Timesheet
                     Management, Project Management and Logs &amp; Audit tabs.
+                  </p>
+                </div>
+              </section>
+            </main>
+          )}
+
+          {/* ========== BIRTHDAYS TAB ========== */}
+          {activeTab === "birthdays" && (
+            <main className="layout single-column">
+              <section className="full-width">
+                {/* Birthday Recording Form */}
+                <div className="card">
+                  <h2>Record Employee Birthday</h2>
+                  <form className="form-grid" onSubmit={handleCreateBirthday}>
+                    <label>
+                      Select Employee
+                      <select
+                        value={birthdayForm.employeeId}
+                        onChange={(e) => {
+                          const selectedId = e.target.value;
+                          const selectedEmp = employees.find(emp => emp._id === selectedId);
+                          setBirthdayForm({
+                            ...birthdayForm,
+                            employeeId: selectedId,
+                            note: selectedEmp ? `Birthday of ${selectedEmp.fullName}` : ""
+                          });
+                        }}
+                      >
+                        <option value="">-- Select Employee --</option>
+                        {employeesWithoutBirthdays.map((emp) => (
+                          <option key={emp._id} value={emp._id}>
+                            {emp.fullName} ({emp.email}) - {emp.employeeId || "No ID"}
+                          </option>
+                        ))}
+                      </select>
+                      <small style={{ fontSize: 11, color: '#aaa', display: 'block', marginTop: 4 }}>
+                        Only shows employees without birthday records
+                      </small>
+                    </label>
+
+                    <label>
+                      Birth Month
+                      <select
+                        value={birthdayForm.month}
+                        onChange={(e) => setBirthdayForm({
+                          ...birthdayForm,
+                          month: e.target.value
+                        })}
+                      >
+                        <option value="">-- Select Month --</option>
+                        {BIRTHDAY_MONTHS.map((monthName) => (
+                          <option key={monthName} value={monthName}>
+                            {monthName}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label>
+                      Birth Day
+                      <select
+                        value={birthdayForm.day}
+                        onChange={(e) => setBirthdayForm({
+                          ...birthdayForm,
+                          day: Number(e.target.value)
+                        })}
+                      >
+                        <option value="">-- Select Day --</option>
+                        {BIRTHDAY_DAYS.map((day) => (
+                          <option key={day} value={day}>
+                            {day}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label>
+                      Year (Optional)
+                      <input
+                        type="number"
+                        value={birthdayForm.year}
+                        onChange={(e) => setBirthdayForm({
+                          ...birthdayForm,
+                          year: Number(e.target.value)
+                        })}
+                        min="1900"
+                        max={new Date().getFullYear()}
+                        placeholder="e.g., 1990"
+                      />
+                    </label>
+
+                    <label className="full-row">
+                      Notes (Optional)
+                      <textarea
+                        rows={2}
+                        value={birthdayForm.note}
+                        onChange={(e) => setBirthdayForm({
+                          ...birthdayForm,
+                          note: e.target.value
+                        })}
+                        placeholder="Add any special notes about birthday..."
+                      />
+                    </label>
+
+                    <div className="full-row">
+                      <button type="submit" className="primary-btn">
+                        Save Birthday
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Upcoming Birthdays (3 days ahead) */}
+                <div className="card">
+                  <div className="card-header-row">
+                    <h2>Upcoming Birthdays (Next 7 Days)</h2>
+                    <button
+                      type="button"
+                      className="outline-btn"
+                      onClick={() => {
+                        
+                        const upcoming = getUpcomingBirthdays(birthdays, 7);
+                        setUpcomingBirthdays(upcoming);
+                        addAlert(`Showing birthdays in next 7 days (${upcoming.length} found)`);
+                      }}
+                    >
+                      Refresh
+                    </button>
+                  </div>
+
+                  {upcomingBirthdays.length > 0 ? (
+                    <div className="table-wrapper small-table">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Employee</th>
+                            <th>Employee ID</th>
+                            <th>Email</th>
+                            <th>Birthday</th>
+                            <th>Days Until</th>
+                            <th>Wish Status</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {upcomingBirthdays.map((b) => {
+                            const emp = employees.find(e => e._id === b.employeeId);
+                            const birthdayDate = new Date(
+                              new Date().getFullYear(),
+                              BIRTHDAY_MONTHS.indexOf(b.month),
+                              b.day
+                            );
+                            const formattedDate = `${b.day} ${b.month} ${birthdayDate.getFullYear()}`;
+                            
+                            return (
+                              <tr key={b._id}>
+                                <td>{emp?.fullName || "Unknown"}</td>
+                                <td>{emp?.employeeId || "N/A"}</td>
+                                <td>{emp?.email || "N/A"}</td>
+                                <td>{formattedDate}</td>
+                                <td>
+                                  <span className={`status-badge ${b.daysUntil === 0 ? 'active' : b.daysUntil <= 3 ? 'warning' : 'info'}`}>
+                                    {b.daysUntil === 0 ? "Today" : `${b.daysUntil} days`}
+                                  </span>
+                                </td>
+                                <td>
+                                  {b.wished ? (
+                                    <span className="status-badge success">
+                                      Wished on {new Date(b.wishedAt).toLocaleDateString()}
+                                    </span>
+                                  ) : (
+                                    <span className="status-badge warning">
+                                      Not Wished
+                                    </span>
+                                  )}
+                                </td>
+                                <td>
+                                  {!b.wished ? (
+                                    <button
+                                      className="link-btn"
+                                      type="button"
+                                      onClick={() => sendBirthdayWish(b._id)}
+                                      disabled={b.daysUntil > 3}
+                                    >
+                                      Send Wish
+                                    </button>
+                                  ) : (
+                                    <button
+                                      className="link-btn"
+                                      type="button"
+                                      onClick={() => sendBirthdayWish(b._id)}
+                                    >
+                                      Resend
+                                    </button>
+                                  )}
+                                  {" "}
+                                  <button
+                                    className="link-btn danger"
+                                    type="button"
+                                    onClick={() => handleDeleteBirthday(b._id)}
+                                  >
+                                    Delete
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="empty">No upcoming birthdays in the next 7 days.</p>
+                  )}
+                  
+                  <p className="note" style={{ marginTop: 8 }}>
+                    <strong>Note:</strong> Birthdays are automatically reminded 3 days in advance. 
+                    The system will automatically send birthday wishes on the birthday date.
+                  </p>
+                </div>
+
+                {/* All Birthdays List */}
+                <div className="card">
+                  <div className="card-header-row">
+                    <h2>All Employee Birthdays</h2>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <select
+                        value={filterMonth}
+                        onChange={(e) => setFilterMonth(e.target.value)}
+                        className="month-selector"
+                      >
+                        <option value="">All Months</option>
+                        {BIRTHDAY_MONTHS.map((monthName) => (
+                          <option key={monthName} value={monthName}>
+                            {monthName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="table-wrapper small-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>S.No</th>
+                          <th>Employee</th>
+                          <th>Employee ID</th>
+                          <th>Email</th>
+                          <th>Birthday</th>
+                          <th>Year</th>
+                          <th>Wish Status</th>
+                          <th>Last Wished</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredBirthdays.map((b, index) => {
+                          const emp = employees.find(e => e._id === b.employeeId);
+                          return (
+                            <tr key={b._id}>
+                              <td>{index + 1}</td>
+                              <td>{emp?.fullName || "Unknown"}</td>
+                              <td>{emp?.employeeId || "N/A"}</td>
+                              <td>{emp?.email || "N/A"}</td>
+                              <td>
+                                <strong>{b.day} {b.month}</strong>
+                              </td>
+                              <td>{b.year || "N/A"}</td>
+                              <td>
+                                {b.wished ? (
+                                  <span className="status-badge success">Wished</span>
+                                ) : (
+                                  <span className="status-badge warning">Pending</span>
+                                )}
+                              </td>
+                              <td>
+                                {b.wishedAt ? (
+                                  new Date(b.wishedAt).toLocaleDateString()
+                                ) : (
+                                  "Never"
+                                )}
+                              </td>
+                              <td>
+                                <button
+                                  className="link-btn"
+                                  type="button"
+                                  onClick={() => sendBirthdayWish(b._id)}
+                                >
+                                  {b.wished ? "Resend" : "Send"}
+                                </button>
+                                {" "}
+                                <button
+                                  className="link-btn danger"
+                                  type="button"
+                                  onClick={() => handleDeleteBirthday(b._id)}
+                                >
+                                  Delete
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {filteredBirthdays.length === 0 && (
+                      <p className="empty">
+                        {filterMonth ? `No birthdays in ${filterMonth}` : "No birthdays recorded yet"}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Birthday Statistics */}
+                <div className="card">
+                  <h2>Birthday Statistics</h2>
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(4, 1fr)",
+                    gap: 12,
+                    fontSize: 13
+                  }}>
+                    <div className="mini-kpi">
+                      <strong>Total Records</strong>
+                      <div>{birthdays.length}</div>
+                    </div>
+                    <div className="mini-kpi">
+                      <strong>Without Records</strong>
+                      <div>{employeesWithoutBirthdays.length}</div>
+                    </div>
+                    <div className="mini-kpi">
+                      <strong>Wished This Year</strong>
+                      <div>{birthdays.filter(b => b.wished).length}</div>
+                    </div>
+                    <div className="mini-kpi">
+                      <strong>Upcoming (7 days)</strong>
+                      <div>{upcomingBirthdays.length}</div>
+                    </div>
+                  </div>
+                  
+                  <p className="note" style={{ marginTop: 8 }}>
+                    <strong>Auto-Wish Feature:</strong> The system automatically sends birthday wishes 
+                    to employees on their birthday date. Manager will receive notifications 3 days in advance.
                   </p>
                 </div>
               </section>
