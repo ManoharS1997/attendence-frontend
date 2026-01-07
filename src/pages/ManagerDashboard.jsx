@@ -23,6 +23,7 @@ const monthNames = [
   "December"
 ];
 
+
 // Status includes ON_HOLD_FROM_COMPANY / ON_HOLD_FROM_CLIENT
 const TASK_STATUS = [
   "OPEN",
@@ -763,12 +764,7 @@ export default function ManagerDashboard() {
     }
   };
 
-  const deleteRecord = async (id) => {
-    if (!window.confirm("Delete this attendance record?")) return;
-    await api.delete(`/attendance/${id}`);
-    loadAttendance();
-    loadSummaries();
-  };
+ 
 
   const handleResetEmployeePassword = async (e) => {
     e.preventDefault();
@@ -1758,52 +1754,51 @@ export default function ManagerDashboard() {
                   <div className="table-wrapper small-table">
                     <table>
                       <thead>
-                        <tr>
-                          <th>Employee</th>
-                          <th>Date</th>
-                          <th>Requested Status</th>
-                          <th>Note / Extra Work</th>
-                          <th>Action</th>
-                        </tr>
+                       <tr>
+  <th>Employee</th>
+  <th>Requested Date</th>
+  <th>Request Type</th>
+  <th>Requested Timings</th>
+  <th>Note</th>
+  <th>Action</th>
+</tr>
+
                       </thead>
                       <tbody>
                         {pendingRequests.map((p) => (
                           <tr key={p._id}>
-                            <td>{p.user?.fullName}</td>
-                            <td>{p.date}</td>
-                            <td>
-                              {p.type === "UPDATE" && p.fromStatus
-                                ? `${p.fromStatus} → ${p.toStatus}`
-                                : p.toStatus}
-                            </td>
-                            <td>
-                              {p.toStatus === "COMPOFF" && p.extraWork ? (
-                                <>
-                                  Extra: {p.extraWork.hours} hrs on{" "}
-                                  {p.extraWork.workedDate}{" "}
-                                  {p.extraWork.workedTime} → Comp-off{" "}
-                                  {p.extraWork.compOffDate}{" "}
-                                  {p.extraWork.compOffTime}
-                                </>
-                              ) : (
-                                p.note || "-"
-                              )}
-                            </td>
-                            <td>
-                              <button
-                                className="link-btn"
-                                onClick={() => decideLeave(p._id, "APPROVED")}
-                              >
-                                Approve
-                              </button>{" "}
-                              <button
-                                className="link-btn danger"
-                                onClick={() => decideLeave(p._id, "REJECTED")}
-                              >
-                                Reject
-                              </button>
-                            </td>
-                          </tr>
+  <td>{p.user?.fullName || "Unknown Employee"}</td>
+
+  <td>{p.date}</td>
+
+  <td>{p.toStatus}</td>
+
+  <td>
+    {p.toWorkInTime && p.toWorkOutTime
+      ? `${p.toWorkInTime.slice(0, 5)} – ${p.toWorkOutTime.slice(0, 5)}`
+      : "-"}
+  </td>
+
+  <td>
+    {p.note?.trim() ? p.note : "-"}
+  </td>
+
+  <td style={{ whiteSpace: "nowrap" }}>
+    <button
+      className="link-btn"
+      onClick={() => decideLeave(p._id, "APPROVED")}
+    >
+      Approve
+    </button>{" "}
+    <button
+      className="link-btn danger"
+      onClick={() => decideLeave(p._id, "REJECTED")}
+    >
+      Reject
+    </button>
+  </td>
+</tr>
+
                         ))}
                       </tbody>
                     </table>
@@ -1825,7 +1820,7 @@ export default function ManagerDashboard() {
                           <th>In</th>
                           <th>Out</th>
                           <th>Decision</th>
-                          <th>Delete</th>
+                          
                         </tr>
                       </thead>
                       <tbody>
@@ -1837,14 +1832,7 @@ export default function ManagerDashboard() {
                             <td>{a.workInTime}</td>
                             <td>{a.workOutTime}</td>
                             <td>{a.managerDecision?.status}</td>
-                            <td>
-                              <button
-                                className="link-btn danger"
-                                onClick={() => deleteRecord(a._id)}
-                              >
-                                Delete
-                              </button>
-                            </td>
+                            
                           </tr>
                         ))}
                       </tbody>

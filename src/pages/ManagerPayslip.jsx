@@ -784,17 +784,7 @@ const _savePayslipToLocalStorage = (payslipData) => {
               <div class="net-pay-words">${formatCurrency(salaryStructure.netPay)} only</div>
             </div>
 
-            <!-- Signatures -->
-            <div class="signature-section">
-              <div class="signature-box">
-                <div class="signature-line"></div>
-                <div class="signature-label">Employee Signature</div>
-              </div>
-              <div class="signature-box">
-                <div class="signature-line"></div>
-                <div class="signature-label">Authorized Signatory</div>
-              </div>
-            </div>
+          
 
             <!-- Footer -->
             <div class="footer">
