@@ -795,4 +795,44 @@ input:invalid, select:invalid, textarea:invalid {
     transform: translateX(-50%) scale(1);
   }
 }
+.birthday-banner {
+  background: linear-gradient(135deg, #1677ff, #00b894);
+  color: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 20px;
+  animation: slideDown 0.6s ease;
+}
+
+.birthday-content h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.birthday-content p {
+  margin: 8px 0 16px;
+  font-size: 14px;
+}
+
+.birthday-content button {
+  background: #fff;
+  color: #1677ff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 

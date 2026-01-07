@@ -450,12 +450,15 @@ const popupShownRef = useRef(false);
 useEffect(() => {
   const checkBirthday = async () => {
     try {
-      const res = await api.get("/birthdays/today");
-     if (res.data?.isBirthday) {
-  setShowBirthdayBanner(true);
-  setBirthdayManagerMessage(res.data?.managerMessage || "");
-}
+      const dismissed = sessionStorage.getItem("birthdayDismissed");
+      if (dismissed) return;
 
+      const res = await api.get("/birthday/today");
+
+      if (res.data?.show) {
+        setShowBirthdayBanner(true);
+        setBirthdayManagerMessage(res.data?.message || "");
+      }
     } catch (err) {
       console.error("Birthday check failed", err);
     }
@@ -463,6 +466,7 @@ useEffect(() => {
 
   checkBirthday();
 }, []);
+
 
 
   useEffect(() => {
@@ -1231,7 +1235,10 @@ useEffect(() => {
 
     <div style={{ textAlign: "center", marginTop: 14 }}>
       <button
-        onClick={() => setShowBirthdayBanner(false)}
+        onClick={() => {
+  setShowBirthdayBanner(false);
+  sessionStorage.setItem("birthdayDismissed", "true");
+}}
         style={{
           border: "none",
           background: "#faad14",

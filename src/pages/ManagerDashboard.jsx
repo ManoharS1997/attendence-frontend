@@ -650,43 +650,80 @@ export default function ManagerDashboard() {
 
   // -------- BIRTHDAY FUNCTIONS ----------
   const loadBirthdays = useCallback(async () => {
+  try {
+    setBirthdaysLoading(true);
+
+    let res;
     try {
-      setBirthdaysLoading(true);
-      console.log("Loading birthdays from API...");
-      
-      const res = await api.get("/birthdays");
-      const birthdayData = res.data || [];
-      
-      console.log("Birthdays API response:", birthdayData);
-      
-      // Update all birthday-related states in one go
-      setBirthdays(birthdayData);
-      
-      // Create employee-birthday map
-      const map = {};
-      birthdayData.forEach(b => {
-        map[b.employeeId] = b;
-      });
-      setEmployeeBirthdayMap(map);
-      
-      // Calculate upcoming birthdays
-      const upcoming = getUpcomingBirthdays(birthdayData, 7);
-      setUpcomingBirthdays(upcoming);
-      
-      console.log("Birthdays loaded:", birthdayData.length, "records");
-      console.log("Employee map:", Object.keys(map).length, "employees");
-      console.log("Upcoming birthdays:", upcoming.length);
-      
-    } catch (err) {
-      console.error("Error loading birthdays:", err.response?.data || err.message || err);
-      setBirthdays([]);
-      setEmployeeBirthdayMap({});
-      setUpcomingBirthdays([]);
-      addAlert("Error loading birthdays. Please check console for details.");
-    } finally {
-      setBirthdaysLoading(false);
+      // Primary endpoint
+      res = await api.get("/birthday");
+
+    } catch {
+      // 🔁 Fallback endpoint (IMPORTANT)
+      res = await api.get("/birthday");
     }
-  }, []);
+
+    const raw = res.data || [];
+
+    // ✅ Normalize backend response (FINAL)
+const normalized = raw.map((b) => {
+  let day;
+  let month;
+  let year;
+
+  // ✅ Case 1: Backend already sends parsed fields
+  if (b.day && b.month && b.year) {
+    day = b.day;
+    month = BIRTHDAY_MONTHS[b.month - 1]; // 🔴 FIX: number → name
+    year = b.year;
+  }
+
+  // ✅ Case 2: Backend sends only dob (dd-mm-yyyy)
+  else if (b.dob && typeof b.dob === "string") {
+    const [dd, mm, yyyy] = b.dob.split("-").map(Number);
+    day = dd;
+    month = BIRTHDAY_MONTHS[mm - 1];
+    year = yyyy;
+  }
+
+  return {
+    ...b,
+    day,
+    month,
+    year,
+
+    // ✅ employee mapping (VERY IMPORTANT)
+    employeeId: b.employee?._id,
+    employeeName: b.employee?.fullName,
+    employeeEmail: b.employee?.email,
+    employeeCode: b.employee?.employeeId
+  };
+});
+
+
+    setBirthdays(normalized);
+
+    // Employee → birthday map
+    const map = {};
+    normalized.forEach((b) => {
+      map[b.employeeId] = b;
+    });
+    setEmployeeBirthdayMap(map);
+
+    // Upcoming birthdays (next 7 days)
+    setUpcomingBirthdays(getUpcomingBirthdays(normalized, 7));
+
+  } catch (err) {
+    console.error("❌ Birthday load failed:", err?.response?.data || err);
+    setBirthdays([]);
+    setEmployeeBirthdayMap({});
+    setUpcomingBirthdays([]);
+    addAlert("Error loading birthdays. Backend endpoint mismatch.");
+  } finally {
+    setBirthdaysLoading(false);
+  }
+}, []);
+
 
   const handleCreateBirthday = async (e) => {
     e.preventDefault();
@@ -724,7 +761,7 @@ export default function ManagerDashboard() {
 
       try {
         // Try POST to /birthdays first (plural endpoint)
-        await api.post("/birthdays", {
+        await api.post("/birthday", {
           employeeId: birthdayForm.employeeId,
           dob: dob,
           note: birthdayForm.note || `Birthday of ${selectedEmp.fullName}`
@@ -768,7 +805,7 @@ export default function ManagerDashboard() {
     if (!window.confirm("Delete this birthday record?")) return;
     
     try {
-      await api.delete(`/birthdays/${id}`);
+      await api.delete(`/birthday/${id}`);
       addAlert("Birthday record deleted");
       
       // Reload birthdays immediately
@@ -782,7 +819,7 @@ export default function ManagerDashboard() {
 
   const sendBirthdayWish = async (birthdayId) => {
     try {
-      await api.post(`/birthdays/${birthdayId}/wish`, {
+      await api.post(`/birthday/${birthdayId}/wish`, {
         wishedBy: user.fullName,
         wishedByEmail: user.email
       });
@@ -808,7 +845,7 @@ export default function ManagerDashboard() {
     
     for (const bd of todaysBirthdays) {
       try {
-        await api.post(`/birthdays/${bd._id}/wish`, {
+        await api.post(`/birthday/${bd._id}/wish`, {
           wishedBy: user.fullName,
           wishedByEmail: user.email,
           auto: true
