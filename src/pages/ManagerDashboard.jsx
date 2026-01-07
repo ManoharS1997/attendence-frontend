@@ -521,6 +521,7 @@ export default function ManagerDashboard() {
     year: new Date().getFullYear(),
     note: ""
   });
+  
   const [filterMonth, setFilterMonth] = useState("");
   const [upcomingBirthdays, setUpcomingBirthdays] = useState([]);
   const [employeeBirthdayMap, setEmployeeBirthdayMap] = useState({});
@@ -657,47 +658,40 @@ export default function ManagerDashboard() {
   }, []);
 
   const handleCreateBirthday = async (e) => {
-    e.preventDefault();
-    
+  e.preventDefault();
+
+  try {
     if (!birthdayForm.employeeId || !birthdayForm.month || !birthdayForm.day) {
-      addAlert("Please select employee, month, and day");
+      addAlert("Please select employee, month and day");
       return;
     }
-    
-    try {
-      // Check if employee already has birthday
-      const existing = birthdays.find(b => b.employeeId === birthdayForm.employeeId);
-      
-      if (existing) {
-        if (!window.confirm("This employee already has a birthday record. Update it?")) {
-          return;
-        }
-        // Update existing
-        await api.put(`/birthdays/${existing._id}`, birthdayForm);
-        addAlert("Birthday updated successfully!");
-      } else {
-        // Create new
-        await api.post("/birthdays", birthdayForm);
-        addAlert("Birthday recorded successfully!");
-      }
-      
-      // Reset form
-      setBirthdayForm({
-        employeeId: "",
-        month: "",
-        day: "",
-        year: new Date().getFullYear(),
-        note: ""
-      });
-      
-      // Reload birthdays
-      await loadBirthdays();
-      
-    } catch (err) {
-      console.error("Error saving birthday", err);
-      addAlert(err.response?.data?.message || "Error saving birthday");
-    }
-  };
+
+    const dob = `${String(birthdayForm.day).padStart(2, "0")}-${String(
+      BIRTHDAY_MONTHS.indexOf(birthdayForm.month) + 1
+    ).padStart(2, "0")}-${birthdayForm.year || "1990"}`;
+
+    await api.post("/birthday", {
+      employeeId: birthdayForm.employeeId,
+      dob
+    });
+
+    addAlert("🎉 Birthday saved successfully!");
+
+    setBirthdayForm({
+      employeeId: "",
+      month: "",
+      day: "",
+      year: "",
+      note: ""
+    });
+
+    await loadBirthdays();
+  } catch (err) {
+    console.error("Birthday save error:", err?.response?.data || err);
+    addAlert(err.response?.data?.message || "Error saving birthday");
+  }
+};
+
 
   const handleDeleteBirthday = async (id) => {
     if (!window.confirm("Delete this birthday record?")) return;
