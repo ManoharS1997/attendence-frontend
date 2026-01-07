@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import ManagerPayslip from "./ManagerPayslip";
 import { useAuth } from "../context/AuthContext";
 import api from "../utils/api";
@@ -521,10 +521,24 @@ export default function ManagerDashboard() {
     year: new Date().getFullYear(),
     note: ""
   });
-  
   const [filterMonth, setFilterMonth] = useState("");
   const [upcomingBirthdays, setUpcomingBirthdays] = useState([]);
   const [employeeBirthdayMap, setEmployeeBirthdayMap] = useState({});
+  const [birthdaysLoading, setBirthdaysLoading] = useState(false);
+  const [creatingBirthday, setCreatingBirthday] = useState(false);
+
+  // Calculate employees without birthdays using useMemo
+  const employeesWithoutBirthdays = useMemo(() => {
+    return employees.filter(emp => 
+      !employeeBirthdayMap[emp._id] && emp.isActive
+    );
+  }, [employees, employeeBirthdayMap]);
+
+  // Calculate filtered birthdays using useMemo
+  const filteredBirthdays = useMemo(() => {
+    if (!filterMonth) return birthdays;
+    return birthdays.filter(b => b.month === filterMonth);
+  }, [birthdays, filterMonth]);
 
   // -------- LOGOUT HANDLER ----------
   const handleLogout = async () => {
@@ -637,61 +651,118 @@ export default function ManagerDashboard() {
   // -------- BIRTHDAY FUNCTIONS ----------
   const loadBirthdays = useCallback(async () => {
     try {
-      const res = await api.get("/birthdays");
-      setBirthdays(res.data || []);
+      setBirthdaysLoading(true);
+      console.log("Loading birthdays from API...");
       
-      // Create employee-birthday map for quick lookup
+      const res = await api.get("/birthdays");
+      const birthdayData = res.data || [];
+      
+      console.log("Birthdays API response:", birthdayData);
+      
+      // Update all birthday-related states in one go
+      setBirthdays(birthdayData);
+      
+      // Create employee-birthday map
       const map = {};
-      res.data.forEach(b => {
+      birthdayData.forEach(b => {
         map[b.employeeId] = b;
       });
       setEmployeeBirthdayMap(map);
       
       // Calculate upcoming birthdays
-      const upcoming = getUpcomingBirthdays(res.data, 7);
+      const upcoming = getUpcomingBirthdays(birthdayData, 7);
       setUpcomingBirthdays(upcoming);
+      
+      console.log("Birthdays loaded:", birthdayData.length, "records");
+      console.log("Employee map:", Object.keys(map).length, "employees");
+      console.log("Upcoming birthdays:", upcoming.length);
+      
     } catch (err) {
-      console.error("Error loading birthdays", err);
+      console.error("Error loading birthdays:", err.response?.data || err.message || err);
       setBirthdays([]);
+      setEmployeeBirthdayMap({});
       setUpcomingBirthdays([]);
+      addAlert("Error loading birthdays. Please check console for details.");
+    } finally {
+      setBirthdaysLoading(false);
     }
   }, []);
 
   const handleCreateBirthday = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  try {
-    if (!birthdayForm.employeeId || !birthdayForm.month || !birthdayForm.day) {
-      addAlert("Please select employee, month and day");
-      return;
+    try {
+      if (!birthdayForm.employeeId || !birthdayForm.month || !birthdayForm.day) {
+        addAlert("Please select employee, month and day");
+        return;
+      }
+
+      // Get the selected employee info for better feedback
+      const selectedEmp = employees.find(emp => emp._id === birthdayForm.employeeId);
+      if (!selectedEmp) {
+        addAlert("Selected employee not found");
+        return;
+      }
+
+      // Check if employee already has a birthday record
+      if (employeeBirthdayMap[birthdayForm.employeeId]) {
+        addAlert("This employee already has a birthday record. Please update the existing record instead.");
+        return;
+      }
+
+      setCreatingBirthday(true);
+      
+      // Format the date properly
+      const monthIndex = BIRTHDAY_MONTHS.indexOf(birthdayForm.month) + 1;
+      const dob = `${String(birthdayForm.day).padStart(2, "0")}-${String(monthIndex).padStart(2, "0")}-${birthdayForm.year || "1990"}`;
+
+      console.log("Creating birthday with data:", {
+        employeeId: birthdayForm.employeeId,
+        dob: dob,
+        note: birthdayForm.note || `Birthday of ${selectedEmp.fullName}`
+      });
+
+      try {
+        // Try POST to /birthdays first (plural endpoint)
+        await api.post("/birthdays", {
+          employeeId: birthdayForm.employeeId,
+          dob: dob,
+          note: birthdayForm.note || `Birthday of ${selectedEmp.fullName}`
+        });
+      } catch (postErr) {
+        console.log("POST /birthdays failed, trying /birthday:", postErr);
+        // Try POST to /birthday (singular endpoint) as fallback
+        await api.post("/birthday", {
+          employeeId: birthdayForm.employeeId,
+          dob: dob,
+          note: birthdayForm.note || `Birthday of ${selectedEmp.fullName}`
+        });
+      }
+
+      addAlert(`🎉 Birthday for ${selectedEmp.fullName} saved successfully!`);
+
+      // Reset form
+      setBirthdayForm({
+        employeeId: "",
+        month: "",
+        day: "",
+        year: new Date().getFullYear(),
+        note: ""
+      });
+
+      // Reload birthdays immediately
+      await loadBirthdays();
+      
+      // Also reload employees to update the "without birthdays" list
+      await loadEmployees();
+
+    } catch (err) {
+      console.error("Birthday save error:", err?.response?.data || err.message || err);
+      addAlert(err.response?.data?.message || "Error saving birthday. Please check console for details.");
+    } finally {
+      setCreatingBirthday(false);
     }
-
-    const dob = `${String(birthdayForm.day).padStart(2, "0")}-${String(
-      BIRTHDAY_MONTHS.indexOf(birthdayForm.month) + 1
-    ).padStart(2, "0")}-${birthdayForm.year || "1990"}`;
-
-    await api.post("/birthday", {
-      employeeId: birthdayForm.employeeId,
-      dob
-    });
-
-    addAlert("🎉 Birthday saved successfully!");
-
-    setBirthdayForm({
-      employeeId: "",
-      month: "",
-      day: "",
-      year: "",
-      note: ""
-    });
-
-    await loadBirthdays();
-  } catch (err) {
-    console.error("Birthday save error:", err?.response?.data || err);
-    addAlert(err.response?.data?.message || "Error saving birthday");
-  }
-};
-
+  };
 
   const handleDeleteBirthday = async (id) => {
     if (!window.confirm("Delete this birthday record?")) return;
@@ -699,7 +770,10 @@ export default function ManagerDashboard() {
     try {
       await api.delete(`/birthdays/${id}`);
       addAlert("Birthday record deleted");
+      
+      // Reload birthdays immediately
       await loadBirthdays();
+      await loadEmployees();
     } catch (err) {
       console.error("Error deleting birthday", err);
       addAlert("Error deleting birthday");
@@ -713,6 +787,8 @@ export default function ManagerDashboard() {
         wishedByEmail: user.email
       });
       addAlert("Birthday wish sent to employee!");
+      
+      // Reload birthdays to update wish status
       await loadBirthdays();
     } catch (err) {
       console.error("Error sending birthday wish", err);
@@ -746,7 +822,23 @@ export default function ManagerDashboard() {
     if (todaysBirthdays.length > 0) {
       await loadBirthdays();
     }
-  }, [birthdays, user]);
+  }, [birthdays, user, loadBirthdays]);
+
+  // Debug useEffect to monitor state changes
+  useEffect(() => {
+    console.log("=== BIRTHDAY STATE DEBUG ===");
+    console.log("Birthdays:", birthdays.length, "records");
+    console.log("Birthdays data:", birthdays);
+    console.log("Employee Birthday Map:", Object.keys(employeeBirthdayMap).length, "employees");
+    console.log("Employees without birthdays:", employeesWithoutBirthdays.length);
+    console.log("Filtered birthdays:", filteredBirthdays.length);
+    console.log("Upcoming birthdays:", upcomingBirthdays.length);
+  }, [birthdays, employeeBirthdayMap, employeesWithoutBirthdays, filteredBirthdays, upcomingBirthdays]);
+
+  // Monitor birthday form state
+  useEffect(() => {
+    console.log("Birthday form state:", birthdayForm);
+  }, [birthdayForm]);
 
   useEffect(() => {
     const id = setTimeout(() => {
@@ -1361,15 +1453,13 @@ export default function ManagerDashboard() {
     ).values()
   ).filter(Boolean);
 
-  // -------- BIRTHDAY FILTERING ----------
-  const filteredBirthdays = filterMonth
-    ? birthdays.filter(b => b.month === filterMonth)
-    : birthdays;
-
-  // Get employees without birthdays
-  const employeesWithoutBirthdays = employees.filter(emp => 
-    !employeeBirthdayMap[emp._id] && emp.isActive
-  );
+  // -------- BIRTHDAY STATISTICS ----------
+  const birthdayStats = {
+    totalRecords: birthdays.length,
+    withoutRecords: employeesWithoutBirthdays.length,
+    wishedThisYear: birthdays.filter(b => b.wished).length,
+    upcoming7Days: upcomingBirthdays.length
+  };
 
   return (
     <div className="page">
@@ -2098,7 +2188,6 @@ export default function ManagerDashboard() {
                     
                     {/* DATE FIELDS */}
                    {/* START DATE */}
-{/* START DATE */}
 <label>
   Start Date
   <input
@@ -2141,8 +2230,7 @@ export default function ManagerDashboard() {
       // Calculate project details from backend
       const calculation = await calculateProjectDates(
         newStartDate,
-        projectForm.endDate,
-        addAlert
+        projectForm.endDate
       );
       
       setProjectForm({
@@ -2202,8 +2290,7 @@ export default function ManagerDashboard() {
       // Calculate project details from backend
       const calculation = await calculateProjectDates(
         projectForm.startDate,
-        newEndDate,
-        addAlert
+        newEndDate
       );
       
       setProjectForm({
@@ -3612,6 +3699,7 @@ let color = "#fff";
                 {/* Birthday Recording Form */}
                 <div className="card">
                   <h2>Record Employee Birthday</h2>
+                  {birthdaysLoading && <p className="note">Loading birthdays...</p>}
                   <form className="form-grid" onSubmit={handleCreateBirthday}>
                     <label>
                       Select Employee
@@ -3626,6 +3714,7 @@ let color = "#fff";
                             note: selectedEmp ? `Birthday of ${selectedEmp.fullName}` : ""
                           });
                         }}
+                        disabled={creatingBirthday}
                       >
                         <option value="">-- Select Employee --</option>
                         {employeesWithoutBirthdays.map((emp) => (
@@ -3635,7 +3724,7 @@ let color = "#fff";
                         ))}
                       </select>
                       <small style={{ fontSize: 11, color: '#aaa', display: 'block', marginTop: 4 }}>
-                        Only shows employees without birthday records
+                        Only shows employees without birthday records ({employeesWithoutBirthdays.length} available)
                       </small>
                     </label>
 
@@ -3647,6 +3736,7 @@ let color = "#fff";
                           ...birthdayForm,
                           month: e.target.value
                         })}
+                        disabled={creatingBirthday}
                       >
                         <option value="">-- Select Month --</option>
                         {BIRTHDAY_MONTHS.map((monthName) => (
@@ -3665,6 +3755,7 @@ let color = "#fff";
                           ...birthdayForm,
                           day: Number(e.target.value)
                         })}
+                        disabled={creatingBirthday}
                       >
                         <option value="">-- Select Day --</option>
                         {BIRTHDAY_DAYS.map((day) => (
@@ -3687,6 +3778,7 @@ let color = "#fff";
                         min="1900"
                         max={new Date().getFullYear()}
                         placeholder="e.g., 1990"
+                        disabled={creatingBirthday}
                       />
                     </label>
 
@@ -3700,18 +3792,26 @@ let color = "#fff";
                           note: e.target.value
                         })}
                         placeholder="Add any special notes about birthday..."
+                        disabled={creatingBirthday}
                       />
                     </label>
 
                     <div className="full-row">
-                      <button type="submit" className="primary-btn">
-                        Save Birthday
+                      <button 
+                        type="submit" 
+                        className="primary-btn"
+                        disabled={creatingBirthday || !birthdayForm.employeeId || !birthdayForm.month || !birthdayForm.day}
+                      >
+                        {creatingBirthday ? "Saving..." : "Save Birthday"}
                       </button>
                     </div>
                   </form>
+                  <p className="note">
+                    <strong>Debug Info:</strong> Check browser console (F12) for detailed state updates and API responses.
+                  </p>
                 </div>
 
-                {/* Upcoming Birthdays (3 days ahead) */}
+                {/* Upcoming Birthdays (7 days ahead) */}
                 <div className="card">
                   <div className="card-header-row">
                     <h2>Upcoming Birthdays (Next 7 Days)</h2>
@@ -3719,17 +3819,18 @@ let color = "#fff";
                       type="button"
                       className="outline-btn"
                       onClick={() => {
-                        
-                        const upcoming = getUpcomingBirthdays(birthdays, 7);
-                        setUpcomingBirthdays(upcoming);
-                        addAlert(`Showing birthdays in next 7 days (${upcoming.length} found)`);
+                        loadBirthdays();
+                        addAlert("Upcoming birthdays refreshed");
                       }}
+                      disabled={birthdaysLoading}
                     >
-                      Refresh
+                      {birthdaysLoading ? "Refreshing..." : "Refresh"}
                     </button>
                   </div>
 
-                  {upcomingBirthdays.length > 0 ? (
+                  {birthdaysLoading ? (
+                    <p className="note">Loading upcoming birthdays...</p>
+                  ) : upcomingBirthdays.length > 0 ? (
                     <div className="table-wrapper small-table">
                       <table>
                         <thead>
@@ -3822,12 +3923,13 @@ let color = "#fff";
                 {/* All Birthdays List */}
                 <div className="card">
                   <div className="card-header-row">
-                    <h2>All Employee Birthdays</h2>
+                    <h2>All Employee Birthdays ({birthdays.length} records)</h2>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                       <select
                         value={filterMonth}
                         onChange={(e) => setFilterMonth(e.target.value)}
                         className="month-selector"
+                        disabled={birthdaysLoading}
                       >
                         <option value="">All Months</option>
                         {BIRTHDAY_MONTHS.map((monthName) => (
@@ -3836,112 +3938,158 @@ let color = "#fff";
                           </option>
                         ))}
                       </select>
+                      <button
+                        type="button"
+                        className="outline-btn"
+                        onClick={() => {
+                          loadBirthdays();
+                          addAlert("Birthday list refreshed");
+                        }}
+                        style={{ fontSize: 12 }}
+                        disabled={birthdaysLoading}
+                      >
+                        {birthdaysLoading ? "Refreshing..." : "Refresh"}
+                      </button>
                     </div>
                   </div>
 
-                  <div className="table-wrapper small-table">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>S.No</th>
-                          <th>Employee</th>
-                          <th>Employee ID</th>
-                          <th>Email</th>
-                          <th>Birthday</th>
-                          <th>Year</th>
-                          <th>Wish Status</th>
-                          <th>Last Wished</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredBirthdays.map((b, index) => {
-                          const emp = employees.find(e => e._id === b.employeeId);
-                          return (
-                            <tr key={b._id}>
-                              <td>{index + 1}</td>
-                              <td>{emp?.fullName || "Unknown"}</td>
-                              <td>{emp?.employeeId || "N/A"}</td>
-                              <td>{emp?.email || "N/A"}</td>
-                              <td>
-                                <strong>{b.day} {b.month}</strong>
-                              </td>
-                              <td>{b.year || "N/A"}</td>
-                              <td>
-                                {b.wished ? (
-                                  <span className="status-badge success">Wished</span>
-                                ) : (
-                                  <span className="status-badge warning">Pending</span>
-                                )}
-                              </td>
-                              <td>
-                                {b.wishedAt ? (
-                                  new Date(b.wishedAt).toLocaleDateString()
-                                ) : (
-                                  "Never"
-                                )}
-                              </td>
-                              <td>
-                                <button
-                                  className="link-btn"
-                                  type="button"
-                                  onClick={() => sendBirthdayWish(b._id)}
-                                >
-                                  {b.wished ? "Resend" : "Send"}
-                                </button>
-                                {" "}
-                                <button
-                                  className="link-btn danger"
-                                  type="button"
-                                  onClick={() => handleDeleteBirthday(b._id)}
-                                >
-                                  Delete
-                                </button>
-                              </td>
+                  {birthdaysLoading ? (
+                    <p className="note">Loading all birthdays...</p>
+                  ) : (
+                    <>
+                      <div className="table-wrapper small-table">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>S.No</th>
+                              <th>Employee</th>
+                              <th>Employee ID</th>
+                              <th>Email</th>
+                              <th>Birthday</th>
+                              <th>Year</th>
+                              <th>Wish Status</th>
+                              <th>Last Wished</th>
+                              <th>Actions</th>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                    {filteredBirthdays.length === 0 && (
-                      <p className="empty">
-                        {filterMonth ? `No birthdays in ${filterMonth}` : "No birthdays recorded yet"}
+                          </thead>
+                          <tbody>
+                            {filteredBirthdays.map((b, index) => {
+                              const emp = employees.find(e => e._id === b.employeeId);
+                              return (
+                                <tr key={b._id}>
+                                  <td>{index + 1}</td>
+                                  <td>{emp?.fullName || "Unknown"}</td>
+                                  <td>{emp?.employeeId || "N/A"}</td>
+                                  <td>{emp?.email || "N/A"}</td>
+                                  <td>
+                                    <strong>{b.day} {b.month}</strong>
+                                  </td>
+                                  <td>{b.year || "N/A"}</td>
+                                  <td>
+                                    {b.wished ? (
+                                      <span className="status-badge success">Wished</span>
+                                    ) : (
+                                      <span className="status-badge warning">Pending</span>
+                                    )}
+                                  </td>
+                                  <td>
+                                    {b.wishedAt ? (
+                                      new Date(b.wishedAt).toLocaleDateString()
+                                    ) : (
+                                      "Never"
+                                    )}
+                                  </td>
+                                  <td>
+                                    <button
+                                      className="link-btn"
+                                      type="button"
+                                      onClick={() => sendBirthdayWish(b._id)}
+                                    >
+                                      {b.wished ? "Resend" : "Send"}
+                                    </button>
+                                    {" "}
+                                    <button
+                                      className="link-btn danger"
+                                      type="button"
+                                      onClick={() => handleDeleteBirthday(b._id)}
+                                    >
+                                      Delete
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                        {filteredBirthdays.length === 0 && (
+                          <p className="empty">
+                            {filterMonth ? `No birthdays in ${filterMonth}` : "No birthdays recorded yet"}
+                          </p>
+                        )}
+                      </div>
+                      <p className="note">
+                        Showing {filteredBirthdays.length} of {birthdays.length} total birthday records.
+                        {filterMonth && ` Filtered by month: ${filterMonth}`}
                       </p>
-                    )}
-                  </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Birthday Statistics */}
                 <div className="card">
-                  <h2>Birthday Statistics</h2>
-                  <div style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(4, 1fr)",
-                    gap: 12,
-                    fontSize: 13
-                  }}>
-                    <div className="mini-kpi">
-                      <strong>Total Records</strong>
-                      <div>{birthdays.length}</div>
-                    </div>
-                    <div className="mini-kpi">
-                      <strong>Without Records</strong>
-                      <div>{employeesWithoutBirthdays.length}</div>
-                    </div>
-                    <div className="mini-kpi">
-                      <strong>Wished This Year</strong>
-                      <div>{birthdays.filter(b => b.wished).length}</div>
-                    </div>
-                    <div className="mini-kpi">
-                      <strong>Upcoming (7 days)</strong>
-                      <div>{upcomingBirthdays.length}</div>
-                    </div>
+                  <div className="card-header-row">
+                    <h2>Birthday Statistics</h2>
+                    <button
+                      type="button"
+                      className="outline-btn"
+                      onClick={() => {
+                        loadBirthdays();
+                        loadEmployees();
+                        addAlert("Birthday statistics refreshed");
+                      }}
+                      style={{ fontSize: 12 }}
+                      disabled={birthdaysLoading}
+                    >
+                      {birthdaysLoading ? "Refreshing..." : "Refresh Stats"}
+                    </button>
                   </div>
                   
-                  <p className="note" style={{ marginTop: 8 }}>
-                    <strong>Auto-Wish Feature:</strong> The system automatically sends birthday wishes 
-                    to employees on their birthday date. Manager will receive notifications 3 days in advance.
-                  </p>
+                  {birthdaysLoading ? (
+                    <p className="note">Loading statistics...</p>
+                  ) : (
+                    <>
+                      <div style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(4, 1fr)",
+                        gap: 12,
+                        fontSize: 13
+                      }}>
+                        <div className="mini-kpi">
+                          <strong>Total Records</strong>
+                          <div>{birthdayStats.totalRecords}</div>
+                        </div>
+                        <div className="mini-kpi">
+                          <strong>Without Records</strong>
+                          <div>{birthdayStats.withoutRecords}</div>
+                        </div>
+                        <div className="mini-kpi">
+                          <strong>Wished This Year</strong>
+                          <div>{birthdayStats.wishedThisYear}</div>
+                        </div>
+                        <div className="mini-kpi">
+                          <strong>Upcoming (7 days)</strong>
+                          <div>{birthdayStats.upcoming7Days}</div>
+                        </div>
+                      </div>
+                      
+                      <p className="note" style={{ marginTop: 8 }}>
+                        <strong>Auto-Wish Feature:</strong> The system automatically sends birthday wishes 
+                        to employees on their birthday date. Manager will receive notifications 3 days in advance.
+                        <br />
+                        <strong>Debug Info:</strong> Check browser console (F12) for detailed state updates and API responses.
+                      </p>
+                    </>
+                  )}
                 </div>
               </section>
             </main>
