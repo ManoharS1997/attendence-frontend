@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
 import api from "../utils/api";
 import ChangePasswordCard from "../components/ChangePasswordCard";
@@ -64,32 +64,7 @@ const monthNames = [
   "December"
 ];
 
-// Get current and previous years for dropdown
-const getYearOptions = () => {
-  const currentYear = new Date().getFullYear();
-  const years = [];
-  for (let i = currentYear; i >= currentYear - 5; i--) {
-    years.push(i);
-  }
-  return years;
-};
-
-const getCurrentMonth = () => {
-  const now = new Date();
-  return {
-    month: String(now.getMonth() + 1).padStart(2, "0"),
-    year: String(now.getFullYear())
-  };
-};
-
-const formatToday = () => {
-  const d = new Date();
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  return `${dd}-${mm}-${yyyy}`;
-};
-
+// Helper functions - moved outside component
 const diffHours = (start, end) => {
   if (!start || !end) return 0;
   const [sh, sm] = start.split(":").map(Number);
@@ -233,8 +208,92 @@ const computeWorkingDaysExcludingHolidays = (startStr, endStr) => {
   return count;
 };
 
+// Get current and previous years for dropdown
+const getYearOptions = () => {
+  const currentYear = new Date().getFullYear();
+  const years = [];
+  for (let i = currentYear; i >= currentYear - 5; i--) {
+    years.push(i);
+  }
+  return years;
+};
+
+const getCurrentMonth = () => {
+  const now = new Date();
+  return {
+    month: String(now.getMonth() + 1).padStart(2, "0"),
+    year: String(now.getFullYear())
+  };
+};
+
+const formatToday = () => {
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+};
+
+// Birthday helper functions
+// 🎂 Professional Management Messages
+const getManagementBirthdayMessage = (name) => {
+  const messages = [
+    `Dear ${name}, on behalf of NOWIT Services management, we extend our heartfelt birthday greetings. Your dedication and professional excellence continue to drive our collective success. Wishing you continued growth and achievement in the coming year.`,
+    `To ${name}: The management team extends warm birthday wishes. Your commitment to excellence and consistent contributions are highly valued. May this year bring you new opportunities and continued professional fulfillment.`,
+    `Happy Birthday, ${name}! NSW IT Services management recognizes your valuable contributions and wishes you a year of continued success, growth, and meaningful achievements in your professional journey.`,
+    `Dear ${name}, on this special day, the management extends sincere birthday wishes. Your professionalism and dedication inspire your colleagues. Wishing you a rewarding year ahead filled with accomplishments.`,
+    `To our valued team member ${name}: Management wishes you a happy birthday. Your work ethic and commitment to quality exemplify our company values. May the coming year bring you both professional success and personal joy.`,
+    `Happy Birthday, ${name}! The leadership team extends best wishes for your special day. Your contributions are instrumental to our success, and we look forward to celebrating many more achievements with you.`,
+    `Dear ${name}, on your birthday, we acknowledge your outstanding professionalism and dedication. NSW IT Services management wishes you continued success and fulfillment in all your endeavors this year.`,
+    `To ${name}: Wishing you a wonderful birthday from the entire management team. Your consistent performance and positive attitude are greatly appreciated. May this year bring you new challenges and triumphs.`
+  ];
+  const today = new Date();
+  const messageIndex = (today.getDate() + today.getMonth()) % messages.length;
+  return messages[messageIndex];
+};
+
+// 🤝 Professional Team Wishes
+const getTeamBirthdayWish = () => {
+  const wishes = [
+    "Your colleagues join in celebrating your special day and extend warm wishes for continued success in your professional journey.",
+    "The entire team sends birthday greetings and looks forward to achieving more milestones together in the coming year.",
+    "On behalf of your teammates, we wish you a productive year ahead filled with collaborative successes and shared achievements.",
+    "Your fellow team members extend birthday wishes and appreciation for your valuable contributions to our collective goals.",
+    "The team celebrates your special day and wishes you a year of professional growth and collaborative accomplishments.",
+    "Colleagues across departments join in wishing you a happy birthday and continued success in your professional endeavors.",
+    "Your teammates extend warm birthday wishes and look forward to another year of productive collaboration and shared successes.",
+    "The entire NSW IT Services team celebrates your birthday and wishes you a rewarding year of professional development."
+  ];
+  const today = new Date();
+  const wishIndex = (today.getDate() + today.getDay()) % wishes.length;
+  return wishes[wishIndex];
+};
+
+// Main Component
 export default function EmployeeDashboard() {
-  // 🔹 Today info & tagline (Top-right header)
+  // State declarations
+  const { user, logout } = useAuth();
+
+  const TAGLINES = useMemo(
+    () => [
+      "Consistency builds professional excellence.",
+      "Every workday is a step toward mastery.",
+      "Discipline today creates success tomorrow.",
+      "Quality work speaks louder than words.",
+      "Focus, commitment, and growth define professionals.",
+      "Building careers. Strengthening organizations.",
+      "Professionalism, trust, and excellence.",
+      "Committed to people. Focused on results.",
+      "Your success is our business.",
+      "Empowering professionals, transforming futures"
+    ],
+    []
+  );
+
+  const getTaglineOfTheDay = useCallback(() => {
+    return TAGLINES[new Date().getDate() % TAGLINES.length];
+  }, [TAGLINES]);
+
   const getTodayInfo = () => {
     const now = new Date();
     return {
@@ -245,43 +304,17 @@ export default function EmployeeDashboard() {
     };
   };
 
-  // 🔹 Taglines array
- // 🔹 Taglines array (memoized)
-const TAGLINES = React.useMemo(
-  () => [
-    "Consistency builds professional excellence.",
-    "Every workday is a step toward mastery.",
-    "Discipline today creates success tomorrow.",
-    "Quality work speaks louder than words.",
-    "Focus, commitment, and growth define professionals.",
-    "Building careers. Strengthening organizations.",
-    "Professionalism, trust, and excellence.",
-    "Committed to people. Focused on results.",
-    "Your success is our business.",
-    "Empowering professionals, transforming futures"
-  ],
-  []
-);
-
-const getTaglineOfTheDay = useCallback(() => {
-  return TAGLINES[new Date().getDate() % TAGLINES.length];
-}, [TAGLINES]);
-
-
- const [todayInfo, setTodayInfo] = useState(getTodayInfo());
-const [tagline, setTagline] = useState(getTaglineOfTheDay());
-const [compOffBalance, setCompOffBalance] = useState(0);
-const [yearOptions] = useState(getYearOptions());
-const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
-const [lastVisitedMonthYear, setLastVisitedMonthYear] = useState(null);
-const [showNextMonthPopup, setShowNextMonthPopup] = useState(false);
-// 🎂 Birthday notification state
-const [showBirthdayBanner, setShowBirthdayBanner] = useState(false);
-const [birthdayManagerMessage, setBirthdayManagerMessage] = useState("");
-
-
-const popupShownRef = useRef(false);
-
+  const [todayInfo, setTodayInfo] = useState(getTodayInfo());
+  const [tagline, setTagline] = useState(getTaglineOfTheDay());
+  const [compOffBalance, setCompOffBalance] = useState(0);
+  const [yearOptions] = useState(getYearOptions());
+  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
+  const [lastVisitedMonthYear, setLastVisitedMonthYear] = useState(null);
+  const [showNextMonthPopup, setShowNextMonthPopup] = useState(false);
+  const [showBirthdayBanner, setShowBirthdayBanner] = useState(false);
+  const [birthdayManagerMessage, setBirthdayManagerMessage] = useState("");
+  
+  const popupShownRef = useRef(false);
 
   // 🔹 Shared metrics state for all tabs
   const [sharedMetrics, setSharedMetrics] = useState({
@@ -302,8 +335,6 @@ const popupShownRef = useRef(false);
 
     return () => clearInterval(interval);
   }, [getTaglineOfTheDay]);
-
-  const { user, logout } = useAuth();
 
   const [activeTab, setActiveTab] = useState("timesheet");
   const [{ month, year }, setMonthYear] = useState(getCurrentMonth());
@@ -447,17 +478,32 @@ const popupShownRef = useRef(false);
   }, [loadAttendance, loadSummary, loadExtraHoursAndCompOff]);
 
   // 🎂 Check if today is employee birthday (on login)
+// 🎂 Check if today is employee birthday (on login)
 useEffect(() => {
   const checkBirthday = async () => {
     try {
+      const isTestMode = import.meta.env.VITE_BIRTHDAY_TEST_MODE === "true";
+
+      // 🔧 DEV MODE: force show for testing
+      if (isTestMode) {
+        setShowBirthdayBanner(true);
+        setBirthdayManagerMessage(
+          getManagementBirthdayMessage(user.fullName || "Team Member")
+        );
+        return;
+      }
+
+      // ✅ PRODUCTION MODE (real logic)
       const dismissed = sessionStorage.getItem("birthdayDismissed");
       if (dismissed) return;
 
       const res = await api.get("/birthday/today");
 
-      if (res.data?.show) {
+      if (res.data?.isBirthday) {
         setShowBirthdayBanner(true);
-        setBirthdayManagerMessage(res.data?.message || "");
+        setBirthdayManagerMessage(
+          getManagementBirthdayMessage(user.fullName || "Team Member")
+        );
       }
     } catch (err) {
       console.error("Birthday check failed", err);
@@ -465,7 +511,8 @@ useEffect(() => {
   };
 
   checkBirthday();
-}, []);
+}, [user.fullName]);
+
 
 
 
@@ -564,52 +611,52 @@ useEffect(() => {
   }, [attendance]); // This will update whenever attendance changes
 
   useEffect(() => {
-    if (!attendance || attendance.length === 0) return;
-    
-    const decided = attendance
-      .filter(
-        (a) =>
-          a.managerDecision &&
-          (a.managerDecision.status === "APPROVED" ||
-            a.managerDecision.status === "REJECTED")
-      )
-      .sort((a, b) => {
-        const ta =
-          a.managerDecision.decidedAt ||
-          a.updatedAt ||
-          `${a.date.split("-").reverse().join("-")}T00:00:00Z`;
-        const tb =
-          b.managerDecision.decidedAt ||
-          b.updatedAt ||
-          `${b.date.split("-").reverse().join("-")}T00:00:00Z`;
-        return new Date(tb) - new Date(ta);
-      });
+  if (!attendance || attendance.length === 0) return;
+  
+  const decided = attendance
+    .filter(
+      (a) =>
+        a.managerDecision &&
+        (a.managerDecision.status === "APPROVED" ||
+          a.managerDecision.status === "REJECTED")
+    )
+    .sort((a, b) => {
+      const ta =
+        a.managerDecision.decidedAt ||
+        a.updatedAt ||
+        `${a.date.split("-").reverse().join("-")}T00:00:00Z`;
+      const tb =
+        b.managerDecision.decidedAt ||
+        b.updatedAt ||
+        `${b.date.split("-").reverse().join("-")}T00:00:00Z`;
+      return new Date(tb) - new Date(ta);
+    });
 
-    if (decided.length === 0) return;
+  if (decided.length === 0) return;
 
-    const latest = decided[0];
-    if (!latest._id || latest._id === lastAlertAttendanceId) return;
+  const latest = decided[0];
+  if (!latest._id || latest._id === lastAlertAttendanceId) return;
 
-    const decision = latest.managerDecision.status;
-    const label =
-      latest.status === "COMPOFF"
-        ? "Comp-off request"
-        : latest.status || "attendance request";
+  const decision = latest.managerDecision.status;
+  const label =
+    latest.status === "COMPOFF"
+      ? "Comp-off request"
+      : latest.status || "attendance request";
 
-    const message =
-      decision === "APPROVED"
-        ? `Your ${label} for ${latest.date} was APPROVED by Manager.`
-        : `Your ${label} for ${latest.date} was REJECTED by Manager.`;
+  const message =
+    decision === "APPROVED"
+      ? `Your ${label} for ${latest.date} was APPROVED by Manager.`
+      : `Your ${label} for ${latest.date} was REJECTED by Manager.`;
 
-    const [_, mm, yyyy] = latest.date.split("-");
-    if (`${mm}-${yyyy}` === `${month}-${year}`) {
-      setTimeout(() => {
-        alert(message);
-      }, 100);
-    }
+  const [_, mm, yyyy] = latest.date.split("-");
+  if (`${mm}-${yyyy}` === `${month}-${year}`) {
+    setTimeout(() => {
+      alert(message);
+    }, 100);
+  }
 
-    setLastAlertAttendanceId(latest._id);
-  }, [attendance, lastAlertAttendanceId, month, year]);
+  setLastAlertAttendanceId(latest._id);
+}, [attendance, lastAlertAttendanceId, month, year]);
 
   const holidays = buildHolidayCalendar(month, year);
   const calendarWeeks = buildMonthMatrix(month, year);
@@ -1173,87 +1220,102 @@ useEffect(() => {
 
             {/* 🎉 Birthday Celebration Banner */}
 {showBirthdayBanner && (
-  <div
-    style={{
-      position: "fixed",
-      top: 20,
-      left: "50%",
-      transform: "translateX(-50%)",
-      zIndex: 9999,
-      padding: "20px 30px",
-      borderRadius: 20,
-      background:
-        "linear-gradient(135deg, #fff1b8, #ffe58f, #ffd666)",
-      boxShadow: "0 14px 34px rgba(255, 193, 7, 0.45)",
-      border: "2px solid #faad14",
-      animation: "birthdayPop 0.8s ease-out",
-      maxWidth: 520
-    }}
-  >
-    <div
-      style={{
-        fontSize: 21,
-        fontWeight: 800,
-        color: "#874d00",
-        textAlign: "center"
-      }}
-    >
-      🎂 Happy Birthday {user.fullName}! 🎉
+  <>
+    {/* 🎈 Floating Balloons Background */}
+    <div className="birthday-balloons">
+      {Array.from({ length: 14 }).map((_, i) => (
+        <div
+          key={i}
+          className="balloon"
+          style={{
+            left: `${Math.random() * 100}%`,
+            animationDuration: `${10 + Math.random() * 8}s`,
+            animationDelay: `${Math.random() * 4}s`,
+            background: [
+              "#ff7875",
+              "#ffd666",
+              "#95de64",
+              "#69c0ff",
+              "#b37feb"
+            ][i % 5]
+          }}
+        />
+      ))}
     </div>
 
+    {/* 🎉 Birthday Card */}
     <div
       style={{
-        marginTop: 6,
-        fontSize: 14,
-        color: "#613400",
-        textAlign: "center"
+        position: "fixed",
+        top: "18%",
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 9999,
+        maxWidth: 620,
+        width: "92%",
+        padding: "26px",
+        borderRadius: 24,
+        background:
+          "linear-gradient(135deg, #fffbe6, #fff1b8)",
+        border: "2px solid #faad14",
+        boxShadow: "0 20px 50px rgba(250,173,20,0.45)"
       }}
     >
-      Wishing you a successful year filled with growth, health, and happiness ✨
-    </div>
+      <div style={{ textAlign: "center", fontSize: 24, fontWeight: 800, color: "#874d00" }}>
+        🎉 Happy Birthday, {user.fullName}! 🎂
+      </div>
 
-    {/* 🎯 Manager Message */}
-    {birthdayManagerMessage && (
+      <div style={{ marginTop: 8, textAlign: "center", fontSize: 14, color: "#5c3a00" }}>
+        Wishing you good health, continued success, and new milestones in the year ahead.
+      </div>
+
+      {/* 💼 Management Message */}
       <div
         style={{
-          marginTop: 12,
-          padding: "10px 14px",
-          borderRadius: 12,
-          background: "rgba(255,255,255,0.7)",
+          marginTop: 16,
+          padding: "12px 16px",
+          borderRadius: 14,
+          background: "#ffffff",
           border: "1px dashed #faad14",
           fontSize: 13,
-          color: "#874d00",
-          textAlign: "center",
-          fontStyle: "italic"
+          color: "#5c3a00"
         }}
       >
-        💬 <strong>Message from Manager:</strong>
-        <br />
-        “{birthdayManagerMessage}”
+        💼 <strong>Message from Management</strong>
+        <div style={{ marginTop: 6, fontStyle: "italic" }}>
+          {birthdayManagerMessage ||
+            getManagementBirthdayMessage(user.fullName)}
+        </div>
       </div>
-    )}
 
-    <div style={{ textAlign: "center", marginTop: 14 }}>
-      <button
-        onClick={() => {
-  setShowBirthdayBanner(false);
-  sessionStorage.setItem("birthdayDismissed", "true");
-}}
-        style={{
-          border: "none",
-          background: "#faad14",
-          color: "#fff",
-          padding: "6px 18px",
-          borderRadius: 999,
-          cursor: "pointer",
-          fontWeight: 600
-        }}
-      >
-        Thank You 🎈
-      </button>
+      {/* 🤝 Team Wish */}
+      <div style={{ marginTop: 12, fontSize: 13, color: "#7a4a00", textAlign: "center" }}>
+        🎊 {getTeamBirthdayWish()}
+      </div>
+
+      <div style={{ textAlign: "center", marginTop: 18 }}>
+        <button
+          onClick={() => {
+            setShowBirthdayBanner(false);
+            sessionStorage.setItem("birthdayDismissed", "true");
+          }}
+          style={{
+            background: "#faad14",
+            color: "#fff",
+            border: "none",
+            padding: "8px 26px",
+            borderRadius: 999,
+            fontWeight: 700,
+            cursor: "pointer"
+          }}
+        >
+          Thank You 🎈
+        </button>
+      </div>
     </div>
-  </div>
+  </>
 )}
+
 
 
             {/* 🔹 Today Info – Professional Animated Badge */}

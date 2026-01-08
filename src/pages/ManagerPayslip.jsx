@@ -1099,20 +1099,7 @@ const _savePayslipToLocalStorage = (payslipData) => {
               }}>
                 For the month of {monthName} {selectedYear}
               </div>
-              <div style={{
-                position: 'absolute',
-                top: '0',
-                right: '0',
-                backgroundColor: selectedTemplate.colors.accent,
-                color: 'white',
-                padding: '3px 8px',
-                borderRadius: '3px',
-                fontSize: '10px',
-                fontWeight: '500'
-              }}>
-                <Layout size={12} />
-                {selectedTemplate.name}
-              </div>
+              
             </div>
 
             {/* Employee Info */}
@@ -1387,22 +1374,7 @@ const _savePayslipToLocalStorage = (payslipData) => {
               </div>
             </div>
 
-            {/* Signatures */}
-            <div style={{
-              marginTop: '15px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '10px 20px'
-            }}>
-              <div style={{ textAlign: 'center', width: '45%' }}>
-                <div style={{ borderTop: '0.8px solid #374151', width: '80%', margin: '15px auto 5px' }}></div>
-                <div style={{ fontSize: '9px', color: '#6b7280' }}>Employee Signature</div>
-              </div>
-              <div style={{ textAlign: 'center', width: '45%' }}>
-                <div style={{ borderTop: '0.8px solid #374151', width: '80%', margin: '15px auto 5px' }}></div>
-                <div style={{ fontSize: '9px', color: '#6b7280' }}>Authorized Signatory</div>
-              </div>
-            </div>
+           
 
             {/* Footer */}
             <div style={{
