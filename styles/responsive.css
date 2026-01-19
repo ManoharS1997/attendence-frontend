@@ -1,0 +1,79 @@
+/* src/styles/responsive.css */
+/* Responsive container */
+.responsive-container {
+  @apply w-full px-4 mx-auto;
+}
+
+@media (min-width: 640px) {
+  .responsive-container {
+    @apply px-6;
+  }
+}
+
+@media (min-width: 1024px) {
+  .responsive-container {
+    @apply px-8;
+  }
+}
+
+@media (min-width: 1280px) {
+  .responsive-container {
+    max-width: 1280px;
+  }
+}
+
+/* Grid utilities */
+.grid-responsive {
+  @apply grid grid-cols-1 gap-4;
+}
+
+@media (min-width: 640px) {
+  .grid-responsive {
+    @apply grid-cols-2;
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid-responsive {
+    @apply grid-cols-3;
+  }
+}
+
+@media (min-width: 1280px) {
+  .grid-responsive {
+    @apply grid-cols-4;
+  }
+}
+
+/* Flex utilities */
+.flex-responsive {
+  @apply flex flex-col;
+}
+
+@media (min-width: 768px) {
+  .flex-responsive {
+    @apply flex-row;
+  }
+}
+
+/* Table responsiveness */
+.table-responsive {
+  @apply overflow-x-auto -mx-4 sm:mx-0;
+}
+
+.table-responsive table {
+  @apply min-w-full;
+}
+
+/* Hide/show based on screen size */
+.mobile-only {
+  @apply block lg:hidden;
+}
+
+.desktop-only {
+  @apply hidden lg:block;
+}
+
+.tablet-only {
+  @apply hidden md:block lg:hidden;
+}

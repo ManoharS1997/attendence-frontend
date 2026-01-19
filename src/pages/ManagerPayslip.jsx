@@ -82,6 +82,10 @@ const ManagerPayslip = () => {
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  // 🔹 Added for employee details (NO existing code touched)
+const [jobTitle, setJobTitle] = useState("");
+const [employeeStatus, setEmployeeStatus] = useState("");
+
   const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState(PAYSLIP_TEMPLATES[0]);
@@ -250,6 +254,14 @@ setPayslipExists(exists);
   // Handle employee selection
   const handleEmployeeSelect = (employee) => {
     setSelectedEmployee(employee);
+
+      // 🔹 Auto-fill Job Title & Status (safe add)
+  setJobTitle(employee?.jobTitle || "");
+  setEmployeeStatus(employee?.employeeStatus || "");
+  // 🔹 Auto-fill Job Title & Status (safe add)
+  setJobTitle(employee?.jobTitle || "");
+  setEmployeeStatus(employee?.employeeStatus || "");
+
     
     if (employee?._id) {
       setBankDetails({
@@ -329,8 +341,9 @@ const handleGeneratePayslip = async () => {
       month: Number(selectedMonth),
       year: Number(selectedYear),
       workingDays,
-      designation: selectedEmployee.designation || "Employee",
-      employeeType: selectedEmployee.employeeType || "Permanent",
+      designation: jobTitle || selectedEmployee.designation || "",
+employeeType: employeeStatus || selectedEmployee.employeeType || "",
+
       templateId: selectedTemplate.id,
 
       overwrite: true,
@@ -362,7 +375,8 @@ const handleGeneratePayslip = async () => {
 
     const response = await generatePayslip(payslipData);
 
-    setExistingPayslip(response);
+    setExistingPayslip(response.payslip);
+
     setShowPreview(true);
 
     toast.success(
@@ -413,10 +427,11 @@ const _savePayslipToLocalStorage = (payslipData) => {
       return;
     }
 
-    if (!existingPayslip) {
-      toast.error("Please generate a payslip first before downloading");
-      return;
-    }
+   if (!existingPayslip || !existingPayslip._id) {
+  toast.error("Payslip ID missing. Please regenerate payslip.");
+  return;
+}
+
 
     setGeneratingPDF(true);
     
@@ -704,31 +719,35 @@ const _savePayslipToLocalStorage = (payslipData) => {
               <div class="template-badge">${selectedTemplate.name}</div>
             </div>
 
-            <!-- Employee Information -->
-            <div class="employee-info-table">
-              <table>
-                <tr>
-                  <th width="20%">Employee ID</th>
-                  <td width="30%">${selectedEmployee?.employeeId || 'EMP001'}</td>
-                  <th width="20%">Employee Name</th>
-                  <td width="30%">${selectedEmployee?.fullName || 'Employee'}</td>
-                </tr>
-                <tr>
-                  <th>Email</th>
-                  <td>${selectedEmployee?.email || 'N/A'}</td>
-                  <th>Designation</th>
-                  <td>${selectedEmployee?.designation || 'Employee'}</td>
-                </tr>
-                <tr>
-                  <th>Working Days</th>
-                  <td>${workingDays} days</td>
-                  <th>Employee Type</th>
-                  <td>${getEmployeeType(selectedEmployee?.employeeId)}</td>
-                </tr>
-              </table>
-            </div>
+           <!-- Employee Information -->
+<div class="employee-info-table">
+  <table>
+    <tr>
+      <th width="20%">Employee ID</th>
+      <td width="30%">${selectedEmployee?.employeeId || 'EMP001'}</td>
+      <th width="20%">Employee Name</th>
+      <td width="30%">${selectedEmployee?.fullName || 'Employee'}</td>
+    </tr>
 
-            <!-- Bank Information -->
+    <tr>
+      <th>Email</th>
+      <td>${selectedEmployee?.email || 'N/A'}</td>
+      <th>Designation</th>
+      <td>${existingPayslip?.designation || existingPayslip?.jobTitle || '—'}</td>
+
+    </tr>
+
+    <tr>
+      <th>Working Days</th>
+      <td>${workingDays} days</td>
+      <th>Employee Status</th>
+      <td>${existingPayslip?.employeeType || 'Permanent'}</td>
+
+    </tr>
+  </table>
+</div>
+
+       <!-- Bank Information -->
             <div class="bank-info">
               <table>
                 <tr>
@@ -741,7 +760,9 @@ const _savePayslipToLocalStorage = (payslipData) => {
                   <th>IFSC Code</th>
                   <td>${bankDetails.ifsc || 'SBIN0005943'}</td>
                   <th>Branch</th>
-                  <td>${bankDetails.branch || 'SBI Main Branch, Bengaluru'}</td>
+                  <td>${existingPayslip?.bankSnapshot?.branch || '—'}</td>
+
+
                 </tr>
               </table>
             </div>
@@ -917,12 +938,7 @@ const _savePayslipToLocalStorage = (payslipData) => {
     return { value: year.toString(), label: year.toString() };
   });
 
-  // Get employee type
-  const getEmployeeType = (employeeId) => {
-    if (!employeeId) return 'Permanent';
-    return employeeId.startsWith('TEMP') ? 'Temporary' : 'Permanent';
-  };
-
+  
   // Format currency
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
@@ -1159,28 +1175,37 @@ const _savePayslipToLocalStorage = (payslipData) => {
                       fontWeight: '600',
                       fontSize: '10px'
                     }}>Designation</th>
-                    <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>{selectedEmployee.designation || 'Employee'}</td>
+                    <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>{jobTitle || '—'}
+</td>
                   </tr>
-                  <tr>
-                    <th style={{
-                      padding: '8px',
-                      backgroundColor: `${selectedTemplate.colors.secondary}20`,
-                      color: selectedTemplate.colors.primary,
-                      border: '0.8px solid #cbd5e1',
-                      fontWeight: '600',
-                      fontSize: '10px'
-                    }}>Working Days</th>
-                    <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>{workingDays} days</td>
-                    <th style={{
-                      padding: '8px',
-                      backgroundColor: `${selectedTemplate.colors.secondary}20`,
-                      color: selectedTemplate.colors.primary,
-                      border: '0.8px solid #cbd5e1',
-                      fontWeight: '600',
-                      fontSize: '10px'
-                    }}>Employee Type</th>
-                    <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>{getEmployeeType(selectedEmployee.employeeId)}</td>
-                  </tr>
+                 <tr>
+  <th style={{
+    padding: '8px',
+    backgroundColor: `${selectedTemplate.colors.secondary}20`,
+    color: selectedTemplate.colors.primary,
+    border: '0.8px solid #cbd5e1',
+    fontWeight: '600',
+    fontSize: '10px'
+  }}>Working Days</th>
+
+  <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>
+    {workingDays} days
+  </td>
+
+  <th style={{
+    padding: '8px',
+    backgroundColor: `${selectedTemplate.colors.secondary}20`,
+    color: selectedTemplate.colors.primary,
+    border: '0.8px solid #cbd5e1',
+    fontWeight: '600',
+    fontSize: '10px'
+  }}>Employee Status</th>
+
+  <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>
+    {employeeStatus || '—'}
+  </td>
+</tr>
+
                 </tbody>
               </table>
             </div>
@@ -1640,6 +1665,123 @@ const _savePayslipToLocalStorage = (payslipData) => {
                       ))}
                     </select>
                   </div>
+                  {/* 🔹 Added Employee Job Title & Status (NO UI change) */}
+{selectedEmployee && (
+  <div style={{ marginTop: "12px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+    
+   {/* Job Title */}
+<div className="form-group">
+  <label>Job Title</label>
+  <select
+    className="form-control"
+    value={jobTitle}
+    onChange={(e) => setJobTitle(e.target.value)}
+  >
+    <option value="">Select Job Title</option>
+
+    {/* IT Roles */}
+    <option value="Software Engineer">Software Engineer</option>
+    <option value="Senior Software Engineer">Senior Software Engineer</option>
+    <option value="Junior Software Engineer">Junior Software Engineer</option>
+    <option value="Full Stack Developer">Full Stack Developer</option>
+    <option value="Frontend Developer">Frontend Developer</option>
+    <option value="Backend Developer">Backend Developer</option>
+    <option value="Web Developer">Web Developer</option>
+    <option value="Mobile App Developer">Mobile App Developer</option>
+    <option value="Android Developer">Android Developer</option>
+    <option value="iOS Developer">iOS Developer</option>
+    <option value="DevOps Engineer">DevOps Engineer</option>
+    <option value="Cloud Engineer">Cloud Engineer</option>
+    <option value="AWS Cloud Engineer">AWS Cloud Engineer</option>
+    <option value="Azure Cloud Engineer">Azure Cloud Engineer</option>
+    <option value="Site Reliability Engineer">Site Reliability Engineer</option>
+    <option value="System Administrator">System Administrator</option>
+    <option value="Network Engineer">Network Engineer</option>
+    <option value="Security Engineer">Security Engineer</option>
+    <option value="Cyber Security Analyst">Cyber Security Analyst</option>
+    <option value="Database Administrator">Database Administrator</option>
+    <option value="Data Engineer">Data Engineer</option>
+    <option value="Data Analyst">Data Analyst</option>
+    <option value="Data Scientist">Data Scientist</option>
+    <option value="AI Engineer">AI Engineer</option>
+    <option value="Machine Learning Engineer">Machine Learning Engineer</option>
+    <option value="QA Engineer">QA Engineer</option>
+    <option value="Manual Tester">Manual Tester</option>
+    <option value="Automation Tester">Automation Tester</option>
+    <option value="Performance Tester">Performance Tester</option>
+    <option value="UI Designer">UI Designer</option>
+    <option value="UX Designer">UX Designer</option>
+    <option value="UI/UX Designer">UI/UX Designer</option>
+    <option value="Technical Lead">Technical Lead</option>
+    <option value="Team Lead">Team Lead</option>
+    <option value="Project Manager">Project Manager</option>
+    <option value="Program Manager">Program Manager</option>
+    <option value="Product Manager">Product Manager</option>
+    <option value="Product Owner">Product Owner</option>
+    <option value="Scrum Master">Scrum Master</option>
+    <option value="Solution Architect">Solution Architect</option>
+    <option value="Software Architect">Software Architect</option>
+    <option value="CTO">CTO</option>
+
+    {/* Non-IT Roles */}
+    <option value="HR Executive">HR Executive</option>
+    <option value="HR Manager">HR Manager</option>
+    <option value="Recruiter">Recruiter</option>
+    <option value="Talent Acquisition Specialist">Talent Acquisition Specialist</option>
+    <option value="Accounts Executive">Accounts Executive</option>
+    <option value="Accountant">Accountant</option>
+    <option value="Finance Manager">Finance Manager</option>
+    <option value="Payroll Executive">Payroll Executive</option>
+    <option value="Operations Executive">Operations Executive</option>
+    <option value="Operations Manager">Operations Manager</option>
+    <option value="Business Analyst">Business Analyst</option>
+    <option value="Business Development Executive">Business Development Executive</option>
+    <option value="Sales Executive">Sales Executive</option>
+    <option value="Sales Manager">Sales Manager</option>
+    <option value="Marketing Executive">Marketing Executive</option>
+    <option value="Digital Marketing Specialist">Digital Marketing Specialist</option>
+    <option value="Content Writer">Content Writer</option>
+    <option value="Graphic Designer">Graphic Designer</option>
+    <option value="Support Engineer">Support Engineer</option>
+    <option value="IT Support Executive">IT Support Executive</option>
+    <option value="Admin Executive">Admin Executive</option>
+    <option value="Office Manager">Office Manager</option>
+    <option value="Receptionist">Receptionist</option>
+    <option value="Intern">Intern</option>
+    <option value="Trainee">Trainee</option>
+    <option value="Consultant">Consultant</option>
+  </select>
+</div>
+
+
+  {/* Employee Status */}
+<div className="form-group">
+  <label>Employee Status</label>
+  <select
+    className="form-control"
+    value={employeeStatus}
+    onChange={(e) => setEmployeeStatus(e.target.value)}
+  >
+    <option value="">Select Employee Status</option>
+    <option value="Permanent">Permanent</option>
+    <option value="Contract">Contract</option>
+    <option value="Temporary">Temporary</option>
+    <option value="Probation">Probation</option>
+    <option value="Intern">Intern</option>
+    <option value="Active">Active</option>
+    <option value="On Leave">On Leave</option>
+    <option value="Inactive">Inactive</option>
+    <option value="Resigned">Resigned</option>
+    <option value="Terminated">Terminated</option>
+  </select>
+</div>
+
+
+  </div>
+)}
+
+
+
                 </>
               )}
             </div>

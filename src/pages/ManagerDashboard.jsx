@@ -420,6 +420,22 @@ export default function ManagerDashboard() {
 
   const { user, logout } = useAuth();
 
+  // ---- TASK PERMISSION (MANAGER) ----
+const canManagerEditTask = (task) => {
+  if (!task) return false;
+
+  // Admin never edits (safety)
+  if (user.role === "admin") return false;
+
+  // Manager can edit ONLY employee-created tasks
+  if (user.role === "manager" && task.createdByRole === "employee") {
+    return true;
+  }
+
+  return false;
+};
+
+
   // ------- ALERT CENTER (bell icon) -------
   const [alerts, setAlerts] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -2960,7 +2976,16 @@ let color = "#fff";
                     {/* Project Discussion Tasks */}
                     <div className="card">
                       <h2>Project Discussion Tasks / Requirements</h2>
-                      <form className="form-grid" onSubmit={handleSubmitTask}>
+                      <form
+  className="form-grid"
+  onSubmit={(e) => {
+    if (editingTaskId && !canManagerEditTask({ createdByRole: "employee" })) {
+      e.preventDefault();
+      return;
+    }
+    handleSubmitTask(e);
+  }}
+>
                         <label className="full-row">
                           Requirement
                           <textarea
@@ -3223,14 +3248,14 @@ let color = "#fff";
                                   <td>{emp}</td>
                                   <td>
                                     <select
-                                      value={t.status}
-                                      onChange={(e) =>
-                                        updateTaskStatus(
-                                          t._id,
-                                          e.target.value
-                                        )
-                                      }
-                                    >
+  value={t.status}
+  disabled={!canManagerEditTask(t)}
+  onChange={(e) => {
+    if (!canManagerEditTask(t)) return;
+    updateTaskStatus(t._id, e.target.value);
+  }}
+>
+
                                       {TASK_STATUS.map((s) => (
                                         <option key={s} value={s}>
                                           {s}
@@ -3239,14 +3264,15 @@ let color = "#fff";
                                     </select>
                                   </td>
                                   <td>
-                                    <select
-                                      value={t.scope || "AGREED"}
-                                      onChange={(e) =>
-                                        updateTaskField(t._id, {
-                                          scope: e.target.value
-                                        })
-                                      }
-                                    >
+                                  <select
+  value={t.scope || "AGREED"}
+  disabled={!canManagerEditTask(t)}
+  onChange={(e) => {
+    if (!canManagerEditTask(t)) return;
+    updateTaskField(t._id, { scope: e.target.value });
+  }}
+>
+
                                       <option value="AGREED">Agreed</option>
                                       <option value="NOT_AGREED">
                                         Not Agreed
@@ -3287,13 +3313,18 @@ let color = "#fff";
                                   </td>
                                   <td>{t.createdBy || "-"}</td>
                                   <td>
-                                    <button
-                                      className="link-btn"
-                                      type="button"
-                                      onClick={() => startEditTask(t)}
-                                    >
-                                      Edit
-                                    </button>
+                                   <button
+  className="link-btn"
+  type="button"
+  disabled={!canManagerEditTask(t)}
+  onClick={() => {
+    if (!canManagerEditTask(t)) return;
+    startEditTask(t);
+  }}
+>
+  Edit
+</button>
+
                                   </td>
                                 </tr>
                               );

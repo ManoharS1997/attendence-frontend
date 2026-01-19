@@ -195,6 +195,28 @@ export default function PayslipGenerator() {
             ))}
           </select>
         </label>
+        {/* Employee Meta Details */}
+{employee && (
+  <div
+    style={{
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 12,
+      marginTop: 12
+    }}
+  >
+    <div>
+      <strong>Job Title:</strong>{" "}
+      {employee.jobTitle || "Not specified"}
+    </div>
+
+    <div>
+      <strong>Employee Status:</strong>{" "}
+      {employee.employeeType || employee.status || "Active"}
+    </div>
+  </div>
+)}
+
 
         <label>
           Month
@@ -267,6 +289,26 @@ export default function PayslipGenerator() {
         <hr />
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+
+          {/* Job Title & Employee Type */}
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 12,
+    marginTop: 8
+  }}
+>
+  <div>
+    <strong>Job Title:</strong>{" "}
+    {employee?.jobTitle || "Not specified"}
+  </div>
+  <div>
+    <strong>Employee Type:</strong>{" "}
+    {employee?.employeeType || "Not specified"}
+  </div>
+</div>
+
           <div>
             <div><strong>Employee:</strong> {employee?.fullName || employee?.email || "—"}</div>
             <div><strong>Email:</strong> {employee?.email || "—"}</div>
