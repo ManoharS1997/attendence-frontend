@@ -1,0 +1,48 @@
+pipeline {
+  agent any
+
+environment {
+  GITHUB_TOKEN = credentials('githubtoken')
+
+//Docker
+IMAGE_NAME = 'attendence-frontend'
+CONTAINER_NAME = 'attendence-frontend-container'
+
+//APP
+PORT = '5173' 
+}
+stages {
+
+stage('Checkout Frontend Code') {
+steps {
+echo '📥 Cloning frontend repository...'
+git branch: 'main',
+credentialsId: 'githubtoken',
+url:'https://github.com/ManoharS1997/attendence-frontend.git'
+}
+}
+stage('Clean Old Docker Resources') {
+steps {
+sh '''
+echo "🧹 Cleaning old frontend container..." docker stop ${CONTAINER_NAME} || true docker rm ${CONTAINER_NAME} || true docker rmi ${IMAGE_NAME} || true '''
+}
+}
+stage('Build Docker Image') {
+steps {
+sh '''
+echo "🐳 Building frontend Docker image..." docker build -t ${IMAGE_NAME} . '''
+}
+}
+stage('Run Frontend Container') {
+steps {
+sh '''
+echo "🚀 Starting frontend container..."
+docker run -d \
+--name ${CONTAINER_NAME} \ -p ${PORT}:${PORT} \ ${IMAGE_NAME} '''
+}
+}
+}
+post { success { echo '✅ Frontend deployed successfully!' } failure { echo '❌ Frontend deployment failed!' sh 'docker logs ${CONTAINER_NAME} || true' } always { echo '🏁 Jenkins pipeline execution finished.'
+}
+}
+}
