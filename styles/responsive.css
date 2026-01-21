@@ -1,79 +1,291 @@
-/* src/styles/responsive.css */
-/* Responsive container */
+/* ===============================
+   GLOBAL RESET
+   =============================== */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  overflow-x: hidden;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ===============================
+   ROOT
+   =============================== */
+#root {
+  min-height: 100vh;
+  width: 100%;
+}
+
+/* ===============================
+   MAIN LAYOUT
+   =============================== */
+.page {
+  width: 100%;
+  min-height: 100vh;
+}
+
+.shell {
+  display: flex;
+  width: 100%;
+}
+
+.main-area {
+  flex: 1;
+  min-width: 0; /* IMPORTANT for tables */
+  background: #f8fafc;
+}
+
+/* ===============================
+   TOPBAR
+   =============================== */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* ===============================
+   SIDEBAR (DESKTOP)
+   =============================== */
+.sidebar {
+  width: 240px;
+  min-height: 100vh;
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  flex-shrink: 0;
+
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 200px;
+  }
+}
+
+/* ===============================
+   CONTAINER
+   =============================== */
 .responsive-container {
-  @apply w-full px-4 mx-auto;
+  max-width: 1400px;
+  margin: auto;
+  padding: 16px;
 }
 
-@media (min-width: 640px) {
-  .responsive-container {
-    @apply px-6;
+/* ===============================
+   TABLE FIX
+   =============================== */
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+table {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+}
+
+@media (max-width: 768px) {
+  /* FIX DIVIDER LINE GAP BELOW LOGO */
+.sidebar-header hr {
+  margin: 2px 0;          /* ✅ fingerprint-sized gap */
+}
+
+  table {
+    min-width: 700px;
   }
 }
 
-@media (min-width: 1024px) {
-  .responsive-container {
-    @apply px-8;
+/* ===============================
+   FORMS
+   =============================== */
+input,
+select,
+textarea {
+  min-height: 40px;
+  font-size: 16px; /* iOS zoom fix */
+}
+
+/* ===============================
+   BUTTONS
+   =============================== */
+button {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* ===============================
+   HIDE ON MOBILE
+   =============================== */
+@media (max-width: 768px) {
+  .hide-mobile {
+    display: none !important;
   }
 }
 
-@media (min-width: 1280px) {
-  .responsive-container {
-    max-width: 1280px;
+/* ===============================
+   MOBILE SIDEBAR (FINAL – CLEAN)
+   =============================== */
+@media (max-width: 768px) {
+  /* SIDEBAR */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 260px;
+    height: 100vh;
+    margin: 0;
+    border-radius: 0;
+    background: #ffffff;
+    z-index: 1001;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+/* SIDEBAR HEADER */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;      /* 🔽 slightly tighter */
+  margin-bottom: 2px;    /* 🔽 MAIN FIX: removes extra space */
+}
+
+
+  /* SIDEBAR NAV */
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 8px;       /* 🔽 removes extra top space */
+}
+
+
+
+  .sidebar-nav button {
+  width: 100%;
+  padding: 10px 12px;     /* 🔽 tighter height */
+  text-align: left;
+  border-radius: 8px;     /* 🔽 less pill */
+  white-space: nowrap;
+}
+
+
+  .nav-item.active {
+  padding: 10px 12px;     /* 🔽 same as normal */
+  border-radius: 8px;
+  height: auto;
+}
+
+
+  /* CLOSE BUTTON */
+  .sidebar-close-btn {
+    /* HIDE CLOSE BUTTON ON DESKTOP */
+@media (min-width: 769px) {
+  .sidebar-close-btn {
+    display: none !important;
   }
 }
 
-/* Grid utilities */
-.grid-responsive {
-  @apply grid grid-cols-1 gap-4;
-}
+    display: block;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    font-size: 22px;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
 
-@media (min-width: 640px) {
-  .grid-responsive {
-    @apply grid-cols-2;
+  /* OVERLAY */
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 1000;
+  }
+
+  /* HAMBURGER */
+  .mobile-menu-btn {
+
+    /* HIDE HAMBURGER ON DESKTOP */
+@media (min-width: 769px) {
+  .mobile-menu-btn {
+    display: none !important;
+  }
+   /* Hide sidebar close (X) button */
+  .sidebar-close-btn {
+    display: none !important;
+  }
+  .sidebar-close-btn {
+    display: block;
   }
 }
 
-@media (min-width: 1024px) {
-  .grid-responsive {
-    @apply grid-cols-3;
+    display: block !important;
+    font-size: 24px;
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    z-index: 1100;
+  }
+
+  /* TOPBAR */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 900;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    margin-top: 6px;
   }
 }
 
-@media (min-width: 1280px) {
-  .grid-responsive {
-    @apply grid-cols-4;
+/* ===============================
+   iPHONE SPECIFIC TWEAK
+   =============================== */
+@media (max-width: 430px) {
+  .sidebar {
+    width: 200px;              /* 🔽 slightly slimmer */
+  }
+
+  .sidebar-nav {
+    gap: 3px;                  /* 🔽 tighter vertical gap */
+    padding: 4px 8px;
+    display: flex; 
+    justify-content: flex-start; 
+  }
+
+  .sidebar-nav button {
+    font-size: 13px;           /* 🔽 cleaner on iPhone */
+    padding: 8px 10px;         /* 🔽 less height */
+    border-radius: 8px;
+  }
+
+  .nav-item.active {
+    padding: 8px 10px;         /* 🔽 same as normal */
+    border-radius: 8px;
   }
 }
 
-/* Flex utilities */
-.flex-responsive {
-  @apply flex flex-col;
-}
-
-@media (min-width: 768px) {
-  .flex-responsive {
-    @apply flex-row;
-  }
-}
-
-/* Table responsiveness */
-.table-responsive {
-  @apply overflow-x-auto -mx-4 sm:mx-0;
-}
-
-.table-responsive table {
-  @apply min-w-full;
-}
-
-/* Hide/show based on screen size */
-.mobile-only {
-  @apply block lg:hidden;
-}
-
-.desktop-only {
-  @apply hidden lg:block;
-}
-
-.tablet-only {
-  @apply hidden md:block lg:hidden;
-}

@@ -80,6 +80,12 @@ const toDdMmYyyy = (dateKey) => {
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  useEffect(() => {
+  document.body.style.overflow = sidebarOpen ? "hidden" : "auto";
+}, [sidebarOpen]);
+
+
 
   const [activeTab, setActiveTab] = useState("dashboard");
 
@@ -879,15 +885,29 @@ export default function AdminDashboard() {
       </style>
       
       <div className="shell">
+        {sidebarOpen && (
+  <div
+    className="sidebar-overlay"
+    onClick={() => setSidebarOpen(false)}
+  />
+)}
+
         {/* Sidebar */}
-        <aside className="sidebar">
+        <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
+          <button
+  className="sidebar-close-btn"
+  onClick={() => setSidebarOpen(false)}
+>
+  ✕
+</button>
+
+
           <div className="sidebar-header">
             <div className="sidebar-logo">
               <img src={logo} alt="NowIT Services" />
             </div>
-            <div className="sidebar-role">Admin</div>
           </div>
-          <nav className="sidebar-nav">
+          <nav className="sidebar-nav " >
             <button
               className={activeTab === "dashboard" ? "nav-item active" : "nav-item"}
               onClick={() => setActiveTab("dashboard")}
@@ -910,17 +930,28 @@ export default function AdminDashboard() {
           </nav>
         </aside>
 
-        <div className="main-area">
+        <div className="main-area" style={{ overflowX: "hidden" }}>
+
           <header className="topbar">
-            <div>
-              <strong>{user.fullName}</strong> (Admin) — {user.email}
-            </div>
-            <div className="topbar-actions">
-              <button onClick={handleLogout} className="outline-btn">
-                Logout
-              </button>
-            </div>
-          </header>
+  {/* ☰ MOBILE HAMBURGER BUTTON */}
+  <button
+    className="mobile-menu-btn"
+    onClick={() => setSidebarOpen(true)}
+  >
+    ☰
+  </button>
+
+  <div>
+    <strong>{user.fullName}</strong> — {user.email}
+  </div>
+
+  <div className="topbar-actions">
+    <button onClick={handleLogout} className="outline-btn">
+      Logout
+    </button>
+  </div>
+</header>
+
 
           {/* ========== TIMESHEET MANAGEMENT TAB ========== */}
           {activeTab === "attendance" && (
@@ -961,6 +992,9 @@ export default function AdminDashboard() {
                   </p>
 
                   <div className="table-wrapper small-table">
+                    <div className="table-wrapper">
+                  </div>
+
                     <table>
                       <thead>
                         <tr>
@@ -1018,8 +1052,8 @@ export default function AdminDashboard() {
                         <tr>
                           <th>Date</th>
                           <th>Employee</th>
-                          <th>Email</th>
-                          <th>Status</th>
+                          <th className="hide-mobile">Email</th>
+                           <th>Status</th>
                           <th>In</th>
                           <th>Out</th>
                           <th>Manager Decision</th>
@@ -1031,7 +1065,8 @@ export default function AdminDashboard() {
                           <tr key={a._id}>
                             <td>{a.date}</td>
                             <td>{a.user?.fullName}</td>
-                            <td>{a.user?.email}</td>
+                            <td className="hide-mobile">{a.user?.email}</td>
+
                             <td>{a.status}</td>
                             <td>{a.workInTime}</td>
                             <td>{a.workOutTime}</td>
