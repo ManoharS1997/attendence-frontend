@@ -6,6 +6,8 @@ import logo from "../assets/Company Logo.png";
 import { buildHolidayCalendar } from "../utils/holidays";
 import "../../styles/employeeDashboard.css";
 import { FaEdit } from "react-icons/fa";
+import { FaCalendarAlt } from "react-icons/fa";
+
 
 const STATUS_OPTIONS = [
   "PRESENT FULL DAY",
@@ -1369,15 +1371,19 @@ export default function EmployeeDashboard() {
                     treated as system holidays and cannot be edited.
                   </p>
                   <form className="form-grid" onSubmit={handleSaveAttendance}>
-                    <label>
-                      Date
-                      <input
-                        type="text"
-                        value={date}
-                        onChange={(e) => setDate(e.target.value)}
-                        placeholder="dd-mm-yyyy"
-                      />
-                    </label>
+                  <label>
+  Date
+  <div className="date-input-wrapper">
+    <FaCalendarAlt className="date-icon" />
+    <input
+      type="date"
+      value={toInputDate(date)}          // yyyy-mm-dd for browser
+      onChange={(e) => setDate(fromInputDate(e.target.value))} // back to dd-mm-yyyy
+      disabled={isSystemHoliday}
+    />
+  </div>
+</label>
+
 
                     <label>
                       Status

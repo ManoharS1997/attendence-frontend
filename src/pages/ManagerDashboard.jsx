@@ -423,18 +423,25 @@ export default function ManagerDashboard() {
   // ---- TASK PERMISSION (MANAGER) ----
 const canManagerEditTask = (task) => {
   if (!task) return false;
+  
+  const userRole = user.role;
+  const taskCreatedByRole = task.createdByRole;
+  const taskCreatedById = task.createdByUserId?._id || task.createdByUserId;
+  const userId = user._id || user.id;
 
   // Admin never edits (safety)
-  if (user.role === "admin") return false;
+  if (userRole === "admin") return false;
 
-  // Manager can edit ONLY employee-created tasks
-  if (user.role === "manager" && task.createdByRole === "employee") {
-    return true;
+  // Manager can edit:
+  // 1. Tasks created by employees (any employee)
+  // 2. Tasks created by themselves
+  if (userRole === "manager") {
+    if (taskCreatedByRole === "employee") return true;
+    if (taskCreatedByRole === "manager" && taskCreatedById === userId) return true;
   }
 
   return false;
 };
-
 
   // ------- ALERT CENTER (bell icon) -------
   const [alerts, setAlerts] = useState([]);
@@ -480,7 +487,9 @@ const canManagerEditTask = (task) => {
     clientPriority: "P3",
     prioritySource: "CLIENT",
     hoursAllocated: 0,
-    createdBy: ""
+    createdBy: user.fullName, // Set default to current manager
+    createdByRole: "manager", // Set default role
+    createdByUserId: user._id || user.id // Set current user ID
   });
 
   // Create employee form
@@ -1288,7 +1297,10 @@ const normalized = raw.map((b) => {
         ...taskForm,
         projectId: selectedProjectId,
         noOfDays: finalDays,
-        hoursAllocated
+        hoursAllocated,
+        createdBy: user.fullName, // Always set created by as current manager
+        createdByRole: "manager", // Set role as manager
+        createdByUserId: user._id || user.id // Set current user ID
       };
 
       if (!payload.assignedUserId) {
@@ -1299,8 +1311,6 @@ const normalized = raw.map((b) => {
         payload.recentRequirement = "Requirement not specified";
       }
 
-      payload.createdBy = taskForm.createdBy || user.fullName;
-
       if (!editingTaskId) {
         await api.post("/tasks", payload);
         addAlert("Task created / noted");
@@ -1310,8 +1320,7 @@ const normalized = raw.map((b) => {
       }
 
       setEditingTaskId(null);
-      setTaskForm((prev) => ({
-        ...prev,
+      setTaskForm({
         projectId: selectedProjectId,
         assignedUserId: "",
         recentRequirement: "",
@@ -1326,8 +1335,10 @@ const normalized = raw.map((b) => {
         clientPriority: "P3",
         prioritySource: "CLIENT",
         hoursAllocated: 0,
-        createdBy: ""
-      }));
+        createdBy: user.fullName,
+        createdByRole: "manager",
+        createdByUserId: user._id || user.id
+      });
       loadProjectTasks(selectedProjectId);
     } catch (err) {
       console.error("Error saving task", err);
@@ -1353,7 +1364,9 @@ const normalized = raw.map((b) => {
       clientPriority: t.clientPriority || "P3",
       prioritySource: t.prioritySource || "CLIENT",
       hoursAllocated: t.hoursAllocated || 0,
-      createdBy: t.createdBy || user.fullName
+      createdBy: t.createdBy || user.fullName,
+      createdByRole: t.createdByRole || "manager",
+      createdByUserId: t.createdByUserId?._id || t.createdByUserId || user._id || user.id
     });
   };
 
@@ -2979,10 +2992,6 @@ let color = "#fff";
                       <form
   className="form-grid"
   onSubmit={(e) => {
-    if (editingTaskId && !canManagerEditTask({ createdByRole: "employee" })) {
-      e.preventDefault();
-      return;
-    }
     handleSubmitTask(e);
   }}
 >
@@ -3218,7 +3227,7 @@ let color = "#fff";
                             </tr>
                           </thead>
                           <tbody>
-                            {projectTasks.map((t) => {
+                            {projectTasks.map((t, index) => {
                               const emp =
                                 t.assignedUser?.fullName ||
                                 employees.find(
@@ -3234,7 +3243,7 @@ let color = "#fff";
 
                               return (
                                 <tr key={t._id}>
-                                  <td>-</td>
+                                  <td>{index + 1}</td> {/* Added S.No */}
 
                                   <td
                                     style={{
@@ -3311,7 +3320,9 @@ let color = "#fff";
                                       t.prioritySource ||
                                       "-"}
                                   </td>
-                                  <td>{t.createdBy || "-"}</td>
+                                  <td>
+                                    {t.createdByUserId?.fullName || t.createdBy || "-"}
+                                  </td>
                                   <td>
                                    <button
   className="link-btn"
