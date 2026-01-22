@@ -5,6 +5,7 @@ import ChangePasswordCard from "../components/ChangePasswordCard";
 import logo from "../assets/Company Logo.png";
 import { buildHolidayCalendar } from "../utils/holidays";
 import "../../styles/employeeDashboard.css";
+import { FaEdit } from "react-icons/fa";
 
 const STATUS_OPTIONS = [
   "PRESENT FULL DAY",
@@ -64,7 +65,6 @@ const monthNames = [
   "December"
 ];
 
-// Helper functions - moved outside component
 const diffHours = (start, end) => {
   if (!start || !end) return 0;
   const [sh, sm] = start.split(":").map(Number);
@@ -179,9 +179,9 @@ const computeWorkingDaysExcludingHolidays = (startStr, endStr) => {
 
     const taken =
       h &&
-      (h.taken === "TAKEN" ||
-        h.takenStatus === "TAKEN" ||
-        h.defaultTaken)
+        (h.taken === "TAKEN" ||
+          h.takenStatus === "TAKEN" ||
+          h.defaultTaken)
         ? "TAKEN"
         : "NOT_TAKEN";
 
@@ -208,7 +208,6 @@ const computeWorkingDaysExcludingHolidays = (startStr, endStr) => {
   return count;
 };
 
-// Get current and previous years for dropdown
 const getYearOptions = () => {
   const currentYear = new Date().getFullYear();
   const years = [];
@@ -234,8 +233,6 @@ const formatToday = () => {
   return `${dd}-${mm}-${yyyy}`;
 };
 
-// Birthday helper functions
-// 🎂 Professional Management Messages
 const getManagementBirthdayMessage = (name) => {
   const messages = [
     `Dear ${name}, on behalf of NOWIT Services management, we extend our heartfelt birthday greetings. Your dedication and professional excellence continue to drive our collective success. Wishing you continued growth and achievement in the coming year.`,
@@ -252,7 +249,6 @@ const getManagementBirthdayMessage = (name) => {
   return messages[messageIndex];
 };
 
-// 🤝 Professional Team Wishes
 const getTeamBirthdayWish = () => {
   const wishes = [
     "Your colleagues join in celebrating your special day and extend warm wishes for continued success in your professional journey.",
@@ -269,9 +265,7 @@ const getTeamBirthdayWish = () => {
   return wishes[wishIndex];
 };
 
-// Main Component
 export default function EmployeeDashboard() {
-  // State declarations
   const { user, logout } = useAuth();
 
   const TAGLINES = useMemo(
@@ -313,10 +307,9 @@ export default function EmployeeDashboard() {
   const [showNextMonthPopup, setShowNextMonthPopup] = useState(false);
   const [showBirthdayBanner, setShowBirthdayBanner] = useState(false);
   const [birthdayManagerMessage, setBirthdayManagerMessage] = useState("");
-  
+
   const popupShownRef = useRef(false);
 
-  // 🔹 Shared metrics state for all tabs
   const [sharedMetrics, setSharedMetrics] = useState({
     presentDays: 0,
     halfDays: 0,
@@ -357,6 +350,8 @@ export default function EmployeeDashboard() {
   const [summary, setSummary] = useState(null);
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [filteredTasks, setFilteredTasks] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
   const [payslips, setPayslips] = useState([]);
   const [loadingSave, setLoadingSave] = useState(false);
   const [lastAlertAttendanceId, setLastAlertAttendanceId] = useState(null);
@@ -379,19 +374,16 @@ export default function EmployeeDashboard() {
   });
   const [editingTaskId, setEditingTaskId] = useState(null);
 
-  // Load extra hours and comp-off balance
- const loadExtraHoursAndCompOff = useCallback(async () => {
-  try {
-    const res = await api.get("/attendance/extra-hours-balance");
-    if (res.data) {
-      // ❌ removed setExtraHoursBalance (state no longer exists)
-      setCompOffBalance(res.data.compOff || 0);
+  const loadExtraHoursAndCompOff = useCallback(async () => {
+    try {
+      const res = await api.get("/attendance/extra-hours-balance");
+      if (res.data) {
+        setCompOffBalance(res.data.compOff || 0);
+      }
+    } catch (error) {
+      console.error("Error loading extra hours balance:", error);
     }
-  } catch (error) {
-    console.error("Error loading extra hours balance:", error);
-  }
-}, []);
-
+  }, []);
 
   const loadAttendance = useCallback(async (selectedMonth = month, selectedYear = year) => {
     const res = await api.get("/attendance/my", {
@@ -414,10 +406,14 @@ export default function EmployeeDashboard() {
     try {
       const res = await api.get("/tasks/my");
       console.log("Employee /tasks/my result:", res.data);
-      setTasks(res.data || []);
+      const tasksData = res.data || [];
+      setTasks(tasksData);
+      setFilteredTasks(tasksData);
+      setSearchTerm("");
     } catch (error) {
       console.error("Error loading my tasks", error?.response || error);
       setTasks([]);
+      setFilteredTasks([]);
     }
   }, []);
 
@@ -431,7 +427,6 @@ export default function EmployeeDashboard() {
     }
   }, []);
 
-  // Force refresh all data
   const forceRefreshAll = useCallback(async () => {
     try {
       await Promise.all([
@@ -444,77 +439,68 @@ export default function EmployeeDashboard() {
     }
   }, [loadAttendance, loadSummary, loadExtraHoursAndCompOff]);
 
-  // Check if next month is opened for the first time
   useEffect(() => {
     const current = new Date();
     const currentMonth = current.getMonth() + 1;
     const currentYear = current.getFullYear();
-    
+
     const selected = new Date(parseInt(year), parseInt(month) - 1, 1);
     const selectedMonth = selected.getMonth() + 1;
     const selectedYear = selected.getFullYear();
-    
-    const isNextMonth = (selectedYear > currentYear) || 
-                       (selectedYear === currentYear && selectedMonth > currentMonth);
-    
+
+    const isNextMonth = (selectedYear > currentYear) ||
+      (selectedYear === currentYear && selectedMonth > currentMonth);
+
     const key = `${month}-${year}`;
-    
+
     if (isNextMonth && !popupShownRef.current && key !== lastVisitedMonthYear) {
       setShowNextMonthPopup(true);
       popupShownRef.current = true;
       setLastVisitedMonthYear(key);
     }
-    
+
     if (!isNextMonth) {
       popupShownRef.current = false;
     }
   }, [month, year, lastVisitedMonthYear]);
 
-  // Load initial data
   useEffect(() => {
     loadAttendance();
     loadSummary();
     loadExtraHoursAndCompOff();
   }, [loadAttendance, loadSummary, loadExtraHoursAndCompOff]);
 
-  // 🎂 Check if today is employee birthday (on login)
-// 🎂 Check if today is employee birthday (on login)
-useEffect(() => {
-  const checkBirthday = async () => {
-    try {
-      const isTestMode = import.meta.env.VITE_BIRTHDAY_TEST_MODE === "true";
+  useEffect(() => {
+    const checkBirthday = async () => {
+      try {
+        const isTestMode = import.meta.env.VITE_BIRTHDAY_TEST_MODE === "true";
 
-      // 🔧 DEV MODE: force show for testing
-      if (isTestMode) {
-        setShowBirthdayBanner(true);
-        setBirthdayManagerMessage(
-          getManagementBirthdayMessage(user.fullName || "Team Member")
-        );
-        return;
+        if (isTestMode) {
+          setShowBirthdayBanner(true);
+          setBirthdayManagerMessage(
+            getManagementBirthdayMessage(user.fullName || "Team Member")
+          );
+          return;
+        }
+
+        const dismissed = sessionStorage.getItem("birthdayDismissed");
+        if (dismissed) return;
+
+        const res = await api.get("/birthday/today");
+
+        if (res.data?.isBirthday) {
+          setShowBirthdayBanner(true);
+          setBirthdayManagerMessage(
+            getManagementBirthdayMessage(user.fullName || "Team Member")
+          );
+        }
+      } catch (err) {
+        console.error("Birthday check failed", err);
       }
+    };
 
-      // ✅ PRODUCTION MODE (real logic)
-      const dismissed = sessionStorage.getItem("birthdayDismissed");
-      if (dismissed) return;
-
-      const res = await api.get("/birthday/today");
-
-      if (res.data?.isBirthday) {
-        setShowBirthdayBanner(true);
-        setBirthdayManagerMessage(
-          getManagementBirthdayMessage(user.fullName || "Team Member")
-        );
-      }
-    } catch (err) {
-      console.error("Birthday check failed", err);
-    }
-  };
-
-  checkBirthday();
-}, [user.fullName]);
-
-
-
+    checkBirthday();
+  }, [user.fullName]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -534,7 +520,6 @@ useEffect(() => {
     }
   }, [activeTab, loadPayslips]);
 
-  // Update shared metrics whenever attendance changes
   useEffect(() => {
     if (attendance.length === 0) {
       setSharedMetrics({
@@ -558,7 +543,6 @@ useEffect(() => {
     let compOffRequests = 0;
 
     attendance.forEach((a) => {
-      // ❗ IMPORTANT: Exclude ONLY rejected records
       if (a.managerDecision?.status === "REJECTED") {
         return;
       }
@@ -573,7 +557,7 @@ useEffect(() => {
       if (a.managerDecision?.status === "PENDING" && a.isLeaveRequest) {
         pendingRequests += 1;
       }
-      
+
       if (a.status === "COMPOFF") {
         compOffRequests += 1;
       }
@@ -585,12 +569,10 @@ useEffect(() => {
       const effective = isPresentLike ? baseHours * factor : 0;
 
       hoursWorked += effective;
-      
-      // ✅ Calculate extra hours for this attendance
+
       if (a.status === "PRESENT FULL DAY" && baseHours > 8) {
         extraHours += (baseHours - 8);
       }
-      // Also add any pre-calculated extra hours from the record
       if (a.extraHours && a.extraHours > 0) {
         extraHours += a.extraHours;
       }
@@ -608,55 +590,55 @@ useEffect(() => {
       extraHours,
       compOffRequests
     });
-  }, [attendance]); // This will update whenever attendance changes
+  }, [attendance]);
 
   useEffect(() => {
-  if (!attendance || attendance.length === 0) return;
-  
-  const decided = attendance
-    .filter(
-      (a) =>
-        a.managerDecision &&
-        (a.managerDecision.status === "APPROVED" ||
-          a.managerDecision.status === "REJECTED")
-    )
-    .sort((a, b) => {
-      const ta =
-        a.managerDecision.decidedAt ||
-        a.updatedAt ||
-        `${a.date.split("-").reverse().join("-")}T00:00:00Z`;
-      const tb =
-        b.managerDecision.decidedAt ||
-        b.updatedAt ||
-        `${b.date.split("-").reverse().join("-")}T00:00:00Z`;
-      return new Date(tb) - new Date(ta);
-    });
+    if (!attendance || attendance.length === 0) return;
 
-  if (decided.length === 0) return;
+    const decided = attendance
+      .filter(
+        (a) =>
+          a.managerDecision &&
+          (a.managerDecision.status === "APPROVED" ||
+            a.managerDecision.status === "REJECTED")
+      )
+      .sort((a, b) => {
+        const ta =
+          a.managerDecision.decidedAt ||
+          a.updatedAt ||
+          `${a.date.split("-").reverse().join("-")}T00:00:00Z`;
+        const tb =
+          b.managerDecision.decidedAt ||
+          b.updatedAt ||
+          `${b.date.split("-").reverse().join("-")}T00:00:00Z`;
+        return new Date(tb) - new Date(ta);
+      });
 
-  const latest = decided[0];
-  if (!latest._id || latest._id === lastAlertAttendanceId) return;
+    if (decided.length === 0) return;
 
-  const decision = latest.managerDecision.status;
-  const label =
-    latest.status === "COMPOFF"
-      ? "Comp-off request"
-      : latest.status || "attendance request";
+    const latest = decided[0];
+    if (!latest._id || latest._id === lastAlertAttendanceId) return;
 
-  const message =
-    decision === "APPROVED"
-      ? `Your ${label} for ${latest.date} was APPROVED by Manager.`
-      : `Your ${label} for ${latest.date} was REJECTED by Manager.`;
+    const decision = latest.managerDecision.status;
+    const label =
+      latest.status === "COMPOFF"
+        ? "Comp-off request"
+        : latest.status || "attendance request";
 
-  const [_, mm, yyyy] = latest.date.split("-");
-  if (`${mm}-${yyyy}` === `${month}-${year}`) {
-    setTimeout(() => {
-      alert(message);
-    }, 100);
-  }
+    const message =
+      decision === "APPROVED"
+        ? `Your ${label} for ${latest.date} was APPROVED by Manager.`
+        : `Your ${label} for ${latest.date} was REJECTED by Manager.`;
 
-  setLastAlertAttendanceId(latest._id);
-}, [attendance, lastAlertAttendanceId, month, year]);
+    const [_, mm, yyyy] = latest.date.split("-");
+    if (`${mm}-${yyyy}` === `${month}-${year}`) {
+      setTimeout(() => {
+        alert(message);
+      }, 100);
+    }
+
+    setLastAlertAttendanceId(latest._id);
+  }, [attendance, lastAlertAttendanceId, month, year]);
 
   const holidays = buildHolidayCalendar(month, year);
   const calendarWeeks = buildMonthMatrix(month, year);
@@ -693,8 +675,8 @@ useEffect(() => {
   const optionalTakenCount = optionalPublic.reduce((sum, h) => {
     const taken =
       h.taken === "TAKEN" ||
-      h.takenStatus === "TAKEN" ||
-      h.defaultTaken
+        h.takenStatus === "TAKEN" ||
+        h.defaultTaken
         ? "TAKEN"
         : "NOT_TAKEN";
     return sum + (taken === "TAKEN" ? 1 : 0);
@@ -731,7 +713,7 @@ useEffect(() => {
 
     const taken =
       h &&
-      (h.taken === "TAKEN" || h.takenStatus === "TAKEN" || h.defaultTaken)
+        (h.taken === "TAKEN" || h.takenStatus === "TAKEN" || h.defaultTaken)
         ? "TAKEN"
         : "NOT_TAKEN";
 
@@ -873,7 +855,6 @@ useEffect(() => {
       }
 
       const payload = {
-        
         date,
         status,
         workInTime,
@@ -881,7 +862,6 @@ useEffect(() => {
         note
       };
 
-      // ✅ Calculate extra hours if worked more than 8 hours
       if (status === "PRESENT FULL DAY") {
         const hours = diffHours(workInTime, workOutTime);
         if (hours > 8) {
@@ -925,7 +905,6 @@ useEffect(() => {
 
       await api.post("/attendance", payload);
 
-      // Immediately refresh all data
       await forceRefreshAll();
 
       if (APPROVAL_STATUSES.includes(status)) {
@@ -936,7 +915,6 @@ useEffect(() => {
         alert("Attendance saved successfully!");
       }
 
-      // Reset form to today's date
       setDate(formatToday());
       setStatus("PRESENT FULL DAY");
       setWorkInTime("10:00");
@@ -982,8 +960,7 @@ useEffect(() => {
     const factor = HALF_DAY_STATUSES.includes(a.status) ? 0.5 : 1;
     const baseHours = diffHours(a.workInTime, a.workOutTime);
     const workedHours = isPresentLike ? baseHours * factor : 0;
-    
-    // Calculate extra hours for this day - IMPORTANT: Use a.extraHours if available
+
     const extraHours = a.extraHours || ((a.status === "PRESENT FULL DAY" && baseHours > 8) ? baseHours - 8 : 0);
 
     return {
@@ -1040,37 +1017,30 @@ useEffect(() => {
     const finalDays = taskForm.noOfDays || 0;
 
     try {
-   const payload = {
-  ...taskForm,
-
-  projectId: taskForm.projectId,
-  noOfDays: finalDays,
-
-  // ✅ Estimated hours logic (CORRECT)
-  hoursAllocated:
-    Number(taskForm.hoursAllocated) > 0
-      ? Number(taskForm.hoursAllocated)
-      : PRIORITY_DEFAULT_HOURS[taskForm.clientPriority] || 8,
-
-  assignedUserId: user._id || user.id,
-  createdBy: editingTaskId ? undefined : (user.fullName || user.email)
-};
-
-     
+      const payload = {
+        ...taskForm,
+        projectId: taskForm.projectId,
+        noOfDays: finalDays,
+        estimateHours:
+          Number(taskForm.hoursAllocated) > 0
+            ? Number(taskForm.hoursAllocated)
+            : PRIORITY_DEFAULT_HOURS[taskForm.clientPriority] || 8,
+        assignedUserId: user._id || user.id,
+        createdBy: editingTaskId ? undefined : (user.fullName || user.email)
+      };
 
       if (!editingTaskId) {
         await api.post("/tasks", payload);
         alert("Task / requirement added successfully");
       } else {
         console.log("UPDATE PAYLOAD →", payload);
-
         await api.patch(`/tasks/${editingTaskId}`, payload);
         alert("Task updated successfully");
       }
 
       resetTaskForm(true);
       await loadTasks();
-      
+
     } catch (error) {
       console.error("Employee create/update task error", error?.response || error);
       setTaskError(error.response?.data?.message || "Error saving task. Please check your input.");
@@ -1078,13 +1048,33 @@ useEffect(() => {
   };
 
   const startEditTask = (t) => {
-    const createdByMe =
-      t.createdBy === (user.fullName || "") || t.createdBy === user.email;
-    if (!createdByMe) return;
+    const canEdit = (() => {
+      const userRole = user.role;
+      const createdByRole = t.createdByRole;
+      const createdById = t.createdByUserId?._id || t.createdByUserId;
+      const userId = user._id || user.id;
+
+      if (userRole === "admin") return false;
+      if (userRole === "employee") {
+        return createdByRole === "employee" && createdById === userId;
+      }
+      if (userRole === "manager" && createdByRole === "employee") {
+        return true;
+      }
+      if (userRole === "manager" && createdByRole === "manager") {
+        return createdById === userId;
+      }
+      return false;
+    })();
+
+    if (!canEdit) {
+      alert("You don't have permission to edit this task");
+      return;
+    }
 
     setEditingTaskId(t._id);
     setTaskForm({
-      projectId: t.project?._id || t.projectId || "",
+      projectId: t.projectId?._id || t.projectId || "",
       recentRequirement: t.recentRequirement || "",
       requirementType: t.requirementType || "NEW",
       status: t.status || "OPEN",
@@ -1097,9 +1087,9 @@ useEffect(() => {
       clientPriority: t.clientPriority || "P3",
       prioritySource: t.prioritySource || "CLIENT",
       hoursAllocated:
-        t.hoursAllocated ||
+        t.estimateHours ||
         PRIORITY_DEFAULT_HOURS[t.clientPriority || "P3"] ||
-        PRIORITY_DEFAULT_HOURS.P3
+        8
     });
   };
 
@@ -1149,7 +1139,6 @@ useEffect(() => {
     }
   };
 
-  // Next month popup
   const NextMonthPopup = () => {
     if (!showNextMonthPopup) return null;
 
@@ -1163,8 +1152,8 @@ useEffect(() => {
             <li>You can view holiday calendar for planning</li>
             <li>Tasks and projects will be visible as usual</li>
           </ul>
-          <button 
-            className="primary-btn" 
+          <button
+            className="primary-btn"
             onClick={() => setShowNextMonthPopup(false)}
             style={{ marginTop: '10px' }}
           >
@@ -1179,146 +1168,136 @@ useEffect(() => {
     <div className="page">
       <div className="shell">
         <aside className="sidebar">
-  <div className="sidebar-header">
-    <img src={logo} alt="NSW IT Services" className="sidebar-logo" />
-  </div>
+          <div className="sidebar-header">
+            <img src={logo} alt="NSW IT Services" className="sidebar-logo" />
+          </div>
 
-  <nav className="sidebar-nav">
-    <button
-      className={activeTab === "dashboard" ? "nav-item active" : "nav-item"}
-      onClick={() => setActiveTab("dashboard")}
-    >
-      Dashboard
-    </button>
+          <nav className="sidebar-nav">
+            <button
+              className={activeTab === "dashboard" ? "nav-item active" : "nav-item"}
+              onClick={() => setActiveTab("dashboard")}
+            >
+              Dashboard
+            </button>
 
-    <button
-      className={activeTab === "projects" ? "nav-item active" : "nav-item"}
-      onClick={() => setActiveTab("projects")}
-    >
-      Project Management
-    </button>
+            <button
+              className={activeTab === "projects" ? "nav-item active" : "nav-item"}
+              onClick={() => setActiveTab("projects")}
+            >
+              Project Management
+            </button>
 
-    <button
-      className={activeTab === "timesheet" ? "nav-item active" : "nav-item"}
-      onClick={() => setActiveTab("timesheet")}
-    >
-      Timesheet Management
-    </button>
+            <button
+              className={activeTab === "timesheet" ? "nav-item active" : "nav-item"}
+              onClick={() => setActiveTab("timesheet")}
+            >
+              Timesheet Management
+            </button>
 
-    <button
-      className={activeTab === "payslips" ? "nav-item active" : "nav-item"}
-      onClick={() => setActiveTab("payslips")}
-    >
-      Payslips
-    </button>
-  </nav>
-</aside>
-
+            <button
+              className={activeTab === "payslips" ? "nav-item active" : "nav-item"}
+              onClick={() => setActiveTab("payslips")}
+            >
+              Payslips
+            </button>
+          </nav>
+        </aside>
 
         <div className="main-area">
           <header className="topbar">
+            {showBirthdayBanner && (
+              <>
+                <div className="birthday-balloons">
+                  {Array.from({ length: 14 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="balloon"
+                      style={{
+                        left: `${Math.random() * 100}%`,
+                        animationDuration: `${10 + Math.random() * 8}s`,
+                        animationDelay: `${Math.random() * 4}s`,
+                        background: [
+                          "#ff7875",
+                          "#ffd666",
+                          "#95de64",
+                          "#69c0ff",
+                          "#b37feb"
+                        ][i % 5]
+                      }}
+                    />
+                  ))}
+                </div>
 
-            {/* 🎉 Birthday Celebration Banner */}
-{showBirthdayBanner && (
-  <>
-    {/* 🎈 Floating Balloons Background */}
-    <div className="birthday-balloons">
-      {Array.from({ length: 14 }).map((_, i) => (
-        <div
-          key={i}
-          className="balloon"
-          style={{
-            left: `${Math.random() * 100}%`,
-            animationDuration: `${10 + Math.random() * 8}s`,
-            animationDelay: `${Math.random() * 4}s`,
-            background: [
-              "#ff7875",
-              "#ffd666",
-              "#95de64",
-              "#69c0ff",
-              "#b37feb"
-            ][i % 5]
-          }}
-        />
-      ))}
-    </div>
+                <div
+                  style={{
+                    position: "fixed",
+                    top: "18%",
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    zIndex: 9999,
+                    maxWidth: 620,
+                    width: "92%",
+                    padding: "26px",
+                    borderRadius: 24,
+                    background:
+                      "linear-gradient(135deg, #fffbe6, #fff1b8)",
+                    border: "2px solid #faad14",
+                    boxShadow: "0 20px 50px rgba(250,173,20,0.45)"
+                  }}
+                >
+                  <div style={{ textAlign: "center", fontSize: 24, fontWeight: 800, color: "#874d00" }}>
+                    🎉 Happy Birthday, {user.fullName}! 🎂
+                  </div>
 
-    {/* 🎉 Birthday Card */}
-    <div
-      style={{
-        position: "fixed",
-        top: "18%",
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 9999,
-        maxWidth: 620,
-        width: "92%",
-        padding: "26px",
-        borderRadius: 24,
-        background:
-          "linear-gradient(135deg, #fffbe6, #fff1b8)",
-        border: "2px solid #faad14",
-        boxShadow: "0 20px 50px rgba(250,173,20,0.45)"
-      }}
-    >
-      <div style={{ textAlign: "center", fontSize: 24, fontWeight: 800, color: "#874d00" }}>
-        🎉 Happy Birthday, {user.fullName}! 🎂
-      </div>
+                  <div style={{ marginTop: 8, textAlign: "center", fontSize: 14, color: "#5c3a00" }}>
+                    Wishing you good health, continued success, and new milestones in the year ahead.
+                  </div>
 
-      <div style={{ marginTop: 8, textAlign: "center", fontSize: 14, color: "#5c3a00" }}>
-        Wishing you good health, continued success, and new milestones in the year ahead.
-      </div>
+                  <div
+                    style={{
+                      marginTop: 16,
+                      padding: "12px 16px",
+                      borderRadius: 14,
+                      background: "#ffffff",
+                      border: "1px dashed #faad14",
+                      fontSize: 13,
+                      color: "#5c3a00"
+                    }}
+                  >
+                    💼 <strong>Message from Management</strong>
+                    <div style={{ marginTop: 6, fontStyle: "italic" }}>
+                      {birthdayManagerMessage ||
+                        getManagementBirthdayMessage(user.fullName)}
+                    </div>
+                  </div>
 
-      {/* 💼 Management Message */}
-      <div
-        style={{
-          marginTop: 16,
-          padding: "12px 16px",
-          borderRadius: 14,
-          background: "#ffffff",
-          border: "1px dashed #faad14",
-          fontSize: 13,
-          color: "#5c3a00"
-        }}
-      >
-        💼 <strong>Message from Management</strong>
-        <div style={{ marginTop: 6, fontStyle: "italic" }}>
-          {birthdayManagerMessage ||
-            getManagementBirthdayMessage(user.fullName)}
-        </div>
-      </div>
+                  <div style={{ marginTop: 12, fontSize: 13, color: "#7a4a00", textAlign: "center" }}>
+                    🎊 {getTeamBirthdayWish()}
+                  </div>
 
-      {/* 🤝 Team Wish */}
-      <div style={{ marginTop: 12, fontSize: 13, color: "#7a4a00", textAlign: "center" }}>
-        🎊 {getTeamBirthdayWish()}
-      </div>
+                  <div style={{ textAlign: "center", marginTop: 18 }}>
+                    <button
+                      onClick={() => {
+                        setShowBirthdayBanner(false);
+                        sessionStorage.setItem("birthdayDismissed", "true");
+                      }}
+                      style={{
+                        background: "#faad14",
+                        color: "#fff",
+                        border: "none",
+                        padding: "8px 26px",
+                        borderRadius: 999,
+                        fontWeight: 700,
+                        cursor: "pointer"
+                      }}
+                    >
+                      Thank You 🎈
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
 
-      <div style={{ textAlign: "center", marginTop: 18 }}>
-        <button
-          onClick={() => {
-            setShowBirthdayBanner(false);
-            sessionStorage.setItem("birthdayDismissed", "true");
-          }}
-          style={{
-            background: "#faad14",
-            color: "#fff",
-            border: "none",
-            padding: "8px 26px",
-            borderRadius: 999,
-            fontWeight: 700,
-            cursor: "pointer"
-          }}
-        >
-          Thank You 🎈
-        </button>
-      </div>
-    </div>
-  </>
-)}
-
-
-
-            {/* 🔹 Today Info – Professional Animated Badge */}
             <div
               style={{
                 position: "absolute",
@@ -1374,7 +1353,6 @@ useEffect(() => {
             </button>
           </header>
 
-          {/* Next Month Popup */}
           <NextMonthPopup />
 
           {/* TIMESHEET TAB */}
@@ -1558,8 +1536,8 @@ useEffect(() => {
                         {isSystemHoliday
                           ? "Attendance Locked for Holiday"
                           : loadingSave
-                          ? "Saving..."
-                          : "Save Attendance"}
+                            ? "Saving..."
+                            : "Save Attendance"}
                       </button>
                     </div>
                   </form>
@@ -1801,9 +1779,9 @@ useEffect(() => {
 
                                 const taken =
                                   h &&
-                                  (h.taken === "TAKEN" ||
-                                    h.takenStatus === "TAKEN" ||
-                                    h.defaultTaken)
+                                    (h.taken === "TAKEN" ||
+                                      h.takenStatus === "TAKEN" ||
+                                      h.defaultTaken)
                                     ? "TAKEN"
                                     : "NOT_TAKEN";
 
@@ -1830,8 +1808,8 @@ useEffect(() => {
                                   (isSunday
                                     ? "Sunday"
                                     : isSecondSaturday
-                                    ? "2nd Saturday"
-                                    : "");
+                                      ? "2nd Saturday"
+                                      : "");
 
                                 return (
                                   <td
@@ -1903,8 +1881,8 @@ useEffect(() => {
 
                               const taken =
                                 h.taken === "TAKEN" ||
-                                h.takenStatus === "TAKEN" ||
-                                h.defaultTaken
+                                  h.takenStatus === "TAKEN" ||
+                                  h.defaultTaken
                                   ? "TAKEN"
                                   : "NOT_TAKEN";
 
@@ -1916,15 +1894,15 @@ useEffect(() => {
                                     {isMandatory
                                       ? "Mandatory"
                                       : isOptional
-                                      ? "Optional"
-                                      : "-"}
+                                        ? "Optional"
+                                        : "-"}
                                   </td>
                                   <td>
                                     {isMandatory
                                       ? "Mandatory"
                                       : taken === "TAKEN"
-                                      ? "Taken (Optional)"
-                                      : "Not Taken"}
+                                        ? "Taken (Optional)"
+                                        : "Not Taken"}
                                   </td>
                                 </tr>
                               );
@@ -1970,7 +1948,7 @@ useEffect(() => {
                       <tbody>
                         {timesheetRows.map((a) => {
                           const rowExtraHours = a.extraHours || 0;
-                          
+
                           return (
                             <tr key={a._id}>
                               <td>{a.date}</td>
@@ -2067,10 +2045,10 @@ useEffect(() => {
                       : "Add Project Task / Requirement"}
                   </h2>
                   {taskError && (
-                    <div className="error-message" style={{ 
-                      backgroundColor: '#fff2f0', 
-                      border: '1px solid #ffccc7', 
-                      padding: '10px', 
+                    <div className="error-message" style={{
+                      backgroundColor: '#fff2f0',
+                      border: '1px solid #ffccc7',
+                      padding: '10px',
                       borderRadius: '4px',
                       marginBottom: '15px',
                       color: '#ff4d4f'
@@ -2386,7 +2364,82 @@ useEffect(() => {
                 </div>
 
                 <div className="card">
-                  <h2>My Tasks</h2>
+                  <h2>My Tasks ({filteredTasks.length} of {tasks.length})</h2>
+
+                  {/* 🔍 SEARCH FUNCTIONALITY */}
+                  <div style={{
+                    marginBottom: '15px',
+                    display: 'flex',
+                    gap: '10px',
+                    alignItems: 'center'
+                  }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <input
+                        type="text"
+                        placeholder="Search tasks by requirement, project, status..."
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px 8px 35px',
+                          borderRadius: '4px',
+                          border: '1px solid #d9d9d9',
+                          fontSize: '14px'
+                        }}
+                        value={searchTerm}
+                        onChange={(e) => {
+                          const term = e.target.value;
+                          setSearchTerm(term);
+
+                          if (term.trim() === '') {
+                            setFilteredTasks(tasks);
+                          } else {
+                            const searchLower = term.toLowerCase();
+                            const filtered = tasks.filter(task => {
+                              const requirement = (task.recentRequirement || '').toLowerCase();
+                              const project = (task.projectId?.name || '').toLowerCase();
+                              const status = (task.status || '').toLowerCase();
+                              const createdBy = (task.createdByUserId?.fullName || '').toLowerCase();
+                              const clientPriority = (task.clientPriority || '').toLowerCase();
+
+                              return requirement.includes(searchLower) ||
+                                project.includes(searchLower) ||
+                                status.includes(searchLower) ||
+                                createdBy.includes(searchLower) ||
+                                clientPriority.includes(searchLower);
+                            });
+                            setFilteredTasks(filtered);
+                          }
+                        }}
+                      />
+                      <div style={{
+                        position: 'absolute',
+                        left: '10px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: '#999'
+                      }}>
+                        🔍
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setSearchTerm('');
+                        setFilteredTasks(tasks);
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        backgroundColor: searchTerm ? '#ff4d4f' : '#d9d9d9',
+                        color: searchTerm ? 'white' : '#666',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '14px'
+                      }}
+                    >
+                      {searchTerm ? 'Clear Search' : 'Reset'}
+                    </button>
+                  </div>
+
                   <div className="table-wrapper small-table">
                     <table>
                       <thead>
@@ -2409,7 +2462,7 @@ useEffect(() => {
                         </tr>
                       </thead>
                       <tbody>
-                        {tasks.map((t, index) => {
+                        {filteredTasks.map((t, index) => {
                           const meta = priorityColors[t.clientPriority] || null;
                           const givenBy =
                             (t.prioritySource || "")
@@ -2417,20 +2470,30 @@ useEffect(() => {
                               .toLowerCase()
                               .replace(/\b\w/g, (c) => c.toUpperCase()) || "-";
 
-                          const createdByMe =
-                            t.createdBy === (user.fullName || "") ||
-                            t.createdBy === user.email;
+                          const canEdit = (() => {
+                            const userRole = user.role;
+                            const createdByRole = t.createdByRole;
+                            const createdById = t.createdByUserId?._id || t.createdByUserId;
+                            const userId = user._id || user.id;
+
+                            if (userRole === "admin") return false;
+                            if (userRole === "employee") {
+                              return createdByRole === "employee" && createdById === userId;
+                            }
+                            if (userRole === "manager" && createdByRole === "employee") {
+                              return true;
+                            }
+                            if (userRole === "manager" && createdByRole === "manager") {
+                              return createdById === userId;
+                            }
+                            return false;
+                          })();
 
                           return (
                             <tr key={t._id}>
                               <td>{index + 1}</td>
-                              <td>{t.project?.name || "-"}</td>
-                              <td
-                                style={{
-                                  maxWidth: 260,
-                                  whiteSpace: "pre-wrap"
-                                }}
-                              >
+                              <td>{t.projectId?.name || "-"}</td>
+                              <td style={{ maxWidth: 260, whiteSpace: "pre-wrap" }}>
                                 {t.recentRequirement}
                               </td>
                               <td>{t.requirementType || "NEW"}</td>
@@ -2440,10 +2503,7 @@ useEffect(() => {
                               <td>{t.originalClosureDate || "-"}</td>
                               <td>{t.estimatedDate || "-"}</td>
                               <td>{t.noOfDays || 0}</td>
-                              <td>{Number(t.hoursAllocated || 0)}</td>
-
-
-
+                              <td>{Number(t.estimateHours || 0)}</td>
                               <td>
                                 {meta ? (
                                   <span
@@ -2464,15 +2524,23 @@ useEffect(() => {
                                 )}
                               </td>
                               <td>{givenBy}</td>
-                              <td>{t.createdBy || "-"}</td>
-                              <td>
-                                {createdByMe ? (
+                              <td>{t.createdByUserId?.fullName || "-"}</td>
+                              <td style={{ textAlign: "center" }}>
+                                {canEdit ? (
                                   <button
                                     type="button"
-                                    className="link-btn"
                                     onClick={() => startEditTask(t)}
+                                    title="Edit Task"
+                                    style={{
+                                      background: "none",
+                                      border: "none",
+                                      cursor: "pointer",
+                                      color: "#1890ff",
+                                      fontSize: "16px",
+                                      padding: 0
+                                    }}
                                   >
-                                    Edit
+                                    <FaEdit />
                                   </button>
                                 ) : (
                                   "-"
@@ -2483,11 +2551,25 @@ useEffect(() => {
                         })}
                       </tbody>
                     </table>
-                    {tasks.length === 0 && (
+                    {filteredTasks.length === 0 && (
                       <p className="empty">
-                        No tasks yet. Manager can allocate tasks to you, and you
-                        can create your own above.
+                        {searchTerm
+                          ? `No tasks found matching "${searchTerm}"`
+                          : "No tasks yet. Manager can allocate tasks to you, and you can create your own above."}
                       </p>
+                    )}
+                    {searchTerm && filteredTasks.length > 0 && (
+                      <div style={{
+                        marginTop: '10px',
+                        padding: '8px',
+                        backgroundColor: '#e6f7ff',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        textAlign: 'center',
+                        color: '#1890ff'
+                      }}>
+                        Found {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''} matching "{searchTerm}"
+                      </div>
                     )}
                   </div>
                 </div>
@@ -2545,7 +2627,7 @@ useEffect(() => {
                     </div>
                   )}
                 </div>
-                
+
                 <div className="card" style={{ marginTop: '16px' }}>
                   <h3>Payslip Information</h3>
                   <div className="note">
