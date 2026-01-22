@@ -897,5 +897,13 @@ input:invalid, select:invalid, textarea:invalid {
     opacity: 0;
   }
 }
+/* ================================
+   SHOW ALL TASK RECORDS (FINAL FIX)
+   ================================ */
+.table-wrapper.small-table {
+  max-height: none !important;
+  height: auto !important;
+  overflow-y: visible !important;
+}
 
 
