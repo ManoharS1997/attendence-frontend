@@ -992,7 +992,8 @@ export default function AdminDashboard() {
                     Calculated per employee from attendance for {monthLabel}.
                   </p>
 
-                  <div className="table-wrapper small-table">
+                  <div className="table-wrapper">
+
                     <div className="table-wrapper">
                     </div>
 
@@ -1925,10 +1926,11 @@ export default function AdminDashboard() {
                       </thead>
                       <tbody>
                         {allTasks.map((t, index) => {
-                          const project = t.project || t.projectId || {};
+                          
                           const assigned = t.assignedUser || t.assignedUserId || {};
 
-                          const projectName = project.name || project.projectName || "-";
+                          const projectName = t.project?.name || t.projectId?.name || "-";
+
                           const assignedName = assigned.fullName || assigned.email || "-";
 
                           return (
@@ -1964,7 +1966,8 @@ export default function AdminDashboard() {
                               <td>{t.noOfDays || 0}</td>
                               <td>{t.clientPriority || "-"}</td>
                               <td>{t.prioritySource || "-"}</td>
-                              <td>{t.createdBy || "-"}</td>
+                              <td>{t.createdByUserId?.fullName || "-"}</td>
+
                             </tr>
                           );
                         })}
