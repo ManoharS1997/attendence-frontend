@@ -14,16 +14,13 @@ body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* ===============================
-   ROOT
-   =============================== */
 #root {
   min-height: 100vh;
   width: 100%;
 }
 
 /* ===============================
-   MAIN LAYOUT
+   LAYOUT
    =============================== */
 .page {
   width: 100%;
@@ -37,7 +34,7 @@ body {
 
 .main-area {
   flex: 1;
-  min-width: 0; /* IMPORTANT for tables */
+  min-width: 0;
   background: #f8fafc;
 }
 
@@ -49,28 +46,57 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  flex-wrap: wrap;
 }
 
 /* ===============================
-   SIDEBAR (DESKTOP)
+   SIDEBAR (DEFAULT = DESKTOP + TABLET)
    =============================== */
 .sidebar {
   width: 240px;
   min-height: 100vh;
   background: #ffffff;
   border-right: 1px solid #e5e7eb;
-  flex-shrink: 0;
-
   display: flex;
   flex-direction: column;
-  align-items: stretch;
 }
 
-@media (max-width: 1024px) {
-  .sidebar {
-    width: 200px;
-  }
+/* ===============================
+   SIDEBAR HEADER (FINGERPRINT GAP)
+   =============================== */
+.sidebar-header {
+  padding: 6px 10px;
+  margin-bottom: 4px;
+}
+
+.sidebar-header img {
+  max-height: 34px;
+  display: block;
+  margin: 0 auto;
+}
+
+.sidebar-header hr {
+  margin: 4px 0;
+}
+
+/* ===============================
+   SIDEBAR NAV (FINGERPRINT GAP)
+   =============================== */
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 8px;
+}
+
+.sidebar-nav button {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  text-align: left;
+}
+
+.nav-item.active {
+  padding: 8px 12px;
 }
 
 /* ===============================
@@ -83,29 +109,17 @@ body {
 }
 
 /* ===============================
-   TABLE FIX
+   TABLE
    =============================== */
 .table-wrapper {
   width: 100%;
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 table {
   width: 100%;
   min-width: 900px;
   border-collapse: collapse;
-}
-
-@media (max-width: 768px) {
-  /* FIX DIVIDER LINE GAP BELOW LOGO */
-.sidebar-header hr {
-  margin: 2px 0;          /* ✅ fingerprint-sized gap */
-}
-
-  table {
-    min-width: 700px;
-  }
 }
 
 /* ===============================
@@ -115,7 +129,7 @@ input,
 select,
 textarea {
   min-height: 40px;
-  font-size: 16px; /* iOS zoom fix */
+  font-size: 16px;
 }
 
 /* ===============================
@@ -127,28 +141,17 @@ button {
 }
 
 /* ===============================
-   HIDE ON MOBILE
+   MOBILE ONLY (≤ 767px)
    =============================== */
-@media (max-width: 768px) {
-  .hide-mobile {
-    display: none !important;
-  }
-}
+@media (max-width: 767px) {
 
-/* ===============================
-   MOBILE SIDEBAR (FINAL – CLEAN)
-   =============================== */
-@media (max-width: 768px) {
-  /* SIDEBAR */
+  /* Sidebar becomes drawer */
   .sidebar {
     position: fixed;
     top: 0;
     left: 0;
     width: 260px;
     height: 100vh;
-    margin: 0;
-    border-radius: 0;
-    background: #ffffff;
     z-index: 1001;
     transform: translateX(-100%);
     transition: transform 0.3s ease;
@@ -157,135 +160,254 @@ button {
   .sidebar.open {
     transform: translateX(0);
   }
-/* SIDEBAR HEADER */
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;      /* 🔽 slightly tighter */
-  margin-bottom: 2px;    /* 🔽 MAIN FIX: removes extra space */
-}
 
-
-  /* SIDEBAR NAV */
-.sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 2px 8px;       /* 🔽 removes extra top space */
-}
-
-
-
-  .sidebar-nav button {
-  width: 100%;
-  padding: 10px 12px;     /* 🔽 tighter height */
-  text-align: left;
-  border-radius: 8px;     /* 🔽 less pill */
-  white-space: nowrap;
-}
-
-
-  .nav-item.active {
-  padding: 10px 12px;     /* 🔽 same as normal */
-  border-radius: 8px;
-  height: auto;
-}
-
-
-  /* CLOSE BUTTON */
-  .sidebar-close-btn {
-    /* HIDE CLOSE BUTTON ON DESKTOP */
-@media (min-width: 769px) {
-  .sidebar-close-btn {
-    display: none !important;
-  }
-}
-
-    display: block;
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    font-size: 22px;
-    background: none;
-    border: none;
-    cursor: pointer;
-  }
-
-  /* OVERLAY */
   .sidebar-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.45);
+    background: rgba(0,0,0,0.45);
     z-index: 1000;
   }
 
-  /* HAMBURGER */
-  .mobile-menu-btn {
-
-    /* HIDE HAMBURGER ON DESKTOP */
-@media (min-width: 769px) {
-  .mobile-menu-btn {
-    display: none !important;
-  }
-   /* Hide sidebar close (X) button */
-  .sidebar-close-btn {
-    display: none !important;
-  }
+  /* Buttons only on phone */
+  .mobile-menu-btn,
   .sidebar-close-btn {
     display: block;
   }
-}
 
-    display: block !important;
-    font-size: 24px;
-    background: none;
-    border: none;
-    padding: 8px;
-    cursor: pointer;
-    z-index: 1100;
+  table {
+    min-width: 700px;
   }
 
-  /* TOPBAR */
-  .topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    z-index: 900;
-  }
-
-  .topbar-actions {
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    margin-top: 6px;
+  .hide-mobile {
+    display: none !important;
   }
 }
 
 /* ===============================
-   iPHONE SPECIFIC TWEAK
+   TABLET + DESKTOP (≥ 768px)
    =============================== */
-@media (max-width: 430px) {
-  .sidebar {
-    width: 200px;              /* 🔽 slightly slimmer */
-  }
-
-  .sidebar-nav {
-    gap: 3px;                  /* 🔽 tighter vertical gap */
-    padding: 4px 8px;
-    display: flex; 
-    justify-content: flex-start; 
-  }
-
-  .sidebar-nav button {
-    font-size: 13px;           /* 🔽 cleaner on iPhone */
-    padding: 8px 10px;         /* 🔽 less height */
-    border-radius: 8px;
-  }
-
-  .nav-item.active {
-    padding: 8px 10px;         /* 🔽 same as normal */
-    border-radius: 8px;
+@media (min-width: 768px) {
+  .mobile-menu-btn,
+  .sidebar-close-btn {
+    display: none !important;
   }
 }
 
+/* ===============================
+   SMALL PHONE
+   =============================== */
+@media (max-width: 430px) {
+  .sidebar {
+    width: 200px;
+  }
+
+  .sidebar-nav button {
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+}
+/* ===============================
+   SIDEBAR GAP HARD FIX (ALL DEVICES)
+   =============================== */
+
+/* Force sidebar content to top */
+.sidebar {
+  justify-content: flex-start !important;
+}
+
+/* Remove any accidental top spacing */
+.sidebar-header {
+  margin-top: 0 !important;
+}
+
+/* THIS IS THE KEY FIX */
+.sidebar-nav {
+  margin-top: 0 !important;
+  padding-top: 4px !important; /* fingerprint gap */
+}
+
+/* Ensure nav is not vertically centered */
+.sidebar > * {
+  flex-shrink: 0;
+}
+/* ===============================
+   SIDEBAR HARD STRUCTURE FIX (ALL DEVICES)
+   =============================== */
+
+/* Sidebar must be column-locked */
+.sidebar {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+}
+
+/* Header sticks to top */
+.sidebar-header {
+  flex: 0 0 auto !important;
+  margin-bottom: 6px !important; /* fingerprint gap */
+}
+
+/* NAV must NOT grow or center */
+.sidebar-nav {
+  flex: 0 0 auto !important;
+  margin-top: 0 !important;
+  padding-top: 4px !important; /* fingerprint gap */
+}
+
+/* THIS absorbs all extra space */
+.sidebar-spacer {
+  flex: 1 1 auto;
+}
+/* ===============================
+   GLOBAL SIDEBAR GAP FIX (ALL DEVICES)
+   =============================== */
+
+.sidebar {
+  padding-top: 4px !important;
+}
+
+/* Logo container */
+.sidebar-header {
+  padding: 6px 8px !important;
+  margin-bottom: 4px !important;
+}
+
+/* Logo image */
+.sidebar-header img {
+  display: block;
+  max-height: 34px;
+  margin: 0 auto !important;
+}
+
+/* Navigation */
+.sidebar-nav {
+  padding-top: 4px !important;
+  margin-top: 0 !important;
+  gap: 6px !important;
+}
+
+/* Buttons */
+.sidebar-nav .nav-item {
+  padding: 8px 12px !important;
+  margin: 0 !important;
+  line-height: 1.2;
+}
+
+/* Active button */
+.sidebar-nav .nav-item.active {
+  padding: 8px 12px !important;
+}
+/* ===============================
+   UNIVERSAL RESPONSIVE TABLE CARD
+   (Mobile / Tablet / Desktop)
+   =============================== */
+
+.card {
+  width: 100%;
+  overflow: hidden; /* keeps rounded corners clean */
+}
+
+/* Table container */
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 6px; /* space for scrollbar */
+}
+
+/* Table itself */
+.table-wrapper table {
+  width: 100%;
+  min-width: 900px; /* forces horizontal scroll */
+  border-collapse: collapse;
+}
+
+/* Tablet */
+@media (max-width: 1024px) {
+  .table-wrapper table {
+    min-width: 800px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 767px) {
+  .table-wrapper table {
+    min-width: 700px;
+  }
+}
+
+/* Small phones */
+@media (max-width: 480px) {
+  .table-wrapper table {
+    min-width: 650px;
+  }
+}
+.table-wrapper::-webkit-scrollbar {
+  height: 6px;
+}
+.table-wrapper::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 6px;
+}
+/* ===============================
+   HOLIDAY CALENDAR – FULL VISIBILITY FIX
+   =============================== */
+
+/* Do NOT clip calendar */
+.card {
+  overflow: visible;
+}
+
+/* Calendar outer wrapper */
+.holiday-calendar-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 8px;
+}
+
+/* Calendar table/grid */
+.holiday-calendar {
+  min-width: 420px;   /* forces full calendar */
+  width: 100%;
+}
+
+/* Calendar cells */
+.holiday-calendar td,
+.holiday-calendar th {
+  min-width: 56px;
+  white-space: nowrap;
+}
+
+/* Tablets */
+@media (max-width: 1024px) {
+  .holiday-calendar {
+    min-width: 480px;
+  }
+}
+
+/* Mobiles */
+@media (max-width: 767px) {
+  .holiday-calendar {
+    min-width: 520px;
+  }
+}
+
+/* Very small devices */
+@media (max-width: 480px) {
+  .holiday-calendar {
+    min-width: 560px;
+  }
+}
+/* Prevent calendar column from shrinking */
+.holiday-calendar-wrapper {
+  flex: 1 1 360px;
+  min-width: 360px;
+}
+@media (max-width: 768px) {
+  .holiday-calendar {
+    font-size: 12px;
+  }
+}

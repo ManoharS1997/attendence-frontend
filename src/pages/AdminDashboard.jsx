@@ -82,8 +82,8 @@ export default function AdminDashboard() {
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   useEffect(() => {
-  document.body.style.overflow = sidebarOpen ? "hidden" : "auto";
-}, [sidebarOpen]);
+    document.body.style.overflow = sidebarOpen ? "hidden" : "auto";
+  }, [sidebarOpen]);
 
 
 
@@ -170,7 +170,7 @@ export default function AdminDashboard() {
   };
 
   // ---------- LOADERS ----------
-  
+
   const loadAttendance = useCallback(async () => {
     try {
       const res = await api.get("/attendance", { params: { month, year } });
@@ -271,7 +271,7 @@ export default function AdminDashboard() {
       setAllTasks([]);
     }
   }, []);
-  
+
   const loadEmployees = useCallback(async () => {
     try {
       const res = await api.get("/employees");
@@ -305,7 +305,7 @@ export default function AdminDashboard() {
     // load projects asap
     loadProjects();
   }, [loadProjects]);
-  
+
   useEffect(() => {
     loadEmployees();
   }, [loadEmployees]);
@@ -545,10 +545,10 @@ export default function AdminDashboard() {
           gap: 8,
         }}
       >
-        <span style={{ 
-          background: "rgba(255,255,255,0.2)", 
-          padding: "4px 8px", 
-          borderRadius: 6 
+        <span style={{
+          background: "rgba(255,255,255,0.2)",
+          padding: "4px 8px",
+          borderRadius: 6
         }}>
           📅
         </span>
@@ -593,12 +593,12 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
-      <div style={{ 
-        marginTop: 12, 
-        opacity: 0.9, 
+      <div style={{
+        marginTop: 12,
+        opacity: 0.9,
         fontSize: 12,
         borderTop: "1px solid rgba(255,255,255,0.1)",
-        paddingTop: 8 
+        paddingTop: 8
       }}>
         Sundays, 2nd Saturdays and configured public holidays are treated as
         system holidays across the organization. Admin has view-only access to
@@ -626,17 +626,17 @@ export default function AdminDashboard() {
           boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
         }}
       >
-        <div style={{ 
-          fontSize: 14, 
-          fontWeight: 600, 
+        <div style={{
+          fontSize: 14,
+          fontWeight: 600,
           color: "#2c3e50",
           marginBottom: 16,
           display: "flex",
           alignItems: "center",
           gap: 8
         }}>
-          <span style={{ 
-            background: "#4a6cf7", 
+          <span style={{
+            background: "#4a6cf7",
             color: "white",
             width: 24,
             height: 24,
@@ -650,16 +650,16 @@ export default function AdminDashboard() {
           </span>
           Export Data
         </div>
-        <div style={{ 
-          display: "flex", 
-          gap: 12, 
-          alignItems: "center", 
-          flexWrap: "wrap" 
+        <div style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          flexWrap: "wrap"
         }}>
           <div className="filter-group">
-            <label style={{ 
-              fontSize: 12, 
-              fontWeight: 500, 
+            <label style={{
+              fontSize: 12,
+              fontWeight: 500,
               color: "#5a6c7d",
               marginBottom: 4,
               display: "block"
@@ -696,9 +696,9 @@ export default function AdminDashboard() {
           </div>
 
           <div className="filter-group">
-            <label style={{ 
-              fontSize: 12, 
-              fontWeight: 500, 
+            <label style={{
+              fontSize: 12,
+              fontWeight: 500,
               color: "#5a6c7d",
               marginBottom: 4,
               display: "block"
@@ -732,8 +732,8 @@ export default function AdminDashboard() {
           </div>
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 24 }}>
-            <button 
-              onClick={handleDownloadAttendanceCsv} 
+            <button
+              onClick={handleDownloadAttendanceCsv}
               className="export-btn"
               style={{ background: "#4a6cf7" }}
             >
@@ -741,8 +741,8 @@ export default function AdminDashboard() {
               Attendance CSV
             </button>
 
-            <button 
-              onClick={handleDownloadTasksCsv} 
+            <button
+              onClick={handleDownloadTasksCsv}
               className="export-btn"
               style={{ background: "#10b981" }}
             >
@@ -750,8 +750,8 @@ export default function AdminDashboard() {
               Tasks CSV
             </button>
 
-            <button 
-              onClick={handleDownloadLeavesCsv} 
+            <button
+              onClick={handleDownloadLeavesCsv}
               className="export-btn"
               style={{ background: "#f59e0b" }}
             >
@@ -759,8 +759,8 @@ export default function AdminDashboard() {
               Leaves CSV
             </button>
 
-            <button 
-              onClick={handleDownloadLeaveSummaryCsv} 
+            <button
+              onClick={handleDownloadLeaveSummaryCsv}
               className="export-btn"
               style={{ background: "#8b5cf6" }}
             >
@@ -883,31 +883,31 @@ export default function AdminDashboard() {
           }
         `}
       </style>
-      
+
       <div className="shell">
         {sidebarOpen && (
-  <div
-    className="sidebar-overlay"
-    onClick={() => setSidebarOpen(false)}
-  />
-)}
+          <div
+            className="sidebar-overlay"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
 
         {/* Sidebar */}
         <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
           <button
-  className="sidebar-close-btn"
-  onClick={() => setSidebarOpen(false)}
->
-  ✕
-</button>
-
+            className="sidebar-close-btn"
+            onClick={() => setSidebarOpen(false)}
+          >
+            ✕
+          </button>
 
           <div className="sidebar-header">
             <div className="sidebar-logo">
               <img src={logo} alt="NowIT Services" />
             </div>
           </div>
-          <nav className="sidebar-nav " >
+
+          <nav className="sidebar-nav">
             <button
               className={activeTab === "dashboard" ? "nav-item active" : "nav-item"}
               onClick={() => setActiveTab("dashboard")}
@@ -921,6 +921,7 @@ export default function AdminDashboard() {
             >
               Timesheet Management
             </button>
+
             <button
               className={activeTab === "payslips" ? "nav-item active" : "nav-item"}
               onClick={() => setActiveTab("payslips")}
@@ -933,24 +934,24 @@ export default function AdminDashboard() {
         <div className="main-area" style={{ overflowX: "hidden" }}>
 
           <header className="topbar">
-  {/* ☰ MOBILE HAMBURGER BUTTON */}
-  <button
-    className="mobile-menu-btn"
-    onClick={() => setSidebarOpen(true)}
-  >
-    ☰
-  </button>
+            {/* ☰ MOBILE HAMBURGER BUTTON */}
+            <button
+              className="mobile-menu-btn"
+              onClick={() => setSidebarOpen(true)}
+            >
+              ☰
+            </button>
 
-  <div>
-    <strong>{user.fullName}</strong> — {user.email}
-  </div>
+            <div>
+              <strong>{user.fullName}</strong> — {user.email}
+            </div>
 
-  <div className="topbar-actions">
-    <button onClick={handleLogout} className="outline-btn">
-      Logout
-    </button>
-  </div>
-</header>
+            <div className="topbar-actions">
+              <button onClick={handleLogout} className="outline-btn">
+                Logout
+              </button>
+            </div>
+          </header>
 
 
           {/* ========== TIMESHEET MANAGEMENT TAB ========== */}
@@ -993,7 +994,7 @@ export default function AdminDashboard() {
 
                   <div className="table-wrapper small-table">
                     <div className="table-wrapper">
-                  </div>
+                    </div>
 
                     <table>
                       <thead>
@@ -1053,7 +1054,7 @@ export default function AdminDashboard() {
                           <th>Date</th>
                           <th>Employee</th>
                           <th className="hide-mobile">Email</th>
-                           <th>Status</th>
+                          <th>Status</th>
                           <th>In</th>
                           <th>Out</th>
                           <th>Manager Decision</th>
@@ -1154,12 +1155,12 @@ export default function AdminDashboard() {
                   <div
                     style={{
                       display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
                       gap: 20,
                       flexWrap: "wrap",
+                      width: "100%",
                     }}
                   >
+
                     {/* Calendar grid */}
                     <div style={{ flex: "1 1 360px" }}>
                       <div
@@ -1232,7 +1233,7 @@ export default function AdminDashboard() {
                           Working Day
                         </span>
                       </div>
-
+                      <div className="holiday-calendar-wrapper"></div>
                       <table className="holiday-calendar">
                         <thead>
                           <tr>
@@ -1366,7 +1367,7 @@ export default function AdminDashboard() {
 
                     {/* Public holiday list */}
                     <div style={{ flex: "1 1 280px" }}>
-                      <div style={{ 
+                      <div style={{
                         background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)",
                         padding: "16px",
                         borderRadius: "12px",
@@ -1374,8 +1375,8 @@ export default function AdminDashboard() {
                         marginBottom: "12px"
                       }}>
                         <h3 style={{ fontSize: 15, marginBottom: 8, color: "#1e293b", display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ 
-                            background: "#4a6cf7", 
+                          <span style={{
+                            background: "#4a6cf7",
                             color: "white",
                             width: 24,
                             height: 24,
@@ -1471,8 +1472,8 @@ export default function AdminDashboard() {
                           )}
                         </div>
 
-                        <div style={{ 
-                          marginTop: 12, 
+                        <div style={{
+                          marginTop: 12,
                           padding: "12px",
                           background: "rgba(74, 108, 247, 0.1)",
                           borderRadius: "8px",
@@ -1485,7 +1486,7 @@ export default function AdminDashboard() {
                         </div>
                         <p className="note" style={{ marginTop: 8, fontSize: 12 }}>
                           Total public holidays for {monthLabel}:{" "}
-                          <strong style={{ color: "#4a6cf7", fontSize: 14 }}>{totalPublicForMonth}</strong> 
+                          <strong style={{ color: "#4a6cf7", fontSize: 14 }}>{totalPublicForMonth}</strong>
                           {" "}(Mandatory:{" "}
                           {mandatoryPublicCount}, Optional Taken:{" "}
                           {optionalTakenCount})
@@ -1506,9 +1507,9 @@ export default function AdminDashboard() {
                 <div className="card">
                   <h2>Employee Payslips</h2>
 
-                  <div style={{ 
-                    display: "flex", 
-                    gap: 16, 
+                  <div style={{
+                    display: "flex",
+                    gap: 16,
                     alignItems: "flex-end",
                     marginBottom: 20,
                     padding: 16,
@@ -1517,9 +1518,9 @@ export default function AdminDashboard() {
                     border: "1px solid #d1d9e6"
                   }}>
                     <div className="filter-group" style={{ flex: 1 }}>
-                      <label style={{ 
-                        fontSize: 12, 
-                        fontWeight: 600, 
+                      <label style={{
+                        fontSize: 12,
+                        fontWeight: 600,
                         color: "#5a6c7d",
                         marginBottom: 6,
                         display: "block"
@@ -1554,9 +1555,9 @@ export default function AdminDashboard() {
                     </div>
 
                     <div className="filter-group" style={{ flex: 1 }}>
-                      <label style={{ 
-                        fontSize: 12, 
-                        fontWeight: 600, 
+                      <label style={{
+                        fontSize: 12,
+                        fontWeight: 600,
                         color: "#5a6c7d",
                         marginBottom: 6,
                         display: "block"
@@ -1868,13 +1869,13 @@ export default function AdminDashboard() {
                                 <span style={{
                                   display: "inline-block",
                                   padding: "4px 8px",
-                                  background: totals.remaining > 100 ? "#d1fae5" : 
-                                            totals.remaining > 50 ? "#fef3c7" : "#fee2e2",
+                                  background: totals.remaining > 100 ? "#d1fae5" :
+                                    totals.remaining > 50 ? "#fef3c7" : "#fee2e2",
                                   borderRadius: "12px",
                                   fontSize: "11px",
                                   fontWeight: "600",
-                                  color: totals.remaining > 100 ? "#065f46" : 
-                                        totals.remaining > 50 ? "#92400e" : "#991b1b"
+                                  color: totals.remaining > 100 ? "#065f46" :
+                                    totals.remaining > 50 ? "#92400e" : "#991b1b"
                                 }}>
                                   {totals.remaining} hrs
                                 </span>
@@ -1945,10 +1946,10 @@ export default function AdminDashboard() {
                                   borderRadius: "12px",
                                   fontSize: "11px",
                                   fontWeight: "600",
-                                  background: t.status === "Completed" ? "#d1fae5" : 
-                                            t.status === "In Progress" ? "#dbeafe" : "#f1f5f9",
-                                  color: t.status === "Completed" ? "#065f46" : 
-                                        t.status === "In Progress" ? "#1e40af" : "#64748b"
+                                  background: t.status === "Completed" ? "#d1fae5" :
+                                    t.status === "In Progress" ? "#dbeafe" : "#f1f5f9",
+                                  color: t.status === "Completed" ? "#065f46" :
+                                    t.status === "In Progress" ? "#1e40af" : "#64748b"
                                 }}>
                                   {t.status}
                                 </span>
