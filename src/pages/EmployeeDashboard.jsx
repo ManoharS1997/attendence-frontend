@@ -376,16 +376,22 @@ export default function EmployeeDashboard() {
   });
   const [editingTaskId, setEditingTaskId] = useState(null);
 
-  const loadExtraHoursAndCompOff = useCallback(async () => {
-    try {
-      const res = await api.get("/attendance/extra-hours-balance");
-      if (res.data) {
-        setCompOffBalance(res.data.compOff || 0);
-      }
-    } catch (error) {
-      console.error("Error loading extra hours balance:", error);
-    }
-  }, []);
+  const loadDashboard = useCallback(async () => {
+  const res = await api.get("/utils/dashboard");
+
+  setSharedMetrics({
+    presentDays: res.data.attendance.presentDays,
+    halfDays: res.data.attendance.halfDays,
+    leavesTaken: res.data.attendance.leaveDays,
+    hoursWorked: res.data.timesheet.totalHoursWorked,
+    pendingRequests: 0,
+    extraHours: res.data.timesheet.totalExtraHours,
+    compOffRequests: 0
+  });
+
+  setCompOffBalance(res.data.leaveBalance.compOff || 0);
+}, []);
+
 
   const loadAttendance = useCallback(async (selectedMonth = month, selectedYear = year) => {
     const res = await api.get("/attendance/my", {
@@ -429,17 +435,18 @@ export default function EmployeeDashboard() {
     }
   }, []);
 
-  const forceRefreshAll = useCallback(async () => {
-    try {
-      await Promise.all([
-        loadAttendance(),
-        loadSummary(),
-        loadExtraHoursAndCompOff()
-      ]);
-    } catch (error) {
-      console.error("Error refreshing data:", error);
-    }
-  }, [loadAttendance, loadSummary, loadExtraHoursAndCompOff]);
+ const forceRefreshAll = useCallback(async () => {
+  try {
+    await Promise.all([
+      loadAttendance(),
+      loadSummary(),
+      loadDashboard()
+    ]);
+  } catch (error) {
+    console.error("Error refreshing data:", error);
+  }
+}, [loadAttendance, loadSummary, loadDashboard]);
+
 
   useEffect(() => {
     const current = new Date();
@@ -466,11 +473,12 @@ export default function EmployeeDashboard() {
     }
   }, [month, year, lastVisitedMonthYear]);
 
-  useEffect(() => {
-    loadAttendance();
-    loadSummary();
-    loadExtraHoursAndCompOff();
-  }, [loadAttendance, loadSummary, loadExtraHoursAndCompOff]);
+ useEffect(() => {
+  loadAttendance();
+  loadSummary();
+  loadDashboard();
+}, [loadAttendance, loadSummary, loadDashboard]);
+
 
   useEffect(() => {
     const checkBirthday = async () => {
@@ -1371,18 +1379,18 @@ export default function EmployeeDashboard() {
                     treated as system holidays and cannot be edited.
                   </p>
                   <form className="form-grid" onSubmit={handleSaveAttendance}>
-                  <label>
-  Date
-  <div className="date-input-wrapper">
-    <FaCalendarAlt className="date-icon" />
-    <input
-      type="date"
-      value={toInputDate(date)}          // yyyy-mm-dd for browser
-      onChange={(e) => setDate(fromInputDate(e.target.value))} // back to dd-mm-yyyy
-      disabled={isSystemHoliday}
-    />
-  </div>
-</label>
+                    <label>
+                      Date
+                      <div className="date-input-wrapper">
+                        <FaCalendarAlt className="date-icon" />
+                        <input
+                          type="date"
+                          value={toInputDate(date)}          // yyyy-mm-dd for browser
+                          onChange={(e) => setDate(fromInputDate(e.target.value))} // back to dd-mm-yyyy
+                          disabled={isSystemHoliday}
+                        />
+                      </div>
+                    </label>
 
 
                     <label>
