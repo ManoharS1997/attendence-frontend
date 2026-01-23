@@ -1606,7 +1606,7 @@ export default function EmployeeDashboard() {
                   </div>
                 </div>
 
-                <div className="card table-shadow-card">
+                {/* <div className="card table-shadow-card">
                   <h2 style={{ color: '#ffffff' }}>Leave & Balance Summary</h2>
                   <table className="leave-summary-table-compact">
                     <tbody>
@@ -1652,7 +1652,7 @@ export default function EmployeeDashboard() {
                       </tr>
                     </tbody>
                   </table>
-                </div>
+                </div> */}
 
                 <div className="card">
                   <h2>Public Holidays – {monthLabel}</h2>
