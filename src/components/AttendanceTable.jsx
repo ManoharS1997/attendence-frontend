@@ -1,3 +1,20 @@
+const getDisplayStatus = (r) => {
+  if (r.status === "PRESENT HALF DAY") {
+    if (r.halfDayType === "FUN") {
+      return "Half Day - Fun Thursday";
+    }
+    if (r.halfDayType === "DEVELOPMENT") {
+      return "Half Day - Development";
+    }
+    return "Half Day";
+  }
+  return r.status;
+};
+
+const getStatusClass = (r) => {
+  return getDisplayStatus(r).replace(/\s/g, "-");
+};
+
 export default function AttendanceTable({ records, title }) {
   return (
     <div className="card">
@@ -19,8 +36,8 @@ export default function AttendanceTable({ records, title }) {
               <tr key={r._id}>
                 <td>{r.date}</td>
                 <td>
-                  <span className={`status-pill status-${r.status.replace(/\s/g, "-")}`}>
-                    {r.status}
+                  <span className={`status-pill status-${getStatusClass(r)}`}>
+                    {getDisplayStatus(r)}
                   </span>
                 </td>
                 <td>{r.workInTime || "-"}</td>
