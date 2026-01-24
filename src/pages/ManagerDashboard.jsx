@@ -98,12 +98,12 @@ const diffDays = (startStr, endStr) => {
 
   const [sd, sm, sy] = startStr.split("-").map(Number);
   const [ed, em, ey] = endStr.split("-").map(Number);
-  
+
   if ([sd, sm, sy, ed, em, ey].some((n) => Number.isNaN(n))) return 0;
 
   const start = new Date(sy, sm - 1, sd);
   const end = new Date(ey, em - 1, ed);
-  
+
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
   if (end < start) return 0;
 
@@ -111,45 +111,45 @@ const diffDays = (startStr, endStr) => {
   const holidaysInRange = [];
   let currentMonth = sm;
   let currentYear = sy;
-  
+
   while (currentYear < ey || (currentYear === ey && currentMonth <= em)) {
     const monthHolidays = buildHolidayCalendar(
-      String(currentMonth).padStart(2, '0'), 
+      String(currentMonth).padStart(2, '0'),
       String(currentYear)
     ) || [];
-    
+
     // Filter holidays that are within the date range
     monthHolidays.forEach((h) => {
-  let holidayDate = null;
+      let holidayDate = null;
 
-  // Case 1: h.date is "dd-mm-yyyy"
-  if (typeof h.date === "string" && h.date.includes("-")) {
-    const [hd, hm, hy] = h.date.split("-").map(Number);
-    holidayDate = new Date(hy, hm - 1, hd);
-  }
+      // Case 1: h.date is "dd-mm-yyyy"
+      if (typeof h.date === "string" && h.date.includes("-")) {
+        const [hd, hm, hy] = h.date.split("-").map(Number);
+        holidayDate = new Date(hy, hm - 1, hd);
+      }
 
-  // Case 2: h.dateKey is "yyyy-mm-dd"
-  else if (typeof h.dateKey === "string" && h.dateKey.includes("-")) {
-    const [hy, hm, hd] = h.dateKey.split("-").map(Number);
-    holidayDate = new Date(hy, hm - 1, hd);
-  }
+      // Case 2: h.dateKey is "yyyy-mm-dd"
+      else if (typeof h.dateKey === "string" && h.dateKey.includes("-")) {
+        const [hy, hm, hd] = h.dateKey.split("-").map(Number);
+        holidayDate = new Date(hy, hm - 1, hd);
+      }
 
-  // Case 3: h.date is already a Date object
-  else if (h.date instanceof Date) {
-    holidayDate = h.date;
-  }
+      // Case 3: h.date is already a Date object
+      else if (h.date instanceof Date) {
+        holidayDate = h.date;
+      }
 
-  if (
-    holidayDate &&
-    !isNaN(holidayDate.getTime()) &&
-    holidayDate >= start &&
-    holidayDate <= end
-  ) {
-    holidaysInRange.push(h);
-  }
-});
+      if (
+        holidayDate &&
+        !isNaN(holidayDate.getTime()) &&
+        holidayDate >= start &&
+        holidayDate <= end
+      ) {
+        holidaysInRange.push(h);
+      }
+    });
 
-    
+
     // Move to next month
     currentMonth++;
     if (currentMonth > 12) {
@@ -161,39 +161,39 @@ const diffDays = (startStr, endStr) => {
   // Create a Set of holiday dates for quick lookup
   const holidayDates = new Set();
   holidaysInRange.forEach(h => {
-   if (typeof h.date === "string") {
-  holidayDates.add(h.date);
-} else if (typeof h.dateKey === "string") {
-  const [y, m, d] = h.dateKey.split("-");
-  holidayDates.add(`${d}-${m}-${y}`);
-}
+    if (typeof h.date === "string") {
+      holidayDates.add(h.date);
+    } else if (typeof h.dateKey === "string") {
+      const [y, m, d] = h.dateKey.split("-");
+      holidayDates.add(`${d}-${m}-${y}`);
+    }
 
   });
 
   let count = 0;
   const cursor = new Date(start);
-  
+
   while (cursor <= end) {
     const yyyy = cursor.getFullYear();
     const mm = String(cursor.getMonth() + 1).padStart(2, "0");
     const dd = String(cursor.getDate()).padStart(2, "0");
     const dateStr = `${dd}-${mm}-${yyyy}`;
-    
+
     const weekday = cursor.getDay(); // 0 Sunday .. 6 Saturday
     const isSunday = weekday === 0;
-    
+
     // Check if it's 2nd Saturday
     const dayOfMonth = cursor.getDate();
     const weekIndex = Math.floor((dayOfMonth - 1) / 7);
     const isSecondSaturday = weekday === 6 && weekIndex === 1;
-    
+
     // Check if it's a holiday
     const isHoliday = holidayDates.has(dateStr);
-    
+
     if (!isSunday && !isSecondSaturday && !isHoliday) {
       count += 1;
     }
-    
+
     cursor.setDate(cursor.getDate() + 1);
   }
 
@@ -205,27 +205,27 @@ const diffDays = (startStr, endStr) => {
  */
 const calculateMonthsDiff = (startStr, endStr) => {
   if (!startStr || !endStr) return 0;
-  
+
   const [sd, sm, sy] = startStr.split("-").map(Number);
   const [ed, em, ey] = endStr.split("-").map(Number);
-  
+
   // Validate all parts are numbers
   if ([sd, sm, sy, ed, em, ey].some(isNaN)) return 0;
 
   const start = new Date(sy, sm - 1, sd);
   const end = new Date(ey, em - 1, ed);
-  
+
   if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
   if (end < start) return 0;
-  
+
   // Calculate difference in months
   let months = (ey - sy) * 12 + (em - sm);
-  
+
   // If end day is less than start day, it's not a full month
   if (ed < sd) {
     months--;
   }
-  
+
   // Add 1 to include both start and end months
   return Math.max(1, months + 1);
 };
@@ -269,8 +269,8 @@ const calculateProjectDates = async (startDate, endDate) => {
       };
     }
   } catch {
-  console.warn("Using fallback project date calculation");
-}
+    console.warn("Using fallback project date calculation");
+  }
 
 
   // ---- FALLBACK ----
@@ -387,20 +387,20 @@ const getTodayHolidayInfo = () => {
 const getUpcomingBirthdays = (birthdaysList, daysAhead = 3) => {
   const today = new Date();
   const upcoming = [];
-  
+
   birthdaysList.forEach(b => {
     if (!b.month || !b.day) return;
-    
+
     // Create birthday date for current year
     const birthdayThisYear = new Date(
       today.getFullYear(),
       BIRTHDAY_MONTHS.indexOf(b.month),
       b.day
     );
-    
+
     // Calculate difference in days
     const diffInDays = Math.ceil((birthdayThisYear - today) / (1000 * 60 * 60 * 24));
-    
+
     // Check if birthday is within the next X days (including today)
     if (diffInDays >= 0 && diffInDays <= daysAhead) {
       upcoming.push({
@@ -410,38 +410,38 @@ const getUpcomingBirthdays = (birthdaysList, daysAhead = 3) => {
       });
     }
   });
-  
+
   return upcoming.sort((a, b) => a.daysUntil - b.daysUntil);
 };
 
 export default function ManagerDashboard() {
 
-    const CURRENT_YEAR = new Date().getFullYear().toString();
+  const CURRENT_YEAR = new Date().getFullYear().toString();
 
   const { user, logout } = useAuth();
 
   // ---- TASK PERMISSION (MANAGER) ----
-const canManagerEditTask = (task) => {
-  if (!task) return false;
-  
-  const userRole = user.role;
-  const taskCreatedByRole = task.createdByRole;
-  const taskCreatedById = task.createdByUserId?._id || task.createdByUserId;
-  const userId = user._id || user.id;
+  const canManagerEditTask = (task) => {
+    if (!task) return false;
 
-  // Admin never edits (safety)
-  if (userRole === "admin") return false;
+    const userRole = user.role;
+    const taskCreatedByRole = task.createdByRole;
+    const taskCreatedById = task.createdByUserId?._id || task.createdByUserId;
+    const userId = user._id || user.id;
 
-  // Manager can edit:
-  // 1. Tasks created by employees (any employee)
-  // 2. Tasks created by themselves
-  if (userRole === "manager") {
-    if (taskCreatedByRole === "employee") return true;
-    if (taskCreatedByRole === "manager" && taskCreatedById === userId) return true;
-  }
+    // Admin never edits (safety)
+    if (userRole === "admin") return false;
 
-  return false;
-};
+    // Manager can edit:
+    // 1. Tasks created by employees (any employee)
+    // 2. Tasks created by themselves
+    if (userRole === "manager") {
+      if (taskCreatedByRole === "employee") return true;
+      if (taskCreatedByRole === "manager" && taskCreatedById === userId) return true;
+    }
+
+    return false;
+  };
 
   // ------- ALERT CENTER (bell icon) -------
   const [alerts, setAlerts] = useState([]);
@@ -465,6 +465,10 @@ const canManagerEditTask = (task) => {
   const [attendance, setAttendance] = useState([]);
   const [{ month, year }, setMonthYear] = useState(getCurrentMonth);
   const [summaries, setSummaries] = useState([]);
+  const [taskSearch, setTaskSearch] = useState("");
+
+
+
 
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(null);
@@ -554,7 +558,7 @@ const canManagerEditTask = (task) => {
 
   // Calculate employees without birthdays using useMemo
   const employeesWithoutBirthdays = useMemo(() => {
-    return employees.filter(emp => 
+    return employees.filter(emp =>
       !employeeBirthdayMap[emp._id] && emp.isActive
     );
   }, [employees, employeeBirthdayMap]);
@@ -582,41 +586,40 @@ const canManagerEditTask = (task) => {
     setEmployees(res.data);
   }, []);
 
- const loadAttendance = useCallback(
-  async () => {
-    if (year !== CURRENT_YEAR) {
-      setAttendance([]);
-      return;
-    }
-    
+  const loadAttendance = useCallback(
+    async () => {
+      if (year !== CURRENT_YEAR) {
+        setAttendance([]);
+        return;
+      }
 
-    const res = await api.get("/attendance", { params: { month, year } });
-    setAttendance(res.data || []);
-  },
-  [month, year]
-
-);
+      const res = await api.get("/attendance", { params: { month, year } });
+      setAttendance(res.data || []);
+    },
+    [month, year, CURRENT_YEAR]
+  );
 
 
- const loadSummaries = useCallback(
-  async () => {
-    if (year !== CURRENT_YEAR) {
-      setSummaries([]);
-      return;
-    }
 
-    try {
-      const res = await api.get("/leave/summary/all", {
-        params: { month, year }
-      });
-      setSummaries(res.data || []);
-    } catch {
-      setSummaries([]);
-    }
-  },
-  [month, year]
+  const loadSummaries = useCallback(
+    async () => {
+      if (year !== CURRENT_YEAR) {
+        setSummaries([]);
+        return;
+      }
 
-);
+      try {
+        const res = await api.get("/leave/summary/all", {
+          params: { month, year }
+        });
+        setSummaries(res.data || []);
+      } catch {
+        setSummaries([]);
+      }
+    },
+    [month, year, CURRENT_YEAR]
+  );
+
 
 
   const loadProjects = useCallback(async () => {
@@ -655,99 +658,99 @@ const canManagerEditTask = (task) => {
   }, []);
 
   const loadLogs = useCallback(
-  async () => {
-    if (year !== CURRENT_YEAR) {
-      setLogs([]);
-      return;
-    }
+    async () => {
+      if (year !== CURRENT_YEAR) {
+        setLogs([]);
+        return;
+      }
 
-    try {
-      setLogsLoading(true);
-      const res = await api.get("/logs", { params: { month, year } });
-      setLogs(res.data || []);
-    } finally {
-      setLogsLoading(false);
-    }
-  },
-  [month, year]
+      try {
+        setLogsLoading(true);
+        const res = await api.get("/logs", { params: { month, year } });
+        setLogs(res.data || []);
+      } finally {
+        setLogsLoading(false);
+      }
+    },
+    [month, year, CURRENT_YEAR]
+  );
 
-);
 
   // -------- BIRTHDAY FUNCTIONS ----------
   const loadBirthdays = useCallback(async () => {
-  try {
-    setBirthdaysLoading(true);
-
-    let res;
     try {
-      // Primary endpoint
-      res = await api.get("/birthday");
+      setBirthdaysLoading(true);
 
-    } catch {
-      // 🔁 Fallback endpoint (IMPORTANT)
-      res = await api.get("/birthday");
+      let res;
+      try {
+        // Primary endpoint
+        res = await api.get("/birthday");
+
+      } catch {
+        // 🔁 Fallback endpoint (IMPORTANT)
+        res = await api.get("/birthday");
+      }
+
+      const raw = res.data || [];
+
+      // ✅ Normalize backend response (FINAL)
+      const normalized = raw.map((b) => {
+        let day;
+        let month;
+        let year;
+
+        // ✅ Case 1: Backend already sends parsed fields
+        if (b.day && b.month && b.year) {
+          day = b.day;
+          month = BIRTHDAY_MONTHS[b.month - 1]; // 🔴 FIX: number → name
+          year = b.year;
+        }
+
+        // ✅ Case 2: Backend sends only dob (dd-mm-yyyy)
+        else if (b.dob && typeof b.dob === "string") {
+          const [dd, mm, yyyy] = b.dob.split("-").map(Number);
+          day = dd;
+          month = BIRTHDAY_MONTHS[mm - 1];
+          year = yyyy;
+        }
+
+        return {
+          ...b,
+          day,
+          month,
+          year,
+
+          // ✅ employee mapping (VERY IMPORTANT)
+          employeeId: b.employee?._id,
+          employeeName: b.employee?.fullName,
+          employeeEmail: b.employee?.email,
+          employeeCode: b.employee?.employeeId
+        };
+      });
+
+
+      setBirthdays(normalized);
+
+      // Employee → birthday map
+      const map = {};
+      normalized.forEach((b) => {
+        map[b.employeeId] = b;
+      });
+      setEmployeeBirthdayMap(map);
+
+      // Upcoming birthdays (next 7 days)
+      setUpcomingBirthdays(getUpcomingBirthdays(normalized, 7));
+
+    } catch (err) {
+      console.error("❌ Birthday load failed:", err?.response?.data || err);
+      setBirthdays([]);
+      setEmployeeBirthdayMap({});
+      setUpcomingBirthdays([]);
+      addAlert("Error loading birthdays. Backend endpoint mismatch.");
+    } finally {
+      setBirthdaysLoading(false);
     }
-
-    const raw = res.data || [];
-
-    // ✅ Normalize backend response (FINAL)
-const normalized = raw.map((b) => {
-  let day;
-  let month;
-  let year;
-
-  // ✅ Case 1: Backend already sends parsed fields
-  if (b.day && b.month && b.year) {
-    day = b.day;
-    month = BIRTHDAY_MONTHS[b.month - 1]; // 🔴 FIX: number → name
-    year = b.year;
-  }
-
-  // ✅ Case 2: Backend sends only dob (dd-mm-yyyy)
-  else if (b.dob && typeof b.dob === "string") {
-    const [dd, mm, yyyy] = b.dob.split("-").map(Number);
-    day = dd;
-    month = BIRTHDAY_MONTHS[mm - 1];
-    year = yyyy;
-  }
-
-  return {
-    ...b,
-    day,
-    month,
-    year,
-
-    // ✅ employee mapping (VERY IMPORTANT)
-    employeeId: b.employee?._id,
-    employeeName: b.employee?.fullName,
-    employeeEmail: b.employee?.email,
-    employeeCode: b.employee?.employeeId
-  };
-});
-
-
-    setBirthdays(normalized);
-
-    // Employee → birthday map
-    const map = {};
-    normalized.forEach((b) => {
-      map[b.employeeId] = b;
-    });
-    setEmployeeBirthdayMap(map);
-
-    // Upcoming birthdays (next 7 days)
-    setUpcomingBirthdays(getUpcomingBirthdays(normalized, 7));
-
-  } catch (err) {
-    console.error("❌ Birthday load failed:", err?.response?.data || err);
-    setBirthdays([]);
-    setEmployeeBirthdayMap({});
-    setUpcomingBirthdays([]);
-    addAlert("Error loading birthdays. Backend endpoint mismatch.");
-  } finally {
-    setBirthdaysLoading(false);
-  }
-}, []);
+  }, []);
 
 
   const handleCreateBirthday = async (e) => {
@@ -773,7 +776,7 @@ const normalized = raw.map((b) => {
       }
 
       setCreatingBirthday(true);
-      
+
       // Format the date properly
       const monthIndex = BIRTHDAY_MONTHS.indexOf(birthdayForm.month) + 1;
       const dob = `${String(birthdayForm.day).padStart(2, "0")}-${String(monthIndex).padStart(2, "0")}-${birthdayForm.year || "1990"}`;
@@ -814,7 +817,7 @@ const normalized = raw.map((b) => {
 
       // Reload birthdays immediately
       await loadBirthdays();
-      
+
       // Also reload employees to update the "without birthdays" list
       await loadEmployees();
 
@@ -828,11 +831,11 @@ const normalized = raw.map((b) => {
 
   const handleDeleteBirthday = async (id) => {
     if (!window.confirm("Delete this birthday record?")) return;
-    
+
     try {
       await api.delete(`/birthday/${id}`);
       addAlert("Birthday record deleted");
-      
+
       // Reload birthdays immediately
       await loadBirthdays();
       await loadEmployees();
@@ -849,7 +852,7 @@ const normalized = raw.map((b) => {
         wishedByEmail: user.email
       });
       addAlert("Birthday wish sent to employee!");
-      
+
       // Reload birthdays to update wish status
       await loadBirthdays();
     } catch (err) {
@@ -863,11 +866,11 @@ const normalized = raw.map((b) => {
     const today = new Date();
     const todayMonth = BIRTHDAY_MONTHS[today.getMonth()];
     const todayDay = today.getDate();
-    
-    const todaysBirthdays = birthdays.filter(b => 
+
+    const todaysBirthdays = birthdays.filter(b =>
       b.month === todayMonth && b.day === todayDay && !b.wished
     );
-    
+
     for (const bd of todaysBirthdays) {
       try {
         await api.post(`/birthday/${bd._id}/wish`, {
@@ -880,7 +883,7 @@ const normalized = raw.map((b) => {
         console.error(`Failed to auto-wish ${bd.employeeName}`, err);
       }
     }
-    
+
     if (todaysBirthdays.length > 0) {
       await loadBirthdays();
     }
@@ -998,7 +1001,7 @@ const normalized = raw.map((b) => {
       };
 
       const response = await api.post("/employees", employeeData);
-      
+
       const generatedEmployeeId = response.data.employeeId;
 
       addAlert(
@@ -1025,7 +1028,7 @@ const normalized = raw.map((b) => {
 
       await loadEmployees();
       await loadSummaries();
-      
+
     } catch (err) {
       console.error("Create employee error:", err);
       addAlert(err.response?.data?.message || "Error creating employee");
@@ -1055,17 +1058,17 @@ const normalized = raw.map((b) => {
         totalLeaveEntitlement,
         carryForward2025
       });
-      
+
       addAlert(
         `Leave configuration updated for ${emp.fullName} (${emp.employeeId}).`
       );
-      
+
       await loadEmployees();
       setSummaries([]);
       await loadSummaries();
       setAttendance([]);
       await loadAttendance();
-      
+
     } catch (err) {
       console.error("Edit leave config error:", err);
       addAlert(err.response?.data?.message || "Error updating leave config");
@@ -1092,7 +1095,7 @@ const normalized = raw.map((b) => {
     }
   };
 
- 
+
 
   const handleResetEmployeePassword = async (e) => {
     e.preventDefault();
@@ -1124,9 +1127,9 @@ const normalized = raw.map((b) => {
   };
 
   const handleYearChange = (e) => {
-  const y = e.target.value;
-  setMonthYear({ month, year: y });
-};
+    const y = e.target.value;
+    setMonthYear({ month, year: y });
+  };
 
 
   const monthLabel = `${monthNames[Number(month) - 1]}, ${year}`;
@@ -1197,17 +1200,17 @@ const normalized = raw.map((b) => {
         addAlert("Start date and end date are required");
         return;
       }
-      
+
       // Parse dates for validation
       const parseDate = (dateStr) => {
         if (!dateStr) return null;
         const [dd, mm, yyyy] = dateStr.split("-").map(Number);
         return new Date(yyyy, mm - 1, dd);
       };
-      
+
       const startDate = parseDate(projectForm.startDate);
       const endDate = parseDate(projectForm.endDate);
-      
+
       if (endDate < startDate) {
         addAlert("End date cannot be before start date");
         return;
@@ -1231,7 +1234,7 @@ const normalized = raw.map((b) => {
         projectId: res.data._id
       }));
       loadProjects();
-      
+
       // Reset form
       setProjectForm({
         name: "",
@@ -1526,6 +1529,30 @@ const normalized = raw.map((b) => {
     wishedThisYear: birthdays.filter(b => b.wished).length,
     upcoming7Days: upcomingBirthdays.length
   };
+  const filteredProjectTasks = (projectTasks || []).filter((t) => {
+    if (!taskSearch.trim()) return true;
+
+    const q = taskSearch.toLowerCase();
+
+    const projectName =
+      t.project?.name ||
+      projects.find(p => p._id === t.projectId)?.name ||
+      "";
+
+    const employeeName =
+      t.assignedUser?.fullName ||
+      t.assignedUser?.email ||
+      "";
+
+    return (
+      (t.recentRequirement || "").toLowerCase().includes(q) ||
+      (t.status || "").toLowerCase().includes(q) ||
+      (t.scope || "").toLowerCase().includes(q) ||
+      (t.clientPriority || "").toLowerCase().includes(q) ||
+      projectName.toLowerCase().includes(q) ||
+      employeeName.toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="page">
@@ -1536,7 +1563,7 @@ const normalized = raw.map((b) => {
             <div className="sidebar-logo">
               <img src={logo} alt="NowIT Services" />
             </div>
-            
+
           </div>
           <nav className="sidebar-nav">
             <button
@@ -1597,193 +1624,193 @@ const normalized = raw.map((b) => {
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 12, position: "relative" }}>
-  {/* Notification Dropdown */}
-  <div style={{ position: "relative" }}>
-    <button
-      type="button"
-      className="outline-btn"
-      style={{ position: "relative", paddingInline: 10 }}
-      onClick={() => {
-        setShowNotifications(!showNotifications);
-      }}
-    >
-      <span role="img" aria-label="alerts">
-        🔔
-      </span>
-      {alerts.length > 0 && (
-        <span
-          style={{
-            position: "absolute",
-            top: -4,
-            right: -4,
-            minWidth: 16,
-            height: 16,
-            borderRadius: 999,
-            background: "#ff4d4f",
-            color: "#fff",
-            fontSize: 10,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-        >
-          {alerts.length}
-        </span>
-      )}
-    </button>
-    
-    {/* Notification Dropdown Panel */}
-   {showNotifications && (
-  <div
-    style={{
-      position: "absolute",
-      top: "100%",
-      right: 0,
-      width: 420,
-      maxHeight: 480,
-      background: "linear-gradient(180deg, #1f1f1f, #141414)",
-      border: "1px solid #2a2a2a",
-      borderRadius: 12,
-      boxShadow: "0 12px 30px rgba(0,0,0,0.55)",
-      zIndex: 1000,
-      overflow: "hidden",
-      marginTop: 10
-    }}
-  >
-
-        <div
-  style={{
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "14px 18px",
-    background: "rgba(255,255,255,0.03)",
-    borderBottom: "1px solid #2a2a2a"
-  }}
->
-  <strong style={{ fontSize: 14, color: "#e6f7ff" }}>
-    Notifications ({alerts.length})
-  </strong>
-
-  <div style={{ display: "flex", gap: 10 }}>
-    {alerts.length > 0 && (
-      <button
-        type="button"
-        onClick={() => {
-          if (window.confirm("Clear all notifications?")) {
-            setAlerts([]);
-          }
-        }}
-        style={{
-          background: "rgba(255,77,79,0.12)",
-          border: "1px solid #ff4d4f",
-          color: "#ff7875",
-          padding: "4px 12px",
-          borderRadius: 6,
-          fontSize: 12,
-          cursor: "pointer"
-        }}
-      >
-        Clear All
-      </button>
-    )}
-
-    <button
-      type="button"
-      onClick={() => setShowNotifications(false)}
-      style={{
-        background: "transparent",
-        border: "none",
-        color: "#aaa",
-        fontSize: 18,
-        cursor: "pointer"
-      }}
-    >
-      ✕
-    </button>
-  </div>
-</div>
-
-        
-        <div style={{
-          maxHeight: 400,
-          overflowY: "auto",
-          padding: 0
-        }}>
-          {alerts.length === 0 ? (
-            <div style={{
-              padding: "40px 20px",
-              textAlign: "center",
-              color: "#999",
-              fontSize: 14
-            }}>
-              No notifications yet
-            </div>
-          ) : (
-            alerts.map((alert, index) => (
-              <div
-                key={index}
-                style={{
-                  padding: "12px 16px",
-                  borderBottom: "1px solid #333",
-                  background: index % 2 === 0 ? "#1a1a1a" : "#222",
-                  position: "relative"
-                }}
-              >
-                <div style={{
-                  fontSize: 13,
-                  lineHeight: 1.4,
-                  color: "#fff",
-                  marginBottom: 4,
-                  paddingRight: 20
-                }}>
-                  {alert.split('\n').map((line, i) => (
-                    <div key={i} style={{ marginBottom: 2 }}>
-                      {line}
-                    </div>
-                  ))}
-                </div>
+              {/* Notification Dropdown */}
+              <div style={{ position: "relative" }}>
                 <button
                   type="button"
+                  className="outline-btn"
+                  style={{ position: "relative", paddingInline: 10 }}
                   onClick={() => {
-                    const newAlerts = [...alerts];
-                    newAlerts.splice(index, 1);
-                    setAlerts(newAlerts);
+                    setShowNotifications(!showNotifications);
                   }}
-                  style={{
-                    position: "absolute",
-                    top: 8,
-                    right: 8,
-                    background: "transparent",
-                    border: "none",
-                    color: "#ff4d4f",
-                    fontSize: 16,
-                    cursor: "pointer",
-                    width: 20,
-                    height: 20,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: "50%",
-                    transition: "background 0.2s"
-                  }}
-                  onMouseOver={(e) => e.target.style.background = "rgba(255,77,79,0.2)"}
-                  onMouseOut={(e) => e.target.style.background = "transparent"}
                 >
-                  ×
+                  <span role="img" aria-label="alerts">
+                    🔔
+                  </span>
+                  {alerts.length > 0 && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: -4,
+                        right: -4,
+                        minWidth: 16,
+                        height: 16,
+                        borderRadius: 999,
+                        background: "#ff4d4f",
+                        color: "#fff",
+                        fontSize: 10,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}
+                    >
+                      {alerts.length}
+                    </span>
+                  )}
                 </button>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    )}
-  </div>
 
-  <button onClick={handleLogout} className="outline-btn">
-    Logout
-  </button>
-</div>
+                {/* Notification Dropdown Panel */}
+                {showNotifications && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "100%",
+                      right: 0,
+                      width: 420,
+                      maxHeight: 480,
+                      background: "linear-gradient(180deg, #1f1f1f, #141414)",
+                      border: "1px solid #2a2a2a",
+                      borderRadius: 12,
+                      boxShadow: "0 12px 30px rgba(0,0,0,0.55)",
+                      zIndex: 1000,
+                      overflow: "hidden",
+                      marginTop: 10
+                    }}
+                  >
+
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "14px 18px",
+                        background: "rgba(255,255,255,0.03)",
+                        borderBottom: "1px solid #2a2a2a"
+                      }}
+                    >
+                      <strong style={{ fontSize: 14, color: "#e6f7ff" }}>
+                        Notifications ({alerts.length})
+                      </strong>
+
+                      <div style={{ display: "flex", gap: 10 }}>
+                        {alerts.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm("Clear all notifications?")) {
+                                setAlerts([]);
+                              }
+                            }}
+                            style={{
+                              background: "rgba(255,77,79,0.12)",
+                              border: "1px solid #ff4d4f",
+                              color: "#ff7875",
+                              padding: "4px 12px",
+                              borderRadius: 6,
+                              fontSize: 12,
+                              cursor: "pointer"
+                            }}
+                          >
+                            Clear All
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => setShowNotifications(false)}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "#aaa",
+                            fontSize: 18,
+                            cursor: "pointer"
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+
+
+                    <div style={{
+                      maxHeight: 400,
+                      overflowY: "auto",
+                      padding: 0
+                    }}>
+                      {alerts.length === 0 ? (
+                        <div style={{
+                          padding: "40px 20px",
+                          textAlign: "center",
+                          color: "#999",
+                          fontSize: 14
+                        }}>
+                          No notifications yet
+                        </div>
+                      ) : (
+                        alerts.map((alert, index) => (
+                          <div
+                            key={index}
+                            style={{
+                              padding: "12px 16px",
+                              borderBottom: "1px solid #333",
+                              background: index % 2 === 0 ? "#1a1a1a" : "#222",
+                              position: "relative"
+                            }}
+                          >
+                            <div style={{
+                              fontSize: 13,
+                              lineHeight: 1.4,
+                              color: "#fff",
+                              marginBottom: 4,
+                              paddingRight: 20
+                            }}>
+                              {alert.split('\n').map((line, i) => (
+                                <div key={i} style={{ marginBottom: 2 }}>
+                                  {line}
+                                </div>
+                              ))}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newAlerts = [...alerts];
+                                newAlerts.splice(index, 1);
+                                setAlerts(newAlerts);
+                              }}
+                              style={{
+                                position: "absolute",
+                                top: 8,
+                                right: 8,
+                                background: "transparent",
+                                border: "none",
+                                color: "#ff4d4f",
+                                fontSize: 16,
+                                cursor: "pointer",
+                                width: 20,
+                                height: 20,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                borderRadius: "50%",
+                                transition: "background 0.2s"
+                              }}
+                              onMouseOver={(e) => e.target.style.background = "rgba(255,77,79,0.2)"}
+                              onMouseOut={(e) => e.target.style.background = "transparent"}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button onClick={handleLogout} className="outline-btn">
+                Logout
+              </button>
+            </div>
           </header>
 
           {/* Global today-holiday banner for Manager */}
@@ -1922,7 +1949,8 @@ const normalized = raw.map((b) => {
                           <th>Employee ID</th>
                           <th>Name</th>
                           <th>Email</th>
-                          <th>Laptop</th>
+                          <th>Laptop ID</th>
+
                           <th>Status</th>
                           <th>Leaves (T / PH / W / CF)</th>
                           <th>Action</th>
@@ -1936,7 +1964,8 @@ const normalized = raw.map((b) => {
                             </td>
                             <td>{e.fullName}</td>
                             <td>{e.email}</td>
-                            <td>{e.laptopId || "-"}</td>
+                            <td>{e.assets?.find(a => a.type === "LAPTOP")?.assetId || "-"}</td>
+
                             <td>
                               <span className={`status-badge ${e.isActive ? 'active' : 'inactive'}`}>
                                 {e.isActive ? "Active" : "Inactive"}
@@ -2020,38 +2049,38 @@ const normalized = raw.map((b) => {
                   <div className="card-header-row">
                     <h2>Monthly Leave Summary</h2>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-  {/* MONTH DROPDOWN */}
-  <select
-    value={month}
-    onChange={(e) =>
-      setMonthYear({ month: e.target.value, year })
-    }
-    className="month-selector"
-  >
-    {monthNames.map((m, i) => (
-      <option key={m} value={String(i + 1).padStart(2, "0")}>
-        {m}
-      </option>
-    ))}
-  </select>
+                      {/* MONTH DROPDOWN */}
+                      <select
+                        value={month}
+                        onChange={(e) =>
+                          setMonthYear({ month: e.target.value, year })
+                        }
+                        className="month-selector"
+                      >
+                        {monthNames.map((m, i) => (
+                          <option key={m} value={String(i + 1).padStart(2, "0")}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
 
-  {/* YEAR DROPDOWN */}
-  <select
-  value={year}
-  onChange={handleYearChange}
-  className="month-selector"
->
-  {Array.from({ length: 6 }, (_, i) => {
-    const y = new Date().getFullYear() - 3 + i;
-    return (
-      <option key={y} value={String(y)}>
-        {y}
-      </option>
-    );
-  })}
-</select>
+                      {/* YEAR DROPDOWN */}
+                      <select
+                        value={year}
+                        onChange={handleYearChange}
+                        className="month-selector"
+                      >
+                        {Array.from({ length: 6 }, (_, i) => {
+                          const y = new Date().getFullYear() - 3 + i;
+                          return (
+                            <option key={y} value={String(y)}>
+                              {y}
+                            </option>
+                          );
+                        })}
+                      </select>
 
-</div>
+                    </div>
 
                   </div>
                   <p style={{ fontSize: 12, marginBottom: 6 }}>
@@ -2098,50 +2127,50 @@ const normalized = raw.map((b) => {
                   <div className="table-wrapper small-table">
                     <table>
                       <thead>
-                       <tr>
-  <th>Employee</th>
-  <th>Requested Date</th>
-  <th>Request Type</th>
-  <th>Requested Timings</th>
-  <th>Note</th>
-  <th>Action</th>
-</tr>
+                        <tr>
+                          <th>Employee</th>
+                          <th>Requested Date</th>
+                          <th>Request Type</th>
+                          <th>Requested Timings</th>
+                          <th>Note</th>
+                          <th>Action</th>
+                        </tr>
 
                       </thead>
                       <tbody>
                         {pendingRequests.map((p) => (
                           <tr key={p._id}>
-  <td>{p.user?.fullName || "Unknown Employee"}</td>
+                            <td>{p.user?.fullName || "Unknown Employee"}</td>
 
-  <td>{p.date}</td>
+                            <td>{p.date}</td>
 
-  <td>{p.toStatus}</td>
+                            <td>{p.toStatus}</td>
 
-  <td>
-    {p.toWorkInTime && p.toWorkOutTime
-      ? `${p.toWorkInTime.slice(0, 5)} – ${p.toWorkOutTime.slice(0, 5)}`
-      : "-"}
-  </td>
+                            <td>
+                              {p.toWorkInTime && p.toWorkOutTime
+                                ? `${p.toWorkInTime.slice(0, 5)} – ${p.toWorkOutTime.slice(0, 5)}`
+                                : "-"}
+                            </td>
 
-  <td>
-    {p.note?.trim() ? p.note : "-"}
-  </td>
+                            <td>
+                              {p.note?.trim() ? p.note : "-"}
+                            </td>
 
-  <td style={{ whiteSpace: "nowrap" }}>
-    <button
-      className="link-btn"
-      onClick={() => decideLeave(p._id, "APPROVED")}
-    >
-      Approve
-    </button>{" "}
-    <button
-      className="link-btn danger"
-      onClick={() => decideLeave(p._id, "REJECTED")}
-    >
-      Reject
-    </button>
-  </td>
-</tr>
+                            <td style={{ whiteSpace: "nowrap" }}>
+                              <button
+                                className="link-btn"
+                                onClick={() => decideLeave(p._id, "APPROVED")}
+                              >
+                                Approve
+                              </button>{" "}
+                              <button
+                                className="link-btn danger"
+                                onClick={() => decideLeave(p._id, "REJECTED")}
+                              >
+                                Reject
+                              </button>
+                            </td>
+                          </tr>
 
                         ))}
                       </tbody>
@@ -2164,7 +2193,7 @@ const normalized = raw.map((b) => {
                           <th>In</th>
                           <th>Out</th>
                           <th>Decision</th>
-                          
+
                         </tr>
                       </thead>
                       <tbody>
@@ -2176,7 +2205,7 @@ const normalized = raw.map((b) => {
                             <td>{a.workInTime}</td>
                             <td>{a.workOutTime}</td>
                             <td>{a.managerDecision?.status}</td>
-                            
+
                           </tr>
                         ))}
                       </tbody>
@@ -2237,7 +2266,7 @@ const normalized = raw.map((b) => {
                         required
                       />
                     </label>
-                    
+
                     <label>
                       Project Code
                       <input
@@ -2251,128 +2280,128 @@ const normalized = raw.map((b) => {
                         placeholder="e.g., PROJ-001"
                       />
                     </label>
-                    
-                    {/* DATE FIELDS */}
-                   {/* START DATE */}
-<label>
-  Start Date
-  <input
-    type="date"
-    value={toInputDate(projectForm.startDate)}
-    onChange={async (e) => {
-      const newStartDate = fromInputDate(e.target.value);
-      
-      if (!newStartDate) {
-        setProjectForm({
-          ...projectForm,
-          startDate: "",
-          totalEstimatedHours: 0,
-          projectMonths: 0
-        });
-        return;
-      }
-      
-      // If no end date, just set start date
-      if (!projectForm.endDate) {
-        setProjectForm({
-          ...projectForm,
-          startDate: newStartDate
-        });
-        return;
-      }
-      
-      // Validate dates
-      const [sd, sm, sy] = newStartDate.split("-").map(Number);
-      const [ed, em, ey] = projectForm.endDate.split("-").map(Number);
-      
-      const startDate = new Date(sy, sm - 1, sd);
-      const endDate = new Date(ey, em - 1, ed);
-      
-      if (endDate < startDate) {
-        addAlert("❌ End date cannot be before start date");
-        return;
-      }
-      
-      // Calculate project details from backend
-      const calculation = await calculateProjectDates(
-        newStartDate,
-        projectForm.endDate
-      );
-      
-      setProjectForm({
-        ...projectForm,
-        startDate: newStartDate,
-        totalEstimatedHours: calculation.totalEstimateHours,
-        projectMonths: calculation.durationMonths,
-      });
-    }}
-    required
-  />
-  <small style={{ fontSize: 11, color: '#aaa', display: 'block', marginTop: 4 }}>
-    Format: DD-MM-YYYY
-  </small>
-</label>
 
-{/* END DATE */}
-<label>
-  End Date
-  <input
-    type="date"
-    value={toInputDate(projectForm.endDate)}
-    onChange={async (e) => {
-      const newEndDate = fromInputDate(e.target.value);
-      
-      if (!newEndDate) {
-        setProjectForm({
-          ...projectForm,
-          endDate: "",
-          totalEstimatedHours: 0,
-          projectMonths: 0
-        });
-        return;
-      }
-      
-      // If no start date, just set end date
-      if (!projectForm.startDate) {
-        setProjectForm({
-          ...projectForm,
-          endDate: newEndDate
-        });
-        return;
-      }
-      
-      // Validate dates
-      const [sd, sm, sy] = projectForm.startDate.split("-").map(Number);
-      const [ed, em, ey] = newEndDate.split("-").map(Number);
-      
-      const startDate = new Date(sy, sm - 1, sd);
-      const endDate = new Date(ey, em - 1, ed);
-      
-      if (endDate < startDate) {
-        addAlert("❌ End date cannot be before start date");
-        return;
-      }
-      
-      // Calculate project details from backend
-      const calculation = await calculateProjectDates(
-        projectForm.startDate,
-        newEndDate
-      );
-      
-      setProjectForm({
-        ...projectForm,
-        endDate: newEndDate,
-        totalEstimatedHours: calculation.totalEstimateHours,
-        projectMonths: calculation.durationMonths,
-      });
-    }}
-    required
-  />
-  <small style={{ fontSize: 11, color: '#aaa', display: 'block', marginTop: 4 }}>
-    Format: DD-MM-YYYY
-  </small>
-</label>
-                    
+                    {/* DATE FIELDS */}
+                    {/* START DATE */}
+                    <label>
+                      Start Date
+                      <input
+                        type="date"
+                        value={toInputDate(projectForm.startDate)}
+                        onChange={async (e) => {
+                          const newStartDate = fromInputDate(e.target.value);
+
+                          if (!newStartDate) {
+                            setProjectForm({
+                              ...projectForm,
+                              startDate: "",
+                              totalEstimatedHours: 0,
+                              projectMonths: 0
+                            });
+                            return;
+                          }
+
+                          // If no end date, just set start date
+                          if (!projectForm.endDate) {
+                            setProjectForm({
+                              ...projectForm,
+                              startDate: newStartDate
+                            });
+                            return;
+                          }
+
+                          // Validate dates
+                          const [sd, sm, sy] = newStartDate.split("-").map(Number);
+                          const [ed, em, ey] = projectForm.endDate.split("-").map(Number);
+
+                          const startDate = new Date(sy, sm - 1, sd);
+                          const endDate = new Date(ey, em - 1, ed);
+
+                          if (endDate < startDate) {
+                            addAlert("❌ End date cannot be before start date");
+                            return;
+                          }
+
+                          // Calculate project details from backend
+                          const calculation = await calculateProjectDates(
+                            newStartDate,
+                            projectForm.endDate
+                          );
+
+                          setProjectForm({
+                            ...projectForm,
+                            startDate: newStartDate,
+                            totalEstimatedHours: calculation.totalEstimateHours,
+                            projectMonths: calculation.durationMonths,
+                          });
+                        }}
+                        required
+                      />
+                      <small style={{ fontSize: 11, color: '#aaa', display: 'block', marginTop: 4 }}>
+                        Format: DD-MM-YYYY
+                      </small>
+                    </label>
+
+                    {/* END DATE */}
+                    <label>
+                      End Date
+                      <input
+                        type="date"
+                        value={toInputDate(projectForm.endDate)}
+                        onChange={async (e) => {
+                          const newEndDate = fromInputDate(e.target.value);
+
+                          if (!newEndDate) {
+                            setProjectForm({
+                              ...projectForm,
+                              endDate: "",
+                              totalEstimatedHours: 0,
+                              projectMonths: 0
+                            });
+                            return;
+                          }
+
+                          // If no start date, just set end date
+                          if (!projectForm.startDate) {
+                            setProjectForm({
+                              ...projectForm,
+                              endDate: newEndDate
+                            });
+                            return;
+                          }
+
+                          // Validate dates
+                          const [sd, sm, sy] = projectForm.startDate.split("-").map(Number);
+                          const [ed, em, ey] = newEndDate.split("-").map(Number);
+
+                          const startDate = new Date(sy, sm - 1, sd);
+                          const endDate = new Date(ey, em - 1, ed);
+
+                          if (endDate < startDate) {
+                            addAlert("❌ End date cannot be before start date");
+                            return;
+                          }
+
+                          // Calculate project details from backend
+                          const calculation = await calculateProjectDates(
+                            projectForm.startDate,
+                            newEndDate
+                          );
+
+                          setProjectForm({
+                            ...projectForm,
+                            endDate: newEndDate,
+                            totalEstimatedHours: calculation.totalEstimateHours,
+                            projectMonths: calculation.durationMonths,
+                          });
+                        }}
+                        required
+                      />
+                      <small style={{ fontSize: 11, color: '#aaa', display: 'block', marginTop: 4 }}>
+                        Format: DD-MM-YYYY
+                      </small>
+                    </label>
+
                     {/* AUTO-CALCULATED & EDITABLE FIELDS */}
                     <label>
                       Total Estimate Hours
@@ -2391,8 +2420,8 @@ const normalized = raw.map((b) => {
                           step="1"
                         />
                         {projectForm.startDate && projectForm.endDate && (
-                          <small style={{ 
-                            fontSize: 10, 
+                          <small style={{
+                            fontSize: 10,
                             color: '#40a9ff',
                             position: 'absolute',
                             right: 8,
@@ -2410,7 +2439,7 @@ const normalized = raw.map((b) => {
                         Auto-calculated from dates (Working days × 8 hours)
                       </small>
                     </label>
-                    
+
                     <label>
                       Duration (Months)
                       <div style={{ position: 'relative' }}>
@@ -2428,8 +2457,8 @@ const normalized = raw.map((b) => {
                           step="1"
                         />
                         {projectForm.startDate && projectForm.endDate && (
-                          <small style={{ 
-                            fontSize: 10, 
+                          <small style={{
+                            fontSize: 10,
                             color: '#40a9ff',
                             position: 'absolute',
                             right: 8,
@@ -2447,7 +2476,7 @@ const normalized = raw.map((b) => {
                         Auto-calculated from dates
                       </small>
                     </label>
-                    
+
                     <label className="full-row">
                       Description
                       <textarea
@@ -2462,7 +2491,7 @@ const normalized = raw.map((b) => {
                         placeholder="Enter project description..."
                       />
                     </label>
-                    
+
                     <div className="full-row" style={{ marginTop: 8 }}>
                       <button type="submit" className="primary-btn" style={{ width: '100%' }}>
                         Create Project
@@ -2663,7 +2692,7 @@ const normalized = raw.map((b) => {
                                   holidayTakenMap[dateKey] || "NOT_TAKEN";
 
                                 let bg = "transparent";
-let color = "#fff";
+                                let color = "#fff";
 
                                 if (isMandatory) {
                                   bg = "#ff7875";
@@ -2684,21 +2713,21 @@ let color = "#fff";
                                       ? "2nd Saturday"
                                       : "");
 
-                               return (
-  <td
-    key={`d-${wi}-${di}`}
-    className="holiday-cell"
-    style={{
-      background: bg,
-      border: "1px solid rgba(255,255,255,0.15)",
-      color: bg === "transparent" ? "#000" : color,
-      verticalAlign: "top",
-      padding: 4,
-      minWidth: 40,
-      backgroundColor: bg === "transparent" ? "#ffffff" : bg,
-      fontWeight: bg === "transparent" ? "600" : "400"
-    }}
-  >
+                                return (
+                                  <td
+                                    key={`d-${wi}-${di}`}
+                                    className="holiday-cell"
+                                    style={{
+                                      background: bg,
+                                      border: "1px solid rgba(255,255,255,0.15)",
+                                      color: bg === "transparent" ? "#000" : color,
+                                      verticalAlign: "top",
+                                      padding: 4,
+                                      minWidth: 40,
+                                      backgroundColor: bg === "transparent" ? "#ffffff" : bg,
+                                      fontWeight: bg === "transparent" ? "600" : "400"
+                                    }}
+                                  >
                                     <div
                                       style={{
                                         fontSize: 12,
@@ -2848,7 +2877,7 @@ let color = "#fff";
                           };
                           const count = p.assignments?.length || 0;
                           const isSelected = selectedProjectId === p._id;
-                          
+
                           return (
                             <tr
                               key={p._id}
@@ -2904,8 +2933,8 @@ let color = "#fff";
                       </p>
                       <p style={{ fontSize: 12, marginBottom: 8 }}>
                         <strong>Duration:</strong> {selectedProject.startDate} to {selectedProject.endDate} ({selectedProject.durationMonths || 0} months)<br />
-                        <strong>Estimate:</strong> {selectedProject.totalEstimatedHours || 0} hrs • 
-                        <strong> Worked:</strong> {projectTotals[selectedProject._id]?.used || 0} hrs • 
+                        <strong>Estimate:</strong> {selectedProject.totalEstimatedHours || 0} hrs •
+                        <strong> Worked:</strong> {projectTotals[selectedProject._id]?.used || 0} hrs •
                         <strong> Balance:</strong> {projectTotals[selectedProject._id]?.remaining || 0} hrs
                       </p>
 
@@ -2989,12 +3018,54 @@ let color = "#fff";
                     {/* Project Discussion Tasks */}
                     <div className="card">
                       <h2>Project Discussion Tasks / Requirements</h2>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 12,
+                          marginBottom: 12,
+                          padding: "10px 12px",
+                          background: "#f8fafc",
+                          borderRadius: 10,
+                          border: "1px solid #e5e7eb"
+                        }}
+                      >
+                        <input
+                          type="text"
+                          placeholder="Search by project, requirement, employee, status..."
+                          value={taskSearch}
+                          onChange={(e) => setTaskSearch(e.target.value)}
+                          style={{
+                            flex: 1,
+                            padding: "8px 12px",
+                            borderRadius: 8,
+                            border: "1px solid #d1d5db",
+                            fontSize: 14
+                          }}
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => setTaskSearch("")}
+                          style={{
+                            padding: "8px 16px",
+                            borderRadius: 8,
+                            border: "none",
+                            background: "#e5e7eb",
+                            cursor: "pointer",
+                            fontWeight: 600
+                          }}
+                        >
+                          Reset
+                        </button>
+                      </div>
+
+
                       <form
-  className="form-grid"
-  onSubmit={(e) => {
-    handleSubmitTask(e);
-  }}
->
+                        className="form-grid"
+                        onSubmit={(e) => {
+                          handleSubmitTask(e);
+                        }}
+                      >
                         <label className="full-row">
                           Requirement
                           <textarea
@@ -3227,7 +3298,8 @@ let color = "#fff";
                             </tr>
                           </thead>
                           <tbody>
-                            {projectTasks.map((t, index) => {
+                            {filteredProjectTasks.map((t, index) => {
+
                               const emp =
                                 t.assignedUser?.fullName ||
                                 employees.find(
@@ -3257,13 +3329,13 @@ let color = "#fff";
                                   <td>{emp}</td>
                                   <td>
                                     <select
-  value={t.status}
-  disabled={!canManagerEditTask(t)}
-  onChange={(e) => {
-    if (!canManagerEditTask(t)) return;
-    updateTaskStatus(t._id, e.target.value);
-  }}
->
+                                      value={t.status}
+                                      disabled={!canManagerEditTask(t)}
+                                      onChange={(e) => {
+                                        if (!canManagerEditTask(t)) return;
+                                        updateTaskStatus(t._id, e.target.value);
+                                      }}
+                                    >
 
                                       {TASK_STATUS.map((s) => (
                                         <option key={s} value={s}>
@@ -3273,14 +3345,14 @@ let color = "#fff";
                                     </select>
                                   </td>
                                   <td>
-                                  <select
-  value={t.scope || "AGREED"}
-  disabled={!canManagerEditTask(t)}
-  onChange={(e) => {
-    if (!canManagerEditTask(t)) return;
-    updateTaskField(t._id, { scope: e.target.value });
-  }}
->
+                                    <select
+                                      value={t.scope || "AGREED"}
+                                      disabled={!canManagerEditTask(t)}
+                                      onChange={(e) => {
+                                        if (!canManagerEditTask(t)) return;
+                                        updateTaskField(t._id, { scope: e.target.value });
+                                      }}
+                                    >
 
                                       <option value="AGREED">Agreed</option>
                                       <option value="NOT_AGREED">
@@ -3324,17 +3396,17 @@ let color = "#fff";
                                     {t.createdByUserId?.fullName || t.createdBy || "-"}
                                   </td>
                                   <td>
-                                   <button
-  className="link-btn"
-  type="button"
-  disabled={!canManagerEditTask(t)}
-  onClick={() => {
-    if (!canManagerEditTask(t)) return;
-    startEditTask(t);
-  }}
->
-  Edit
-</button>
+                                    <button
+                                      className="link-btn"
+                                      type="button"
+                                      disabled={!canManagerEditTask(t)}
+                                      onClick={() => {
+                                        if (!canManagerEditTask(t)) return;
+                                        startEditTask(t);
+                                      }}
+                                    >
+                                      Edit
+                                    </button>
 
                                   </td>
                                 </tr>
@@ -3876,8 +3948,8 @@ let color = "#fff";
                     </label>
 
                     <div className="full-row">
-                      <button 
-                        type="submit" 
+                      <button
+                        type="submit"
                         className="primary-btn"
                         disabled={creatingBirthday || !birthdayForm.employeeId || !birthdayForm.month || !birthdayForm.day}
                       >
@@ -3932,7 +4004,7 @@ let color = "#fff";
                               b.day
                             );
                             const formattedDate = `${b.day} ${b.month} ${birthdayDate.getFullYear()}`;
-                            
+
                             return (
                               <tr key={b._id}>
                                 <td>{emp?.fullName || "Unknown"}</td>
@@ -3992,9 +4064,9 @@ let color = "#fff";
                   ) : (
                     <p className="empty">No upcoming birthdays in the next 7 days.</p>
                   )}
-                  
+
                   <p className="note" style={{ marginTop: 8 }}>
-                    <strong>Note:</strong> Birthdays are automatically reminded 3 days in advance. 
+                    <strong>Note:</strong> Birthdays are automatically reminded 3 days in advance.
                     The system will automatically send birthday wishes on the birthday date.
                   </p>
                 </div>
@@ -4132,7 +4204,7 @@ let color = "#fff";
                       {birthdaysLoading ? "Refreshing..." : "Refresh Stats"}
                     </button>
                   </div>
-                  
+
                   {birthdaysLoading ? (
                     <p className="note">Loading statistics...</p>
                   ) : (
@@ -4160,9 +4232,9 @@ let color = "#fff";
                           <div>{birthdayStats.upcoming7Days}</div>
                         </div>
                       </div>
-                      
+
                       <p className="note" style={{ marginTop: 8 }}>
-                        <strong>Auto-Wish Feature:</strong> The system automatically sends birthday wishes 
+                        <strong>Auto-Wish Feature:</strong> The system automatically sends birthday wishes
                         to employees on their birthday date. Manager will receive notifications 3 days in advance.
                         <br />
                         <strong>Debug Info:</strong> Check browser console (F12) for detailed state updates and API responses.

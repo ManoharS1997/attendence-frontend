@@ -150,6 +150,33 @@ export default function AdminDashboard() {
 
   // All project tasks (view only)
   const [allTasks, setAllTasks] = useState([]);
+  const [taskSearch, setTaskSearch] = useState("");
+  const filteredAdminTasks = (allTasks || []).filter((t) => {
+  if (!taskSearch.trim()) return true;
+
+  const q = taskSearch.toLowerCase();
+
+  const projectName =
+    t.project?.name ||
+    projects.find(p => p._id === t.projectId)?.name ||
+    "";
+
+  const assignedName =
+    t.assignedUser?.fullName ||
+    t.assignedUser?.email ||
+    "";
+
+  return (
+    (t.recentRequirement || "").toLowerCase().includes(q) ||
+    (t.status || "").toLowerCase().includes(q) ||
+    (t.scope || "").toLowerCase().includes(q) ||
+    (t.clientPriority || "").toLowerCase().includes(q) ||
+    projectName.toLowerCase().includes(q) ||
+    assignedName.toLowerCase().includes(q)
+  );
+});
+
+
 
   // Holidays (read-only)
   const [calendarDays, setCalendarDays] = useState([]); // from /leave/calendar
@@ -1899,6 +1926,47 @@ export default function AdminDashboard() {
                 {/* All project tasks (view-only) */}
                 <div className="card">
                   <h2>All Project Tasks (View Only)</h2>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 12,
+                      marginBottom: 12,
+                      padding: "10px 12px",
+                      background: "#f8fafc",
+                      borderRadius: 10,
+                      border: "1px solid #e5e7eb"
+                    }}
+                  >
+                    <input
+                      type="text"
+                      placeholder="Search by project, requirement, employee, status..."
+                      value={taskSearch}
+                      onChange={(e) => setTaskSearch(e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: "8px 12px",
+                        borderRadius: 8,
+                        border: "1px solid #d1d5db",
+                        fontSize: 14
+                      }}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => setTaskSearch("")}
+                      style={{
+                        padding: "8px 16px",
+                        borderRadius: 8,
+                        border: "none",
+                        background: "#e5e7eb",
+                        cursor: "pointer",
+                        fontWeight: 600
+                      }}
+                    >
+                      Reset
+                    </button>
+                  </div>
+
                   <p style={{ fontSize: 12, marginBottom: 6 }}>
                     Tasks created by Manager or Employees. Admin can review but
                     cannot edit.
@@ -1925,11 +1993,16 @@ export default function AdminDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {allTasks.map((t, index) => {
-                          
+                        {filteredAdminTasks.map((t, index) => {
+
+
                           const assigned = t.assignedUser || t.assignedUserId || {};
 
-                          const projectName = t.project?.name || t.projectId?.name || "-";
+                          const projectName =
+                            t.project?.name ||
+                            projects.find(p => p._id === t.projectId)?.name ||
+                            "-";
+
 
                           const assignedName = assigned.fullName || assigned.email || "-";
 
