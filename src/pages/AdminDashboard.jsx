@@ -143,11 +143,7 @@ export default function AdminDashboard() {
     });
   }, [payslips, selectedEmployeeId, searchText]);
 
-  // --- Admin Payslip helpers ---
-  const selectedEmployee = useMemo(() => {
-    return employees.find((e) => e._id === selectedEmployeeId) || null;
-  }, [employees, selectedEmployeeId]);
-
+  
   // All project tasks (view only)
   const [allTasks, setAllTasks] = useState([]);
   const [taskSearch, setTaskSearch] = useState("");
@@ -1673,7 +1669,8 @@ export default function AdminDashboard() {
                                       const url = window.URL.createObjectURL(blob);
                                       const a = document.createElement("a");
                                       a.href = url;
-                                      a.download = `Payslip-${selectedEmployee?.fullName}-${p.month}-${p.year}.pdf`;
+                                      a.download = `${p.employee?.fullName || "Employee"}_${monthNames[p.month - 1]}_${p.year}.pdf`;
+
                                       a.click();
                                       window.URL.revokeObjectURL(url);
                                     })

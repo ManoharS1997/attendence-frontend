@@ -1126,28 +1126,33 @@ export default function EmployeeDashboard() {
     </div>
   );
 
-  const handleDownloadPayslip = async (payslipId) => {
-    try {
-      const response = await api.get(`/payslips/${payslipId}/download`, {
-        responseType: "blob",
-      });
+  const handleDownloadPayslip = async (payslipId, month, year) => {
+  try {
+    const response = await api.get(`/payslips/${payslipId}/download`, {
+      responseType: "blob",
+    });
 
-      const blob = new Blob([response.data], { type: "application/pdf" });
-      const url = window.URL.createObjectURL(blob);
+    const blob = new Blob([response.data], { type: "application/pdf" });
+    const url = window.URL.createObjectURL(blob);
 
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `Payslip_${payslipId}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    const employeeName = (user.fullName || "Employee").replace(/\s+/g, "_");
+    const monthName = monthNames[month - 1];
 
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Error downloading payslip:", error);
-      alert("Failed to download payslip.");
-    }
-  };
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${employeeName}_${monthName}_${year}.pdf`;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Error downloading payslip:", error);
+    alert("Failed to download payslip.");
+  }
+};
+
 
   const NextMonthPopup = () => {
     if (!showNextMonthPopup) return null;
@@ -2628,7 +2633,8 @@ export default function EmployeeDashboard() {
                               <td>
                                 <button
                                   className="primary-btn small-btn"
-                                  onClick={() => handleDownloadPayslip(p._id)}
+                                  onClick={() => handleDownloadPayslip(p._id, p.month, p.year)}
+
                                   style={{ padding: '6px 12px', fontSize: '12px' }}
                                 >
                                   Download
