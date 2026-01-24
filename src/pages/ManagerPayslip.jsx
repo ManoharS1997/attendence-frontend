@@ -78,7 +78,10 @@ const PAYSLIP_TEMPLATES = [
 ];
 
 const ManagerPayslip = () => {
-  const [loading, setLoading] = useState(false);
+  
+  // 🔹 Separate state ONLY for payslip generation (fix infinite Generating loop)
+const [isGeneratingPayslip, setIsGeneratingPayslip] = useState(false);
+
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -258,10 +261,7 @@ setPayslipExists(exists);
       // 🔹 Auto-fill Job Title & Status (safe add)
   setJobTitle(employee?.jobTitle || "");
   setEmployeeStatus(employee?.employeeStatus || "");
-  // 🔹 Auto-fill Job Title & Status (safe add)
-  setJobTitle(employee?.jobTitle || "");
-  setEmployeeStatus(employee?.employeeStatus || "");
-
+ 
     
     if (employee?._id) {
       setBankDetails({
@@ -277,7 +277,7 @@ setPayslipExists(exists);
     setExistingPayslip(null);
      setPayslipExists(false);
 
-  setLoading(true);
+  
   };
 
   // Calculate salary automatically
@@ -333,7 +333,9 @@ const handleGeneratePayslip = async () => {
   }
 
   
-  setLoading(true);
+  setIsGeneratingPayslip(true);
+
+
 
   try {
     const payslipData = {
@@ -388,7 +390,8 @@ employeeType: employeeStatus || selectedEmployee.employeeType || "",
     console.error("Failed to generate payslip:", err);
     toast.error(err.message || "Failed to generate payslip");
   } finally {
-    setLoading(false);
+    setIsGeneratingPayslip(false);
+
   }
 };
 
@@ -758,7 +761,8 @@ const _savePayslipToLocalStorage = (payslipData) => {
                 </tr>
                 <tr>
                   <th>IFSC Code</th>
-                  <td>${bankDetails.ifsc || 'SBIN0005943'}</td>
+                  <td>${existingPayslip?.bankSnapshot?.ifsc || '—'}
+</td>
                   <th>Branch</th>
                   <td>${existingPayslip?.bankSnapshot?.branch || '—'}</td>
 
@@ -1175,7 +1179,8 @@ const _savePayslipToLocalStorage = (payslipData) => {
                       fontWeight: '600',
                       fontSize: '10px'
                     }}>Designation</th>
-                    <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>{jobTitle || '—'}
+                    <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>{existingPayslip?.designation || jobTitle || '—'}
+
 </td>
                   </tr>
                  <tr>
@@ -1202,7 +1207,8 @@ const _savePayslipToLocalStorage = (payslipData) => {
   }}>Employee Status</th>
 
   <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>
-    {employeeStatus || '—'}
+    {existingPayslip?.employeeType || employeeStatus || '—'}
+
   </td>
 </tr>
 
@@ -1233,7 +1239,8 @@ const _savePayslipToLocalStorage = (payslipData) => {
                       width: '30%',
                       padding: '8px',
                       border: '0.8px solid #cbd5e1'
-                    }}>{bankDetails.bankName || 'State Bank of India'}</td>
+                    }}>{existingPayslip?.bankSnapshot?.bankName || '—'}
+</td>
                     <th style={{
                       width: '20%',
                       padding: '8px',
@@ -1258,7 +1265,7 @@ const _savePayslipToLocalStorage = (payslipData) => {
                       fontWeight: '600',
                       fontSize: '10px'
                     }}>IFSC Code</th>
-                    <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>{bankDetails.ifsc || 'SBIN0005943'}</td>
+                    <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>{existingPayslip?.bankSnapshot?.ifsc || '—'}</td>
                     <th style={{
                       padding: '8px',
                       backgroundColor: `${selectedTemplate.colors.secondary}20`,
@@ -1267,7 +1274,10 @@ const _savePayslipToLocalStorage = (payslipData) => {
                       fontWeight: '600',
                       fontSize: '10px'
                     }}>Branch</th>
-                    <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>{bankDetails.branch || 'SBI Main Branch, Bengaluru'}</td>
+                    <td style={{ padding: '8px', border: '0.8px solid #cbd5e1' }}>
+  {existingPayslip?.bankSnapshot?.branch || '—'}
+</td>
+
                   </tr>
                 </tbody>
               </table>
@@ -1692,6 +1702,7 @@ const _savePayslipToLocalStorage = (payslipData) => {
     <option value="iOS Developer">iOS Developer</option>
     <option value="DevOps Engineer">DevOps Engineer</option>
     <option value="Cloud Engineer">Cloud Engineer</option>
+    <option value="Devops Cloud Engineer">Devops Cloud Engineer</option>
     <option value="AWS Cloud Engineer">AWS Cloud Engineer</option>
     <option value="Azure Cloud Engineer">Azure Cloud Engineer</option>
     <option value="Site Reliability Engineer">Site Reliability Engineer</option>
@@ -1825,24 +1836,24 @@ const _savePayslipToLocalStorage = (payslipData) => {
 
             {/* Action Buttons */}
             <div className="form-actions">
-             <button 
+            <button
   className="btn-generate"
   onClick={handleGeneratePayslip}
-  // disabled={loading || !isGenerateButtonEnabled()}
+  disabled={isGeneratingPayslip}
 >
+  {isGeneratingPayslip ? (
+    <>
+      <div className="spinner"></div>
+      Generating...
+    </>
+  ) : (
+    <>
+      <Save size={18} />
+      {existingPayslip ? "Update Payslip" : "Generate Payslip"}
+    </>
+  )}
+</button>
 
-                {loading ? (
-                  <>
-                    <div className="spinner"></div>
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Save size={18} />
-                    {existingPayslip ? 'Update Payslip' : 'Generate Payslip'}
-                  </>
-                )}
-              </button>
               
               <button 
   className="btn-send"
