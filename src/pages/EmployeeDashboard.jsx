@@ -8,7 +8,6 @@ import "../../styles/employeeDashboard.css";
 import { FaEdit } from "react-icons/fa";
 import { FaCalendarAlt } from "react-icons/fa";
 
-
 const STATUS_OPTIONS = [
   "PRESENT FULL DAY",
   "PRESENT HALF DAY",
@@ -67,15 +66,6 @@ const monthNames = [
   "December"
 ];
 
-const diffHours = (start, end) => {
-  if (!start || !end) return 0;
-  const [sh, sm] = start.split(":").map(Number);
-  const [eh, em] = end.split(":").map(Number);
-  if (Number.isNaN(sh) || Number.isNaN(eh)) return 0;
-  let mins = eh * 60 + em - (sh * 60 + sm);
-  if (mins < 0) mins += 24 * 60;
-  return Math.round((mins / 60) * 10) / 10;
-};
 
 const diffDays = (start, end) => {
   if (!start || !end) return 0;
@@ -338,6 +328,8 @@ export default function EmployeeDashboard() {
   const [status, setStatus] = useState("PRESENT FULL DAY");
   const [workInTime, setWorkInTime] = useState("10:00");
   const [workOutTime, setWorkOutTime] = useState("18:00");
+  const [lunchInTime, setLunchInTime] = useState("");
+  const [lunchOutTime, setLunchOutTime] = useState("");
   const [note, setNote] = useState("");
 
   const [extraWork, setExtraWork] = useState({
@@ -530,6 +522,7 @@ export default function EmployeeDashboard() {
     }
   }, [activeTab, loadPayslips]);
 
+  // ✅ FIXED: Use backend-calculated hours instead of frontend calculation
   useEffect(() => {
     if (attendance.length === 0) {
       setSharedMetrics({
@@ -572,22 +565,14 @@ export default function EmployeeDashboard() {
         compOffRequests += 1;
       }
 
-      const isPresentLike =
-        a.status === "PRESENT FULL DAY" || HALF_DAY_STATUSES.includes(a.status);
-      const factor = HALF_DAY_STATUSES.includes(a.status) ? 0.5 : 1;
-      const baseHours = diffHours(a.workInTime, a.workOutTime);
-      const effective = isPresentLike ? baseHours * factor : 0;
-
-      hoursWorked += effective;
-
-      if (a.status === "PRESENT FULL DAY" && baseHours > 8) {
-        extraHours += (baseHours - 8);
-      }
-      if (a.extraHours && a.extraHours > 0) {
-        extraHours += a.extraHours;
-      }
+      // ✅ FIXED: Use backend calculated hours instead of frontend calculation
+      hoursWorked += a.hoursWorked || 0;
+      
+      // ✅ FIXED: Use backend calculated extra hours
+      extraHours += a.extraHoursWorked || 0;
     });
 
+    // Round for display
     hoursWorked = Math.round(hoursWorked * 10) / 10;
     extraHours = Math.round(extraHours * 10) / 10;
 
@@ -796,6 +781,8 @@ export default function EmployeeDashboard() {
       setStatus(systemHolidayStatus);
       setWorkInTime("");
       setWorkOutTime("");
+      setLunchInTime("");
+      setLunchOutTime("");
       setNote("");
     }, 0);
     return () => clearTimeout(id);
@@ -869,15 +856,10 @@ export default function EmployeeDashboard() {
         status,
         workInTime,
         workOutTime,
+        lunchInTime,
+        lunchOutTime,
         note
       };
-
-      if (status === "PRESENT FULL DAY") {
-        const hours = diffHours(workInTime, workOutTime);
-        if (hours > 8) {
-          payload.extraHours = hours - 8;
-        }
-      }
 
       if (status === "COMPOFF") {
         const {
@@ -929,6 +911,8 @@ export default function EmployeeDashboard() {
       setStatus("PRESENT FULL DAY");
       setWorkInTime("10:00");
       setWorkOutTime("18:00");
+      setLunchInTime("");
+      setLunchOutTime("");
       setNote("");
       setExtraWork({
         hours: 2,
@@ -964,14 +948,10 @@ export default function EmployeeDashboard() {
 
   const monthLabel = `${monthNames[Number(month) - 1]}, ${year}`;
 
+  // ✅ FIXED: timesheetRows - Use backend calculated hours
   const timesheetRows = attendance.map((a) => {
-    const isPresentLike =
-      a.status === "PRESENT FULL DAY" || HALF_DAY_STATUSES.includes(a.status);
-    const factor = HALF_DAY_STATUSES.includes(a.status) ? 0.5 : 1;
-    const baseHours = diffHours(a.workInTime, a.workOutTime);
-    const workedHours = isPresentLike ? baseHours * factor : 0;
-
-    const extraHours = a.extraHours || ((a.status === "PRESENT FULL DAY" && baseHours > 8) ? baseHours - 8 : 0);
+    const workedHours = a.hoursWorked || 0;
+    const extraHours = a.extraHoursWorked || 0;
 
     return {
       ...a,
@@ -1451,6 +1431,32 @@ export default function EmployeeDashboard() {
                       />
                     </label>
 
+                    {status === "PRESENT FULL DAY" && (
+                      <>
+                        <label>
+                          Lunch In Time
+                          <input
+                            type="time"
+                            value={lunchInTime}
+                            onChange={(e) => setLunchInTime(e.target.value)}
+                            disabled={isSystemHoliday}
+                            required
+                          />
+                        </label>
+
+                        <label>
+                          Lunch Out Time
+                          <input
+                            type="time"
+                            value={lunchOutTime}
+                            onChange={(e) => setLunchOutTime(e.target.value)}
+                            disabled={isSystemHoliday}
+                            required
+                          />
+                        </label>
+                      </>
+                    )}
+
                     <label className="full-row">
                       Note (optional)
                       <input
@@ -1610,54 +1616,6 @@ export default function EmployeeDashboard() {
                     </div>
                   </div>
                 </div>
-
-                {/* <div className="card table-shadow-card">
-                  <h2 style={{ color: '#ffffff' }}>Leave & Balance Summary</h2>
-                  <table className="leave-summary-table-compact">
-                    <tbody>
-                      <tr>
-                        <td>Total Leave Entitlement</td>
-                        <td>{summary?.totalLeaveEntitlement || 0}</td>
-                      </tr>
-                      <tr>
-                        <td>Public Holidays</td>
-                        <td>{summary?.publicHolidays || 0}</td>
-                      </tr>
-                      <tr>
-                        <td>Weekend Holidays</td>
-                        <td>{summary?.weekendHolidays || 0}</td>
-                      </tr>
-                      <tr>
-                        <td>Carry Forward (2025)</td>
-                        <td>{summary?.carryForward2025 || 0}</td>
-                      </tr>
-                      <tr>
-                        <td>Leaves Taken</td>
-                        <td>{summary?.leavesTaken || 0}</td>
-                      </tr>
-                      <tr className="highlight">
-                        <td>Balance Leaves</td>
-                        <td>{summary?.balanceLeaves || 0}</td>
-                      </tr>
-                      <tr>
-                        <td>Total Half Days</td>
-                        <td>{summary?.totalHalfDays || 0}</td>
-                      </tr>
-                      <tr>
-                        <td>Balance After Half Days</td>
-                        <td>{summary?.balanceAfterHalfDays || 0}</td>
-                      </tr>
-                      <tr style={{ background: "#fff3cd" }}>
-                        <td><strong>Extra Hours Balance</strong></td>
-                        <td><strong>{sharedMetrics.extraHours.toFixed(1)} hrs</strong></td>
-                      </tr>
-                      <tr style={{ background: "#d4edda" }}>
-                        <td><strong>Comp-off Balance</strong></td>
-                        <td><strong>{compOffBalance} days</strong></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div> */}
 
                 <div className="card">
                   <h2>Public Holidays – {monthLabel}</h2>

@@ -2147,9 +2147,16 @@ export default function ManagerDashboard() {
                             <td>{p.toStatus}</td>
 
                             <td>
-                              {p.toWorkInTime && p.toWorkOutTime
-                                ? `${p.toWorkInTime.slice(0, 5)} – ${p.toWorkOutTime.slice(0, 5)}`
-                                : "-"}
+                              {p.toWorkInTime && p.toWorkOutTime ? (
+  <>
+    {p.toWorkInTime.slice(0, 5)} – {p.toWorkOutTime.slice(0, 5)}
+    <br />
+    <small style={{ opacity: 0.75 }}>
+      Lunch: {p.lunchBreakMinutes ? `${p.lunchBreakMinutes} mins` : "—"}
+    </small>
+  </>
+) : "-"}
+
                             </td>
 
                             <td>
@@ -2197,18 +2204,23 @@ export default function ManagerDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {attendance.map((a) => (
-                          <tr key={a._id}>
-                            <td>{a.date}</td>
-                            <td>{a.user?.fullName}</td>
-                            <td>{a.status}</td>
-                            <td>{a.workInTime}</td>
-                            <td>{a.workOutTime}</td>
-                            <td>{a.managerDecision?.status}</td>
+  {attendance.map((a) => (
+    <tr key={a._id}>
+      <td>{a.date}</td>
+      <td>{a.user?.fullName}</td>
+      <td>{a.status}</td>
+      <td>{a.workInTime}</td>
+      <td>{a.workOutTime}</td>
+      <td>
+        {a.lunchBreakMinutes
+          ? `${a.lunchBreakMinutes} mins`
+          : "-"}
+      </td>
+      <td>{a.managerDecision?.status}</td>
+    </tr>
+  ))}
+</tbody>
 
-                          </tr>
-                        ))}
-                      </tbody>
                     </table>
                     {attendance.length === 0 && (
                       <p className="empty">No attendance yet</p>
