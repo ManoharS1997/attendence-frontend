@@ -1,15 +1,21 @@
 import React from "react";
 import { useAuth } from "./context/AuthContext";
+import useIdleLogout from "./utils/useIdleLogout";
+
 import LoginPage from "./pages/LoginPage";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import ManagerDashboard from "./pages/ManagerDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./styles.css";
 
 export default function App() {
   const { user } = useAuth();
+
+  // 🔐 Auto logout after 5 minutes idle (ALL ROLES)
+  useIdleLogout();
 
   return (
     <>
