@@ -1529,31 +1529,30 @@ export default function ManagerDashboard() {
     wishedThisYear: birthdays.filter(b => b.wished).length,
     upcoming7Days: upcomingBirthdays.length
   };
-  const filteredProjectTasks = (projectTasks || []).filter((t) => {
-    if (!taskSearch.trim()) return true;
+  const filteredProjectTasks = (Array.isArray(projectTasks) ? projectTasks : []).filter((t) => {
+  if (!taskSearch.trim()) return true;
 
-    const q = taskSearch.toLowerCase();
+  const q = taskSearch.toLowerCase();
 
-    const projectName =
-      t.project?.name ||
-      projects.find(p => p._id === t.projectId)?.name ||
-      "";
+  const projectName =
+    t.project?.name ||
+    projects.find(p => p._id === t.projectId)?.name ||
+    "";
 
-    const employeeName =
-      t.assignedUser?.fullName ||
-      t.assignedUser?.email ||
-      "";
+  const employeeName =
+    t.assignedUser?.fullName ||
+    t.assignedUser?.email ||
+    "";
 
-    return (
-      (t.recentRequirement || "").toLowerCase().includes(q) ||
-      (t.status || "").toLowerCase().includes(q) ||
-      (t.scope || "").toLowerCase().includes(q) ||
-      (t.clientPriority || "").toLowerCase().includes(q) ||
-      projectName.toLowerCase().includes(q) ||
-      employeeName.toLowerCase().includes(q)
-    );
-  });
-
+  return (
+    (t.recentRequirement || "").toLowerCase().includes(q) ||
+    (t.status || "").toLowerCase().includes(q) ||
+    (t.scope || "").toLowerCase().includes(q) ||
+    (t.clientPriority || "").toLowerCase().includes(q) ||
+    projectName.toLowerCase().includes(q) ||
+    employeeName.toLowerCase().includes(q)
+  );
+});
   return (
     <div className="page">
       <div className="shell">
