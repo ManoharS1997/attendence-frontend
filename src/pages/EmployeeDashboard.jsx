@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
 import api from "../utils/api";
@@ -6,8 +5,7 @@ import ChangePasswordCard from "../components/ChangePasswordCard";
 import logo from "../assets/Company Logo.png";
 import { buildHolidayCalendar } from "../utils/holidays";
 import "../../styles/employeeDashboard.css";
-import { FaEdit } from "react-icons/fa";
-import { FaCalendarAlt } from "react-icons/fa";
+import { FaEdit, FaCalendarAlt } from "react-icons/fa";
 
 const STATUS_OPTIONS = [
   "PRESENT FULL DAY",
@@ -66,7 +64,6 @@ const monthNames = [
   "November",
   "December"
 ];
-
 
 const diffDays = (start, end) => {
   if (!start || !end) return 0;
@@ -354,38 +351,44 @@ export default function EmployeeDashboard() {
   const [taskError, setTaskError] = useState("");
 
   const [taskForm, setTaskForm] = useState({
-    projectId: "",
-    recentRequirement: "",
-    requirementType: "NEW",
-    status: "OPEN",
-    scope: "AGREED",
-    notes: "",
-    discussedDate: formatToday(),
-    originalClosureDate: "",
-    estimatedDate: "",
-    noOfDays: 0,
-    clientPriority: "P3",
-    prioritySource: "CLIENT",
-    hoursAllocated: PRIORITY_DEFAULT_HOURS.P3
-  });
+  projectId: "",
+  recentRequirement: "",
+  requirementType: "NEW",
+  requirementRole: "DEVELOPER", // ADD THIS LINE
+  status: "OPEN",
+  scope: "AGREED",
+  notes: "",
+  discussedDate: formatToday(),
+  originalClosureDate: "",
+  estimatedDate: "",
+  noOfDays: 0,
+  clientPriority: "P3",
+  prioritySource: "CLIENT",
+  hoursAllocated: PRIORITY_DEFAULT_HOURS.P3
+});
   const [editingTaskId, setEditingTaskId] = useState(null);
 
+  // Project State for Employee
+  const [myProjects, setMyProjects] = useState([]);
+  const [projectTasks, setProjectTasks] = useState([]);
+  const [selectedProject, setSelectedProject] = useState(null);
+  
+
   const loadDashboard = useCallback(async () => {
-  const res = await api.get("/utils/dashboard");
+    const res = await api.get("/utils/dashboard");
 
-  setSharedMetrics({
-    presentDays: res.data.attendance.presentDays,
-    halfDays: res.data.attendance.halfDays,
-    leavesTaken: res.data.attendance.leaveDays,
-    hoursWorked: res.data.timesheet.totalHoursWorked,
-    pendingRequests: 0,
-    extraHours: res.data.timesheet.totalExtraHours,
-    compOffRequests: 0
-  });
+    setSharedMetrics({
+      presentDays: res.data.attendance.presentDays,
+      halfDays: res.data.attendance.halfDays,
+      leavesTaken: res.data.attendance.leaveDays,
+      hoursWorked: res.data.timesheet.totalHoursWorked,
+      pendingRequests: 0,
+      extraHours: res.data.timesheet.totalExtraHours,
+      compOffRequests: 0
+    });
 
-  setCompOffBalance(res.data.leaveBalance.compOff || 0);
-}, []);
-
+    setCompOffBalance(res.data.leaveBalance.compOff || 0);
+  }, []);
 
   const loadAttendance = useCallback(async (selectedMonth = month, selectedYear = year) => {
     const res = await api.get("/attendance/my", {
@@ -399,11 +402,21 @@ export default function EmployeeDashboard() {
     setSummary(res.data || null);
   }, [month, year]);
 
-  const loadProjects = useCallback(async () => {
+ const loadProjects = useCallback(async () => {
+  try {
     const res = await api.get("/projects/my");
-    setProjects(res.data || []);
-  }, []);
-
+    console.log("Employee projects loaded:", res.data);
+    const projectsData = res.data || [];
+    
+    // Use the same data for both states
+    setProjects(projectsData);
+    setMyProjects(projectsData);
+  } catch (error) {
+    console.error("Error loading projects", error);
+    setProjects([]);
+    setMyProjects([]);
+  }
+}, []);
   const loadTasks = useCallback(async () => {
     try {
       const res = await api.get("/tasks/my");
@@ -412,12 +425,19 @@ export default function EmployeeDashboard() {
       setTasks(tasksData);
       setFilteredTasks(tasksData);
       setSearchTerm("");
+      
+      // Load project-specific tasks
+      if (selectedProject) {
+        const projectTasksRes = await api.get(`/projects/${selectedProject._id}/tasks`);
+        setProjectTasks(projectTasksRes.data || []);
+      }
     } catch (error) {
       console.error("Error loading my tasks", error?.response || error);
       setTasks([]);
       setFilteredTasks([]);
+      setProjectTasks([]);
     }
-  }, []);
+  }, [selectedProject]);
 
   const loadPayslips = useCallback(async () => {
     try {
@@ -429,18 +449,18 @@ export default function EmployeeDashboard() {
     }
   }, []);
 
- const forceRefreshAll = useCallback(async () => {
-  try {
-    await Promise.all([
-      loadAttendance(),
-      loadSummary(),
-      loadDashboard()
-    ]);
-  } catch (error) {
-    console.error("Error refreshing data:", error);
-  }
-}, [loadAttendance, loadSummary, loadDashboard]);
 
+const forceRefreshAll = useCallback(async () => {
+    try {
+      await Promise.all([
+        loadAttendance(),
+        loadSummary(),
+        loadDashboard()
+      ]);
+    } catch (error) {
+      console.error("Error refreshing data:", error);
+    }
+  }, [loadAttendance, loadSummary, loadDashboard]);
 
   useEffect(() => {
     const current = new Date();
@@ -467,12 +487,11 @@ export default function EmployeeDashboard() {
     }
   }, [month, year, lastVisitedMonthYear]);
 
- useEffect(() => {
-  loadAttendance();
-  loadSummary();
-  loadDashboard();
-}, [loadAttendance, loadSummary, loadDashboard]);
-
+  useEffect(() => {
+    loadAttendance();
+    loadSummary();
+    loadDashboard();
+  }, [loadAttendance, loadSummary, loadDashboard]);
 
   useEffect(() => {
     const checkBirthday = async () => {
@@ -524,7 +543,6 @@ export default function EmployeeDashboard() {
     }
   }, [activeTab, loadPayslips]);
 
-  // ✅ FIXED: Use backend-calculated hours instead of frontend calculation
   useEffect(() => {
     if (attendance.length === 0) {
       setSharedMetrics({
@@ -567,14 +585,10 @@ export default function EmployeeDashboard() {
         compOffRequests += 1;
       }
 
-      // ✅ FIXED: Use backend calculated hours instead of frontend calculation
       hoursWorked += a.hoursWorked || 0;
-      
-      // ✅ FIXED: Use backend calculated extra hours
       extraHours += a.extraHoursWorked || 0;
     });
 
-    // Round for display
     hoursWorked = Math.round(hoursWorked * 10) / 10;
     extraHours = Math.round(extraHours * 10) / 10;
 
@@ -950,7 +964,6 @@ export default function EmployeeDashboard() {
 
   const monthLabel = `${monthNames[Number(month) - 1]}, ${year}`;
 
-  // ✅ FIXED: timesheetRows - Use backend calculated hours
   const timesheetRows = attendance.map((a) => {
     const workedHours = a.hoursWorked || 0;
     const extraHours = a.extraHoursWorked || 0;
@@ -970,75 +983,95 @@ export default function EmployeeDashboard() {
   const resetTaskForm = (keepProjectId = false) => {
     setEditingTaskId(null);
     setTaskForm((prev) => ({
-      projectId: keepProjectId ? prev.projectId : "",
-      recentRequirement: "",
-      requirementType: "NEW",
-      status: "OPEN",
-      scope: "AGREED",
-      notes: "",
-      discussedDate: formatToday(),
-      originalClosureDate: "",
-      estimatedDate: "",
-      noOfDays: 0,
-      clientPriority: "P3",
-      prioritySource: "CLIENT",
-      hoursAllocated: PRIORITY_DEFAULT_HOURS.P3
-    }));
+  projectId: keepProjectId ? prev.projectId : "",
+  recentRequirement: "",
+  requirementType: "NEW",
+  requirementRole: "DEVELOPER", // ADD THIS LINE
+  status: "OPEN",
+  scope: "AGREED",
+  notes: "",
+  discussedDate: formatToday(),
+  originalClosureDate: "",
+  estimatedDate: "",
+  noOfDays: 0,
+  clientPriority: "P3",
+  prioritySource: "CLIENT",
+  hoursAllocated: PRIORITY_DEFAULT_HOURS.P3
+}));
     setTaskError("");
   };
 
   const handleCreateOrUpdateTask = async (e) => {
-    e.preventDefault();
-    setTaskError("");
+  e.preventDefault();
+  setTaskError("");
 
-    if (!taskForm.projectId) {
-      setTaskError("Please select a project");
-      return;
+  if (!taskForm.projectId) {
+    setTaskError("Please select a project");
+    return;
+  }
+
+  // Check if project is approved
+  const selectedProject = projects.find(p => p._id === taskForm.projectId);
+  if (selectedProject && selectedProject.status !== "APPROVED") {
+    setTaskError(`Cannot create task for project "${selectedProject.name}". Project status: ${selectedProject.status}. Only APPROVED projects allow task creation.`);
+    return;
+  }
+
+  if (!taskForm.recentRequirement || taskForm.recentRequirement.trim().length === 0) {
+    setTaskError("Please enter a requirement description");
+    return;
+  }
+
+  if (!taskForm.hoursAllocated || taskForm.hoursAllocated <= 0) {
+    setTaskError("Please enter estimated hours greater than 0");
+    return;
+  }
+
+  const finalDays = taskForm.noOfDays || 0;
+
+  try {
+    // EXPLICITLY include requirementRole in payload
+    const payload = {
+      projectId: taskForm.projectId,
+      recentRequirement: taskForm.recentRequirement,
+      requirementType: taskForm.requirementType,
+      requirementRole: taskForm.requirementRole || "DEVELOPER", // MAKE SURE THIS IS INCLUDED
+      status: taskForm.status,
+      scope: taskForm.scope,
+      notes: taskForm.notes,
+      discussedDate: taskForm.discussedDate,
+      originalClosureDate: taskForm.originalClosureDate,
+      estimatedDate: taskForm.estimatedDate,
+      noOfDays: finalDays,
+      clientPriority: taskForm.clientPriority,
+      prioritySource: taskForm.prioritySource,
+      estimateHours: Number(taskForm.hoursAllocated) > 0
+        ? Number(taskForm.hoursAllocated)
+        : PRIORITY_DEFAULT_HOURS[taskForm.clientPriority] || 8,
+      assignedUserId: user._id || user.id,
+      createdByUserId: user._id || user.id,
+      createdBy: editingTaskId ? undefined : (user.fullName || user.email)
+    };
+
+    console.log("DEBUG - Creating task with payload:", payload);
+
+    if (!editingTaskId) {
+      await api.post("/tasks", payload);
+      alert("Task / requirement added successfully");
+    } else {
+      console.log("UPDATE PAYLOAD →", payload);
+      await api.patch(`/tasks/${editingTaskId}`, payload);
+      alert("Task updated successfully");
     }
 
-    if (!taskForm.recentRequirement || taskForm.recentRequirement.trim().length === 0) {
-      setTaskError("Please enter a requirement description");
-      return;
-    }
+    resetTaskForm(true);
+    await loadTasks();
 
-    if (!taskForm.hoursAllocated || taskForm.hoursAllocated <= 0) {
-      setTaskError("Please enter estimated hours greater than 0");
-      return;
-    }
-
-    const finalDays = taskForm.noOfDays || 0;
-
-    try {
-      const payload = {
-        ...taskForm,
-        projectId: taskForm.projectId,
-        noOfDays: finalDays,
-        estimateHours:
-          Number(taskForm.hoursAllocated) > 0
-            ? Number(taskForm.hoursAllocated)
-            : PRIORITY_DEFAULT_HOURS[taskForm.clientPriority] || 8,
-        assignedUserId: user._id || user.id,
-        createdBy: editingTaskId ? undefined : (user.fullName || user.email)
-      };
-
-      if (!editingTaskId) {
-        await api.post("/tasks", payload);
-        alert("Task / requirement added successfully");
-      } else {
-        console.log("UPDATE PAYLOAD →", payload);
-        await api.patch(`/tasks/${editingTaskId}`, payload);
-        alert("Task updated successfully");
-      }
-
-      resetTaskForm(true);
-      await loadTasks();
-
-    } catch (error) {
-      console.error("Employee create/update task error", error?.response || error);
-      setTaskError(error.response?.data?.message || "Error saving task. Please check your input.");
-    }
-  };
-
+  } catch (error) {
+    console.error("Employee create/update task error", error?.response || error);
+    setTaskError(error.response?.data?.message || "Error saving task. Please check your input.");
+  }
+};
   const startEditTask = (t) => {
     const canEdit = (() => {
       const userRole = user.role;
@@ -1066,23 +1099,24 @@ export default function EmployeeDashboard() {
 
     setEditingTaskId(t._id);
     setTaskForm({
-      projectId: t.projectId?._id || t.projectId || "",
-      recentRequirement: t.recentRequirement || "",
-      requirementType: t.requirementType || "NEW",
-      status: t.status || "OPEN",
-      scope: t.scope || "AGREED",
-      notes: t.notes || "",
-      discussedDate: t.discussedDate || formatToday(),
-      originalClosureDate: t.originalClosureDate || "",
-      estimatedDate: t.estimatedDate || "",
-      noOfDays: t.noOfDays || 0,
-      clientPriority: t.clientPriority || "P3",
-      prioritySource: t.prioritySource || "CLIENT",
-      hoursAllocated:
-        t.estimateHours ||
-        PRIORITY_DEFAULT_HOURS[t.clientPriority || "P3"] ||
-        8
-    });
+  projectId: t.projectId?._id || t.projectId || "",
+  recentRequirement: t.recentRequirement || "",
+  requirementType: t.requirementType || "NEW",
+  requirementRole: t.requirementRole || "DEVELOPER", // ADD THIS LINE
+  status: t.status || "OPEN",
+  scope: t.scope || "AGREED",
+  notes: t.notes || "",
+  discussedDate: t.discussedDate || formatToday(),
+  originalClosureDate: t.originalClosureDate || "",
+  estimatedDate: t.estimatedDate || "",
+  noOfDays: t.noOfDays || 0,
+  clientPriority: t.clientPriority || "P3",
+  prioritySource: t.prioritySource || "CLIENT",
+  hoursAllocated:
+    t.estimateHours ||
+    PRIORITY_DEFAULT_HOURS[t.clientPriority || "P3"] ||
+    8
+});
   };
 
   const monthYearSelect = (
@@ -1109,32 +1143,46 @@ export default function EmployeeDashboard() {
   );
 
   const handleDownloadPayslip = async (payslipId, month, year) => {
+    try {
+      const response = await api.get(`/payslips/${payslipId}/download`, {
+        responseType: "blob",
+      });
+
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+
+      const employeeName = (user.fullName || "Employee").replace(/\s+/g, "_");
+      const monthName = monthNames[month - 1];
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${employeeName}_${monthName}_${year}.pdf`;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error downloading payslip:", error);
+      alert("Failed to download payslip.");
+    }
+  };
+
+  const handleProjectSelect = async (project) => {
+  setSelectedProject(project);
   try {
-    const response = await api.get(`/payslips/${payslipId}/download`, {
-      responseType: "blob",
-    });
-
-    const blob = new Blob([response.data], { type: "application/pdf" });
-    const url = window.URL.createObjectURL(blob);
-
-    const employeeName = (user.fullName || "Employee").replace(/\s+/g, "_");
-    const monthName = monthNames[month - 1];
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${employeeName}_${monthName}_${year}.pdf`;
-
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    window.URL.revokeObjectURL(url);
+    const tasksRes = await api.get(`/projects/${project._id}/tasks`);
+    setProjectTasks(tasksRes.data || []);
+    
+    // REMOVED: const balanceRes = await api.get(`/projects/${project._id}/balance`);
+    // REMOVED: setProjectBalanceDetails(balanceRes.data);
   } catch (error) {
-    console.error("Error downloading payslip:", error);
-    alert("Failed to download payslip.");
+    console.error("Error loading project details:", error);
+    setProjectTasks([]);
+    // REMOVED: setProjectBalanceDetails(null);
   }
 };
-
 
   const NextMonthPopup = () => {
     if (!showNextMonthPopup) return null;
@@ -1156,6 +1204,112 @@ export default function EmployeeDashboard() {
           >
             OK, Got it
           </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Project Status Badge Component (inline since you said no new files)
+  const ProjectStatusBadge = ({ status }) => {
+    const statusConfig = {
+      DRAFT: {
+        label: "DRAFT",
+        color: "#8c8c8c",
+        bgColor: "#f5f5f5",
+        borderColor: "#d9d9d9"
+      },
+      PENDING_APPROVAL: {
+        label: "PENDING APPROVAL",
+        color: "#fa8c16",
+        bgColor: "#fff7e6",
+        borderColor: "#ffa940"
+      },
+      APPROVED: {
+        label: "APPROVED",
+        color: "#52c41a",
+        bgColor: "#f6ffed",
+        borderColor: "#95de64"
+      },
+      REJECTED: {
+        label: "REJECTED",
+        color: "#ff4d4f",
+        bgColor: "#fff2f0",
+        borderColor: "#ff7875"
+      },
+      COMPLETED: {
+        label: "COMPLETED",
+        color: "#1890ff",
+        bgColor: "#e6f7ff",
+        borderColor: "#69c0ff"
+      },
+      ARCHIVED: {
+        label: "ARCHIVED",
+        color: "#722ed1",
+        bgColor: "#f9f0ff",
+        borderColor: "#b37feb"
+      }
+    };
+
+    const config = statusConfig[status] || statusConfig.DRAFT;
+
+    return (
+      <span
+        style={{
+          display: "inline-block",
+          padding: "4px 10px",
+          borderRadius: "12px",
+          fontSize: "11px",
+          fontWeight: "600",
+          color: config.color,
+          backgroundColor: config.bgColor,
+          border: `1px solid ${config.borderColor}`,
+          textTransform: "uppercase",
+          letterSpacing: "0.3px"
+        }}
+      >
+        {config.label}
+      </span>
+    );
+  };
+
+  // Balance Display Component (inline)
+  const BalanceDisplay = ({ balance, estimated, consumed }) => {
+    const isNegative = balance < 0;
+    const isLow = balance < (estimated * 0.1); // Less than 10% remaining
+
+    return (
+      <div style={{
+        padding: "10px",
+        borderRadius: "6px",
+        backgroundColor: isNegative ? "#fff2f0" : isLow ? "#fff7e6" : "#f6ffed",
+        border: `1px solid ${isNegative ? "#ffccc7" : isLow ? "#ffe58f" : "#b7eb8f"}`,
+        marginBottom: "10px"
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+          <span style={{ fontWeight: "bold", color: isNegative ? "#ff4d4f" : isLow ? "#fa8c16" : "#52c41a" }}>
+            Project Balance
+          </span>
+          <span style={{ 
+            fontWeight: "bold", 
+            fontSize: "16px",
+            color: isNegative ? "#ff4d4f" : isLow ? "#fa8c16" : "#52c41a"
+          }}>
+            {balance.toFixed(1)} hrs
+          </span>
+        </div>
+        <div style={{ fontSize: "12px", color: "#666" }}>
+          <div>Estimated: {estimated} hrs</div>
+          <div>Consumed: {consumed} hrs</div>
+          {isNegative && (
+            <div style={{ color: "#ff4d4f", fontWeight: "bold", marginTop: "5px" }}>
+              ⚠️ Project has exceeded estimated hours
+            </div>
+          )}
+          {isLow && !isNegative && (
+            <div style={{ color: "#fa8c16", fontWeight: "bold", marginTop: "5px" }}>
+              ⚠️ Low balance remaining ({((balance/estimated)*100).toFixed(1)}%)
+            </div>
+          )}
         </div>
       </div>
     );
@@ -2017,6 +2171,197 @@ export default function EmployeeDashboard() {
           {activeTab === "projects" && (
             <main className="layout single-column">
               <section className="full-width">
+                {/* PROJECT SELECTION SECTION */}
+                <div className="card">
+                  <h2>My Assigned Projects</h2>
+                  <div className="table-wrapper small-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Project Name</th>
+                          <th>Status</th>
+                          <th>Total Estimated Hours</th>
+                          <th>Balance Hours</th>
+                          <th>My Role</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {myProjects.length > 0 ? (
+                          myProjects.map((project) => (
+                            <tr key={project._id}>
+                              <td>
+                                <strong>{project.name}</strong>
+                                {project.code && ` (${project.code})`}
+                                <div style={{ fontSize: '12px', color: '#666' }}>
+                                  {project.description || 'No description'}
+                                </div>
+                              </td>
+                              <td>
+                                <ProjectStatusBadge status={project.status} />
+                              </td>
+                              <td>{project.totalEstimatedHours || 0} hrs</td>
+                              <td>
+                                <span style={{
+                                  color: project.balanceHours < 0 ? '#ff4d4f' : 
+                                         project.balanceHours < (project.totalEstimatedHours * 0.1) ? '#fa8c16' : '#52c41a',
+                                  fontWeight: 'bold'
+                                }}>
+                                  {project.balanceHours || 0} hrs
+                                </span>
+                              </td>
+                              <td>
+                                {project.assignments?.find(a => a.user?._id === user._id)?.role || 'Not assigned'}
+                              </td>
+                              <td>
+                                <button
+                                  onClick={() => handleProjectSelect(project)}
+                                  className="primary-btn small-btn"
+                                  style={{ padding: '4px 8px', fontSize: '12px' }}
+                                >
+                                  View Details
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>
+                              <p className="empty">No projects assigned to you yet.</p>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* SELECTED PROJECT DETAILS */}
+                {selectedProject && (
+                  <div className="card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                      <h2>Project: {selectedProject.name} {selectedProject.code && `(${selectedProject.code})`}</h2>
+                      <ProjectStatusBadge status={selectedProject.status} />
+                    </div>
+                    
+                    <BalanceDisplay 
+                      balance={selectedProject.balanceHours || 0}
+                      estimated={selectedProject.totalEstimatedHours || 0}
+                      consumed={selectedProject.consumedHours || 0}
+                    />
+
+                    <div style={{ 
+                      display: 'grid', 
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                      gap: '15px',
+                      marginBottom: '20px'
+                    }}>
+                      <div style={{ padding: '10px', backgroundColor: '#f0f5ff', borderRadius: '6px' }}>
+                        <div style={{ fontSize: '12px', color: '#666' }}>Start Date</div>
+                        <div style={{ fontWeight: 'bold' }}>
+                          {selectedProject.startDate ? new Date(selectedProject.startDate).toLocaleDateString() : 'Not set'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '10px', backgroundColor: '#f6ffed', borderRadius: '6px' }}>
+                        <div style={{ fontSize: '12px', color: '#666' }}>End Date</div>
+                        <div style={{ fontWeight: 'bold' }}>
+                          {selectedProject.endDate ? new Date(selectedProject.endDate).toLocaleDateString() : 'Not set'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '10px', backgroundColor: '#fff7e6', borderRadius: '6px' }}>
+                        <div style={{ fontSize: '12px', color: '#666' }}>My Role</div>
+                        <div style={{ fontWeight: 'bold' }}>
+                          {selectedProject.assignments?.find(a => a.user?._id === user._id)?.role || 'Not assigned'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* PROJECT TASKS */}
+                    <h3>Tasks in this Project</h3>
+                    <div className="table-wrapper small-table">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Requirement</th>
+                            <th>Status</th>
+                            <th>Est. Hours</th>
+                            <th>Priority</th>
+                            <th>Created By</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {projectTasks.length > 0 ? (
+                            projectTasks.map((task) => (
+                              <tr key={task._id}>
+                                <td style={{ maxWidth: '300px', whiteSpace: 'pre-wrap' }}>
+                                  {task.recentRequirement}
+                                </td>
+                                <td>{task.status}</td>
+                                <td>{task.estimateHours || 0} hrs</td>
+                                <td>
+                                  <span style={{
+                                    padding: '2px 8px',
+                                    borderRadius: '12px',
+                                    fontSize: '11px',
+                                    fontWeight: '600',
+                                    backgroundColor: priorityColors[task.clientPriority]?.color || '#d9d9d9',
+                                    color: '#fff'
+                                  }}>
+                                    {task.clientPriority}
+                                  </span>
+                                </td>
+                                <td>{task.createdByUserId?.fullName || 'Unknown'}</td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan="5" style={{ textAlign: 'center', padding: '20px' }}>
+                                <p className="empty">No tasks created for this project yet.</p>
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* WARNING MESSAGES */}
+                    {selectedProject.status !== "APPROVED" && (
+                      <div style={{
+                        marginTop: '15px',
+                        padding: '10px',
+                        backgroundColor: '#fff7e6',
+                        border: '1px solid #ffe58f',
+                        borderRadius: '6px',
+                        color: '#d48806'
+                      }}>
+                        ⚠️ <strong>Project Not Approved</strong>
+                        <p style={{ margin: '5px 0 0 0', fontSize: '13px' }}>
+                          This project is in <strong>{selectedProject.status}</strong> status. 
+                          Only APPROVED projects allow task creation. Please contact your manager.
+                        </p>
+                      </div>
+                    )}
+
+                    {selectedProject.balanceHours < 0 && (
+                      <div style={{
+                        marginTop: '15px',
+                        padding: '10px',
+                        backgroundColor: '#fff2f0',
+                        border: '1px solid #ffccc7',
+                        borderRadius: '6px',
+                        color: '#ff4d4f'
+                      }}>
+                        ⚠️ <strong>Project Exceeded Estimated Hours</strong>
+                        <p style={{ margin: '5px 0 0 0', fontSize: '13px' }}>
+                          This project has exceeded its estimated hours by <strong>{Math.abs(selectedProject.balanceHours)} hours</strong>.
+                          Manager must add delay reason before completing the project.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TASK CREATION FORM */}
                 <div className="card">
                   <h2>
                     {editingTaskId
@@ -2035,6 +2380,25 @@ export default function EmployeeDashboard() {
                       {taskError}
                     </div>
                   )}
+                  
+                  {/* PROJECT SELECTION WARNING */}
+                  {projects.filter(p => p.status === "APPROVED").length === 0 && (
+                    <div style={{
+                      padding: '10px',
+                      backgroundColor: '#fff7e6',
+                      border: '1px solid #ffe58f',
+                      borderRadius: '6px',
+                      marginBottom: '15px',
+                      color: '#d48806'
+                    }}>
+                      ⚠️ <strong>No Approved Projects Available</strong>
+                      <p style={{ margin: '5px 0 0 0', fontSize: '13px' }}>
+                        You need at least one APPROVED project to create tasks. 
+                        Please contact your manager to approve your assigned projects.
+                      </p>
+                    </div>
+                  )}
+
                   <form
                     className="form-grid"
                     onSubmit={handleCreateOrUpdateTask}
@@ -2050,14 +2414,22 @@ export default function EmployeeDashboard() {
                           })
                         }
                         required
+                        disabled={projects.filter(p => p.status === "APPROVED").length === 0}
                       >
                         <option value="">-- Select project --</option>
-                        {projects.map((p) => (
-                          <option key={p._id} value={p._id}>
-                            {p.name}
-                          </option>
-                        ))}
+                        {projects
+                          .filter(p => p.status === "APPROVED")
+                          .map((p) => (
+                            <option key={p._id} value={p._id}>
+                              {p.name} ({p.status})
+                            </option>
+                          ))}
                       </select>
+                      {projects.filter(p => p.status === "APPROVED").length === 0 && (
+                        <div style={{ fontSize: '12px', color: '#fa8c16', marginTop: '5px' }}>
+                          No approved projects available for task creation
+                        </div>
+                      )}
                     </label>
 
                     <label className="full-row">
@@ -2092,7 +2464,29 @@ export default function EmployeeDashboard() {
                         <option value="BUG">Bug</option>
                       </select>
                     </label>
-
+{/* ADD THIS NEW FIELD IMMEDIATELY AFTER REQUIREMENT TYPE */}
+<label>
+  Requirement Role
+  <select
+    value={taskForm.requirementRole}
+    onChange={(e) =>
+      setTaskForm({
+        ...taskForm,
+        requirementRole: e.target.value
+      })
+    }
+    required
+  >
+    <option value="DEVELOPER">Developer</option>
+    <option value="DEVOPS">DevOps</option>
+    <option value="QA">QA/Tester</option>
+    <option value="TESTER">Tester</option>
+    <option value="PRODUCT_MANAGER">Product Manager</option>
+    <option value="TECH_LEAD">Tech Lead</option>
+    <option value="SUPPORT">Support</option>
+    <option value="OTHER">Other</option>
+  </select>
+</label>
                     <label>
                       Status
                       <select
@@ -2265,6 +2659,9 @@ export default function EmployeeDashboard() {
                         step="0.5"
                         required
                       />
+                      <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                        Note: These hours will reduce the project balance when task is approved
+                      </div>
                     </label>
 
                     <label>
@@ -2292,7 +2689,11 @@ export default function EmployeeDashboard() {
                     </label>
 
                     <div className="full-row">
-                      <button type="submit" className="primary-btn">
+                      <button 
+                        type="submit" 
+                        className="primary-btn"
+                        disabled={projects.filter(p => p.status === "APPROVED").length === 0}
+                      >
                         {editingTaskId
                           ? "Update Task / Requirement"
                           : "Add Task / Requirement"}
@@ -2311,41 +2712,10 @@ export default function EmployeeDashboard() {
                   </form>
                 </div>
 
+                {/* ALL MY TASKS */}
                 <div className="card">
-                  <h2>My Projects &amp; Task Allocation</h2>
-                  <div className="table-wrapper small-table">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Project</th>
-                          <th>Code</th>
-                          <th>Description</th>
-                          <th>Estimate (hrs)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {projects.map((p) => (
-                          <tr key={p._id}>
-                            <td>{p.name}</td>
-                            <td>{p.code || "-"}</td>
-                            <td>{p.description || "-"}</td>
-                            <td>{p.totalEstimatedHours || 355}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {projects.length === 0 && (
-                      <p className="empty">
-                        No projects assigned to you yet.
-                      </p>
-                    )}
-                  </div>
-                </div>
+                  <h2>All My Tasks ({filteredTasks.length} of {tasks.length})</h2>
 
-                <div className="card">
-                  <h2>My Tasks ({filteredTasks.length} of {tasks.length})</h2>
-
-                  {/* 🔍 SEARCH FUNCTIONALITY */}
                   <div style={{
                     marginBottom: '15px',
                     display: 'flex',
@@ -2365,36 +2735,35 @@ export default function EmployeeDashboard() {
                         }}
                         value={searchTerm}
                         onChange={(e) => {
-  const term = e.target.value;
-  setSearchTerm(term);
+                          const term = e.target.value;
+                          setSearchTerm(term);
 
-  const safeTasks = Array.isArray(tasks) ? tasks : [];
+                          const safeTasks = Array.isArray(tasks) ? tasks : [];
 
-  if (term.trim() === "") {
-    setFilteredTasks(safeTasks);
-  } else {
-    const searchLower = term.toLowerCase();
+                          if (term.trim() === "") {
+                            setFilteredTasks(safeTasks);
+                          } else {
+                            const searchLower = term.toLowerCase();
 
-    const filtered = safeTasks.filter((task) => {
-      const requirement = (task?.recentRequirement || "").toLowerCase();
-      const project = (task?.projectId?.name || "").toLowerCase();
-      const status = (task?.status || "").toLowerCase();
-      const createdBy = (task?.createdByUserId?.fullName || "").toLowerCase();
-      const clientPriority = (task?.clientPriority || "").toLowerCase();
+                            const filtered = safeTasks.filter((task) => {
+                              const requirement = (task?.recentRequirement || "").toLowerCase();
+                              const project = (task?.projectId?.name || "").toLowerCase();
+                              const status = (task?.status || "").toLowerCase();
+                              const createdBy = (task?.createdByUserId?.fullName || "").toLowerCase();
+                              const clientPriority = (task?.clientPriority || "").toLowerCase();
 
-      return (
-        requirement.includes(searchLower) ||
-        project.includes(searchLower) ||
-        status.includes(searchLower) ||
-        createdBy.includes(searchLower) ||
-        clientPriority.includes(searchLower)
-      );
-    });
+                              return (
+                                requirement.includes(searchLower) ||
+                                project.includes(searchLower) ||
+                                status.includes(searchLower) ||
+                                createdBy.includes(searchLower) ||
+                                clientPriority.includes(searchLower)
+                              );
+                            });
 
-    setFilteredTasks(filtered);
-  }
-}}
-
+                            setFilteredTasks(filtered);
+                          }
+                        }}
                       />
                       <div style={{
                         position: 'absolute',
@@ -2432,14 +2801,12 @@ export default function EmployeeDashboard() {
                         <tr>
                           <th>S.No</th>
                           <th>Project</th>
+                          <th>Project Status</th>
                           <th>Requirement</th>
                           <th>Type</th>
                           <th>Status</th>
                           <th>Scope</th>
                           <th>Discussed</th>
-                          <th>Start</th>
-                          <th>Close</th>
-                          <th>Working Days</th>
                           <th>Est. Hrs</th>
                           <th>Client Priority</th>
                           <th>Given By</th>
@@ -2449,94 +2816,95 @@ export default function EmployeeDashboard() {
                       </thead>
                       <tbody>
                         {Array.isArray(filteredTasks) &&
-  filteredTasks.map((t, index) => {
+                          filteredTasks.map((t, index) => {
+                            const meta = priorityColors[t.clientPriority] || null;
+                            const givenBy =
+                              (t.prioritySource || "")
+                                .replace(/_/g, " ")
+                                .toLowerCase()
+                                .replace(/\b\w/g, (c) => c.toUpperCase()) || "-";
 
-                          const meta = priorityColors[t.clientPriority] || null;
-                          const givenBy =
-                            (t.prioritySource || "")
-                              .replace(/_/g, " ")
-                              .toLowerCase()
-                              .replace(/\b\w/g, (c) => c.toUpperCase()) || "-";
+                            const canEdit = (() => {
+                              const userRole = user.role;
+                              const createdByRole = t.createdByRole;
+                              const createdById = t.createdByUserId?._id || t.createdByUserId;
+                              const userId = user._id || user.id;
 
-                          const canEdit = (() => {
-                            const userRole = user.role;
-                            const createdByRole = t.createdByRole;
-                            const createdById = t.createdByUserId?._id || t.createdByUserId;
-                            const userId = user._id || user.id;
+                              if (userRole === "admin") return false;
+                              if (userRole === "employee") {
+                                return createdByRole === "employee" && createdById === userId;
+                              }
+                              if (userRole === "manager" && createdByRole === "employee") {
+                                return true;
+                              }
+                              if (userRole === "manager" && createdByRole === "manager") {
+                                return createdById === userId;
+                              }
+                              return false;
+                            })();
 
-                            if (userRole === "admin") return false;
-                            if (userRole === "employee") {
-                              return createdByRole === "employee" && createdById === userId;
-                            }
-                            if (userRole === "manager" && createdByRole === "employee") {
-                              return true;
-                            }
-                            if (userRole === "manager" && createdByRole === "manager") {
-                              return createdById === userId;
-                            }
-                            return false;
-                          })();
-
-                          return (
-                            <tr key={t._id}>
-                              <td>{index + 1}</td>
-                              <td>{t.projectId?.name || "-"}</td>
-                              <td style={{ maxWidth: 260, whiteSpace: "pre-wrap" }}>
-                                {t.recentRequirement}
-                              </td>
-                              <td>{t.requirementType || "NEW"}</td>
-                              <td>{t.status}</td>
-                              <td>{t.scope || "-"}</td>
-                              <td>{t.discussedDate || "-"}</td>
-                              <td>{t.originalClosureDate || "-"}</td>
-                              <td>{t.estimatedDate || "-"}</td>
-                              <td>{t.noOfDays || 0}</td>
-                              <td>{Number(t.estimateHours || 0)}</td>
-                              <td>
-                                {meta ? (
-                                  <span
-                                    style={{
-                                      display: "inline-block",
-                                      padding: "2px 8px",
-                                      borderRadius: 999,
-                                      fontSize: 11,
-                                      fontWeight: 600,
-                                      backgroundColor: meta.color,
-                                      color: "#fff"
-                                    }}
-                                  >
-                                    {meta.label}
-                                  </span>
-                                ) : (
-                                  t.clientPriority || "-"
-                                )}
-                              </td>
-                              <td>{givenBy}</td>
-                              <td>{t.createdByUserId?.fullName || "-"}</td>
-                              <td style={{ textAlign: "center" }}>
-                                {canEdit ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => startEditTask(t)}
-                                    title="Edit Task"
-                                    style={{
-                                      background: "none",
-                                      border: "none",
-                                      cursor: "pointer",
-                                      color: "#1890ff",
-                                      fontSize: "16px",
-                                      padding: 0
-                                    }}
-                                  >
-                                    <FaEdit />
-                                  </button>
-                                ) : (
-                                  "-"
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
+                            return (
+                              <tr key={t._id}>
+                                <td>{index + 1}</td>
+                                <td>{t.projectId?.name || "-"}</td>
+                                <td>
+                                  {t.projectId?.status && (
+                                    <ProjectStatusBadge status={t.projectId.status} />
+                                  )}
+                                </td>
+                                <td style={{ maxWidth: 260, whiteSpace: "pre-wrap" }}>
+                                  {t.recentRequirement}
+                                </td>
+                                <td>{t.requirementType || "NEW"}</td>
+                                <td>{t.status}</td>
+                                <td>{t.scope || "-"}</td>
+                                <td>{t.discussedDate || "-"}</td>
+                                <td>{Number(t.estimateHours || 0)}</td>
+                                <td>
+                                  {meta ? (
+                                    <span
+                                      style={{
+                                        display: "inline-block",
+                                        padding: "2px 8px",
+                                        borderRadius: 999,
+                                        fontSize: 11,
+                                        fontWeight: 600,
+                                        backgroundColor: meta.color,
+                                        color: "#fff"
+                                      }}
+                                    >
+                                      {meta.label}
+                                    </span>
+                                  ) : (
+                                    t.clientPriority || "-"
+                                  )}
+                                </td>
+                                <td>{givenBy}</td>
+                                <td>{t.createdByUserId?.fullName || "-"}</td>
+                                <td style={{ textAlign: "center" }}>
+                                  {canEdit ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => startEditTask(t)}
+                                      title="Edit Task"
+                                      style={{
+                                        background: "none",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        color: "#1890ff",
+                                        fontSize: "16px",
+                                        padding: 0
+                                      }}
+                                    >
+                                      <FaEdit />
+                                    </button>
+                                  ) : (
+                                    "-"
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
                       </tbody>
                     </table>
                     {filteredTasks.length === 0 && (
@@ -2603,7 +2971,6 @@ export default function EmployeeDashboard() {
                                 <button
                                   className="primary-btn small-btn"
                                   onClick={() => handleDownloadPayslip(p._id, p.month, p.year)}
-
                                   style={{ padding: '6px 12px', fontSize: '12px' }}
                                 >
                                   Download
@@ -2765,6 +3132,58 @@ export default function EmployeeDashboard() {
                   <p className="note" style={{ marginTop: 12, fontSize: 12 }}>
                     This is a read-only report. Any change will be done by the Manager from their dashboard.
                   </p>
+                </div>
+
+                {/* PROJECT SUMMARY IN DASHBOARD */}
+                <div className="card table-shadow-card">
+                  <h2>My Projects Summary</h2>
+                  <div className="table-wrapper small-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Project</th>
+                          <th>Status</th>
+                          <th>Estimated Hours</th>
+                          <th>Balance Hours</th>
+                          <th>My Role</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {myProjects.length > 0 ? (
+                          myProjects.slice(0, 5).map((project) => (
+                            <tr key={project._id}>
+                              <td>{project.name}</td>
+                              <td>
+                                <ProjectStatusBadge status={project.status} />
+                              </td>
+                              <td>{project.totalEstimatedHours || 0} hrs</td>
+                              <td>
+                                <span style={{
+                                  color: project.balanceHours < 0 ? '#ff4d4f' : 
+                                         project.balanceHours < (project.totalEstimatedHours * 0.1) ? '#fa8c16' : '#52c41a',
+                                  fontWeight: 'bold'
+                                }}>
+                                  {project.balanceHours || 0} hrs
+                                </span>
+                              </td>
+                              <td>{project.assignments?.find(a => a.user?._id === user._id)?.role || 'Not assigned'}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="5" style={{ textAlign: 'center', padding: '20px' }}>
+                              <p className="empty">No projects assigned to you yet.</p>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  {myProjects.length > 5 && (
+                    <p className="note" style={{ marginTop: 10 }}>
+                      Showing 5 of {myProjects.length} projects. Go to "Project Management" tab for complete view.
+                    </p>
+                  )}
                 </div>
               </section>
             </main>

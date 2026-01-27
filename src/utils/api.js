@@ -2,21 +2,22 @@
 import axios from "axios";
 
 /* =========================
-   BASE URL
+   BASE URL & AXIOS INSTANCE
 ========================= */
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
-/* =========================
-   AXIOS INSTANCE
-========================= */
 const api = axios.create({
   baseURL: API_BASE_URL,
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
 /* =========================
-   TOKEN INTERCEPTOR
+   REQUEST/RESPONSE INTERCEPTORS
 ========================= */
+
+// Request interceptor for adding auth token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
@@ -28,429 +29,467 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-/* =========================
-   EMPLOYEES
-========================= */
-export const getEmployees = async () => {
-  const res = await api.get("/employees");
-  return res.data;
-};
-
-/* =========================
-   NEW: DESIGNATIONS FUNCTION
-========================= */
-export const getDesignations = async () => {
-  try {
-    const res = await api.get("/employees/designations");
-    return res.data;
-  } catch {
-    try {
-      const employees = await getEmployees();
-      const designationsSet = new Set();
-      
-      employees.forEach(employee => {
-        if (employee.designation) {
-          designationsSet.add(employee.designation);
-        }
-      });
-      
-      return Array.from(designationsSet).map(designation => ({
-        value: designation,
-        label: designation
-      }));
-    } catch {
-      return [
-        { value: "Software Engineer", label: "Software Engineer" },
-        { value: "Senior Software Engineer", label: "Senior Software Engineer" },
-        { value: "Frontend Developer", label: "Frontend Developer" },
-        { value: "Backend Developer", label: "Backend Developer" },
-        { value: "Full Stack Developer", label: "Full Stack Developer" },
-        { value: "DevOps Engineer", label: "DevOps Engineer" },
-        { value: "QA Engineer", label: "QA Engineer" },
-        { value: "UI/UX Designer", label: "UI/UX Designer" },
-        { value: "Project Manager", label: "Project Manager" },
-        { value: "Product Manager", label: "Product Manager" },
-        { value: "HR Manager", label: "HR Manager" },
-        { value: "Accountant", label: "Accountant" },
-        { value: "Marketing Manager", label: "Marketing Manager" },
-        { value: "Sales Executive", label: "Sales Executive" },
-        { value: "Business Analyst", label: "Business Analyst" },
-        { value: "Data Scientist", label: "Data Scientist" },
-        { value: "Network Engineer", label: "Network Engineer" },
-        { value: "System Administrator", label: "System Administrator" },
-        { value: "Technical Support", label: "Technical Support" }
-      ];
+// Response interceptor for error handling
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Handle common errors (401, 403, 500, etc.)
+    if (error.response?.status === 401) {
+      localStorage.removeItem("token");
+      window.location.href = "/login";
     }
+    return Promise.reject(error);
   }
+);
+
+/* =========================
+   API METHODS
+========================= */
+
+/* =========================
+   PROJECT MANAGEMENT
+========================= */
+const ProjectAPI = {
+  create: async (projectData) => {
+    const res = await api.post("/projects", projectData);
+    return res.data;
+  },
+
+  getAll: async () => {
+    const res = await api.get("/projects");
+    return res.data;
+  },
+
+  getMyProjects: async () => {
+    const res = await api.get("/projects/my");
+    return res.data;
+  },
+
+  getById: async (projectId) => {
+    const res = await api.get(`/projects/${projectId}`);
+    return res.data;
+  },
+
+  update: async (projectId, updates) => {
+    const res = await api.patch(`/projects/${projectId}`, updates);
+    return res.data;
+  },
+
+  approve: async (projectId) => {
+    const res = await api.patch(`/projects/${projectId}/approve`);
+    return res.data;
+  },
+
+  reject: async (projectId) => {
+    const res = await api.patch(`/projects/${projectId}/reject`);
+    return res.data;
+  },
+
+  complete: async (projectId) => {
+    const res = await api.patch(`/projects/${projectId}/complete`);
+    return res.data;
+  },
+
+  assignEmployee: async (projectId, userId, role) => {
+    const res = await api.post(`/projects/${projectId}/assign`, { userId, role });
+    return res.data;
+  },
+
+  unassignEmployee: async (projectId, userId) => {
+    const res = await api.delete(`/projects/${projectId}/assign/${userId}`);
+    return res.data;
+  },
+
+  archive: async (projectId) => {
+    const res = await api.post(`/projects/${projectId}/archive`);
+    return res.data;
+  },
+
+  unarchive: async (projectId) => {
+    const res = await api.post(`/projects/${projectId}/unarchive`);
+    return res.data;
+  },
 };
 
 /* =========================
-   PAYSLIPS
+   TASK MANAGEMENT
 ========================= */
-
-// Check if payslip exists (employee + month + year)
-export const checkExistingPayslip = async (employeeId, month, year) => {
-  try {
-    const res = await api.get(
-      `/payslips/check/${employeeId}/${month}/${year}`
-    );
+const TaskAPI = {
+  create: async (taskData) => {
+    const res = await api.post("/tasks", taskData);
     return res.data;
-  } catch (error) {
-    if (error.response?.status === 404) {
+  },
+
+  getMyTasks: async () => {
+    const res = await api.get("/tasks/my");
+    return res.data;
+  },
+
+  getProjectTasks: async (projectId) => {
+    const res = await api.get(`/tasks/project/${projectId}`);
+    return res.data;
+  },
+
+  getById: async (taskId) => {
+    const res = await api.get(`/tasks/${taskId}`);
+    return res.data;
+  },
+
+  update: async (taskId, updates) => {
+    const res = await api.patch(`/tasks/${taskId}`, updates);
+    return res.data;
+  },
+
+  approve: async (taskId) => {
+    const res = await api.patch(`/tasks/${taskId}/approve`);
+    return res.data;
+  },
+
+  unapprove: async (taskId) => {
+    const res = await api.patch(`/tasks/${taskId}/unapprove`);
+    return res.data;
+  },
+
+  getStats: async () => {
+    const res = await api.get("/tasks/stats/overview");
+    return res.data;
+  },
+};
+
+/* =========================
+   EMPLOYEE MANAGEMENT
+========================= */
+const EmployeeAPI = {
+  getAll: async () => {
+    const res = await api.get("/employees");
+    return res.data;
+  },
+
+  getDesignations: async () => {
+    try {
+      const res = await api.get("/employees/designations");
+      return res.data;
+    } catch {
+      try {
+        const employees = await EmployeeAPI.getAll();
+        const designationsSet = new Set();
+        
+        employees.forEach(employee => {
+          if (employee.designation) {
+            designationsSet.add(employee.designation);
+          }
+        });
+        
+        return Array.from(designationsSet).map(designation => ({
+          value: designation,
+          label: designation
+        }));
+      } catch {
+        return [
+          { value: "Software Engineer", label: "Software Engineer" },
+          { value: "Senior Software Engineer", label: "Senior Software Engineer" },
+          { value: "Project Manager", label: "Project Manager" },
+          { value: "HR Manager", label: "HR Manager" },
+          { value: "Accountant", label: "Accountant" },
+        ];
+      }
+    }
+  },
+
+  updateBankDetails: async (employeeId, bankDetails) => {
+    try {
+      const res = await api.put(`/employees/${employeeId}/bank-details`, bankDetails);
+      return res.data;
+    } catch (error) {
+      console.error("Error updating bank details:", error);
+      throw error;
+    }
+  },
+};
+
+/* =========================
+   PAYSLIP MANAGEMENT
+========================= */
+const PayslipAPI = {
+  checkExists: async (employeeId, month, year) => {
+    try {
+      const res = await api.get(`/payslips/check/${employeeId}/${month}/${year}`);
+      return res.data;
+    } catch (error) {
+      if (error.response?.status === 404) {
+        return false;
+      }
+      console.error("Error checking existing payslip:", error);
       return false;
     }
-    console.error("Error checking existing payslip:", error);
-    return false;
-  }
-};
+  },
 
-// Generate payslip (manager/admin)
-export const generatePayslip = async (data) => {
-  const res = await api.post("/payslips", data);
-  return res.data;
-};
-
-// Get logged-in employee payslips
-export const getEmployeePayslips = async () => {
-  const res = await api.get("/payslips/my");
-  return res.data;
-};
-
-// ✅ ONLY VALID DOWNLOAD METHOD (MATCHES BACKEND)
-export const downloadPayslipById = async (payslipId) => {
-  try {
-    const res = await api.get(`/payslips/${payslipId}/download`, {
-      responseType: "blob",
-    });
-
-    const blob = new Blob([res.data], { type: "application/pdf" });
-    const url = window.URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `Payslip_${payslipId}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    window.URL.revokeObjectURL(url);
-    return true;
-  } catch (error) {
-    console.error("Error downloading payslip:", error);
-    throw error;
-  }
-};
-
-/* =========================
-   BANK DETAILS APIs
-========================= */
-
-// Get employee bank details
-export const getBankDetails = async (employeeId) => {
-  try {
-    const res = await api.get(`/bank/${employeeId}`);
+  generate: async (data) => {
+    const res = await api.post("/payslips", data);
     return res.data;
-  } catch (error) {
-    console.error("Error fetching bank details:", error);
-    throw error;
-  }
-};
+  },
 
-// Update bank details
-export const updateBankDetails = async (employeeId, bankData) => {
-  try {
-    const res = await api.post(`/bank/${employeeId}`, bankData);
-    return res.data;
-  } catch (error) {
-    console.error("Error updating bank details:", error);
-    throw error;
-  }
-};
-
-// Get bank history
-export const getBankHistory = async (employeeId, page = 1, limit = 20) => {
-  try {
-    const res = await api.get(`/bank/${employeeId}/history`, {
-      params: { page, limit }
-    });
-    return res.data;
-  } catch (error) {
-    console.error("Error fetching bank history:", error);
-    throw error;
-  }
-};
-
-// Verify bank details
-export const verifyBankDetails = async (employeeId, notes) => {
-  try {
-    const res = await api.post(`/bank/${employeeId}/verify`, { notes });
-    return res.data;
-  } catch (error) {
-    console.error("Error verifying bank details:", error);
-    throw error;
-  }
-};
-
-// List all employees with bank details
-export const getEmployeesWithBankDetails = async () => {
-  try {
-    const res = await api.get("/bank/list/employees");
-    return res.data;
-  } catch (error) {
-    console.error("Error fetching employees with bank details:", error);
-    throw error;
-  }
-};
-
-/* =========================
-   NEW: SEND PAYSLIP TO EMPLOYEE FUNCTION
-========================= */
-// Add this function to fix the error
-export const sendPayslipToEmployee = async (payslipId) => {
-  try {
-    const res = await api.post(`/payslips/${payslipId}/send`);
-    return res.data;
-  } catch (error) {
-    console.error("Error sending payslip:", error);
-    throw error;
-  }
-};
-
-/* =========================
-   NEW: UPDATE EMPLOYEE BANK DETAILS FUNCTION
-========================= */
-// Add this function to fix the error
-export const updateEmployeeBankDetails = async (employeeId, bankDetails) => {
-  try {
-    const res = await api.put(`/employees/${employeeId}/bank-details`, bankDetails);
-    return res.data;
-  } catch (error) {
-    console.error("Error updating bank details:", error);
-    throw error;
-  }
-};
-
-/* =========================
-   JOB TITLES APIs
-========================= */
-
-// Get all available job titles (static for frontend)
-export const getJobTitles = () => {
-  return [
-    // IT Job Titles
-    "Software Engineer",
-    "Senior Software Engineer",
-    "Software Development Engineer",
-    "Full Stack Developer",
-    "Frontend Developer",
-    "Backend Developer",
-    "Web Developer",
-    "Mobile App Developer",
-    "Android Developer",
-    "iOS Developer",
-    "DevOps Engineer",
-    "Cloud Engineer",
-    "AWS Solutions Architect",
-    "Azure Developer",
-    "Google Cloud Engineer",
-    "Site Reliability Engineer",
-    "Systems Engineer",
-    "Network Engineer",
-    "Security Engineer",
-    "Cybersecurity Analyst",
-    "Penetration Tester",
-    "Database Administrator",
-    "SQL Developer",
-    "Data Engineer",
-    "Data Scientist",
-    "Data Analyst",
-    "Machine Learning Engineer",
-    "AI Engineer",
-    "Business Intelligence Analyst",
-    "QA Engineer",
-    "Test Engineer",
-    "Automation Test Engineer",
-    "Manual Test Engineer",
-    "Performance Test Engineer",
-    "UI/UX Designer",
-    "Product Designer",
-    "Graphic Designer",
-    "Technical Writer",
-    "Documentation Specialist",
-    "IT Support Engineer",
-    "Help Desk Technician",
-    "IT Administrator",
-    "System Administrator",
-    "Network Administrator",
-    "IT Manager",
-    "Technical Lead",
-    "Team Lead",
-    "Project Manager",
-    "Scrum Master",
-    "Product Manager",
-    "Product Owner",
-    "Business Analyst",
-    "Technical Business Analyst",
-    "Solution Architect",
-    "Enterprise Architect",
-    "CTO",
-    "IT Director",
-    "VP of Engineering",
-    "Software Architect",
-    "Engineering Manager",
-    
-    // Non-IT Job Titles
-    "HR Manager",
-    "HR Executive",
-    "Recruiter",
-    "Talent Acquisition Specialist",
-    "HR Business Partner",
-    "Payroll Administrator",
-    "HR Coordinator",
-    "Training & Development Manager",
-    "Compensation & Benefits Analyst",
-    
-    "Finance Manager",
-    "Accountant",
-    "Chartered Accountant",
-    "Financial Analyst",
-    "Accounts Executive",
-    "Accounts Payable Specialist",
-    "Accounts Receivable Specialist",
-    "Treasury Analyst",
-    "Tax Consultant",
-    "Auditor",
-    "Cost Accountant",
-    "Financial Controller",
-    "CFO",
-    
-    "Marketing Manager",
-    "Digital Marketing Specialist",
-    "SEO Specialist",
-    "Social Media Manager",
-    "Content Writer",
-    "Content Marketer",
-    "Brand Manager",
-    "Marketing Executive",
-    "Marketing Analyst",
-    "Public Relations Officer",
-    
-    "Sales Manager",
-    "Sales Executive",
-    "Business Development Manager",
-    "Account Manager",
-    "Sales Representative",
-    "Sales Consultant",
-    "Customer Success Manager",
-    "Inside Sales Representative",
-    
-    "Operations Manager",
-    "Operations Executive",
-    "Supply Chain Manager",
-    "Logistics Manager",
-    "Warehouse Manager",
-    "Production Manager",
-    "Quality Control Manager",
-    
-    "Administration Manager",
-    "Administrative Assistant",
-    "Executive Assistant",
-    "Office Manager",
-    "Receptionist",
-    
-    "Legal Counsel",
-    "Legal Advisor",
-    "Compliance Officer",
-    "Company Secretary",
-    
-    "CEO",
-    "Managing Director",
-    "Director",
-    "General Manager",
-    "Assistant Manager",
-    "Department Head",
-    
-    "Intern",
-    "Trainee",
-    "Fresher",
-    "Junior Executive",
-    "Senior Executive",
-    "Associate",
-    "Consultant",
-    "Specialist",
-    "Expert",
-    "Advisor"
-  ];
-};
-
-/* =========================
-   PAYSLIP ENHANCED APIs
-========================= */
-
-// Check if payslip exists
-export const checkPayslipExists = async (employeeId, month, year) => {
-  try {
-    const res = await api.get(`/payslips/check/${employeeId}/${month}/${year}`);
-    return res.data;
-  } catch (error) {
-    console.error("Error checking payslip:", error);
-    return { exists: false };
-  }
-};
-
-// Send payslip to employee and admin
-export const sendPayslip = async (payslipId) => {
-  try {
-    const res = await api.post(`/payslips/${payslipId}/send`);
-    return res.data;
-  } catch (error) {
-    console.error("Error sending payslip:", error);
-    throw error;
-  }
-};
-
-// Get employee's own payslips
-export const getMyPayslips = async () => {
-  try {
+  getMyPayslips: async () => {
     const res = await api.get("/payslips/my");
     return res.data;
-  } catch (error) {
-    console.error("Error fetching my payslips:", error);
-    throw error;
-  }
+  },
+
+  getAll: async (params = {}) => {
+    try {
+      const res = await api.get("/payslips", { params });
+      return res.data;
+    } catch (error) {
+      console.error("Error fetching all payslips:", error);
+      throw error;
+    }
+  },
+
+  getById: async (payslipId) => {
+    try {
+      const res = await api.get(`/payslips/${payslipId}`);
+      return res.data;
+    } catch (error) {
+      console.error("Error fetching payslip:", error);
+      throw error;
+    }
+  },
+
+  download: async (payslipId) => {
+    try {
+      const res = await api.get(`/payslips/${payslipId}/download`, {
+        responseType: "blob",
+      });
+
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Payslip_${payslipId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      window.URL.revokeObjectURL(url);
+      return true;
+    } catch (error) {
+      console.error("Error downloading payslip:", error);
+      throw error;
+    }
+  },
+
+  send: async (payslipId) => {
+    try {
+      const res = await api.post(`/payslips/${payslipId}/send`);
+      return res.data;
+    } catch (error) {
+      console.error("Error sending payslip:", error);
+      throw error;
+    }
+  },
+
+  markAsViewed: async (payslipId) => {
+    try {
+      const res = await api.patch(`/payslips/${payslipId}/view`);
+      return res.data;
+    } catch (error) {
+      console.error("Error marking payslip as viewed:", error);
+      throw error;
+    }
+  },
 };
 
-// Get all payslips (manager/admin)
-export const getAllPayslips = async (params = {}) => {
-  try {
-    const res = await api.get("/payslips", { params });
-    return res.data;
-  } catch (error) {
-    console.error("Error fetching all payslips:", error);
-    throw error;
-  }
+/* =========================
+   BANK DETAILS
+========================= */
+const BankAPI = {
+  getDetails: async (employeeId) => {
+    try {
+      const res = await api.get(`/bank/${employeeId}`);
+      return res.data;
+    } catch (error) {
+      console.error("Error fetching bank details:", error);
+      throw error;
+    }
+  },
+
+  updateDetails: async (employeeId, bankData) => {
+    try {
+      const res = await api.post(`/bank/${employeeId}`, bankData);
+      return res.data;
+    } catch (error) {
+      console.error("Error updating bank details:", error);
+      throw error;
+    }
+  },
+
+  getHistory: async (employeeId, page = 1, limit = 20) => {
+    try {
+      const res = await api.get(`/bank/${employeeId}/history`, {
+        params: { page, limit }
+      });
+      return res.data;
+    } catch (error) {
+      console.error("Error fetching bank history:", error);
+      throw error;
+    }
+  },
+
+  verify: async (employeeId, notes) => {
+    try {
+      const res = await api.post(`/bank/${employeeId}/verify`, { notes });
+      return res.data;
+    } catch (error) {
+      console.error("Error verifying bank details:", error);
+      throw error;
+    }
+  },
+
+  getEmployeesWithDetails: async () => {
+    try {
+      const res = await api.get("/bank/list/employees");
+      return res.data;
+    } catch (error) {
+      console.error("Error fetching employees with bank details:", error);
+      throw error;
+    }
+  },
 };
 
-// Mark payslip as viewed
-export const markPayslipAsViewed = async (payslipId) => {
-  try {
-    const res = await api.patch(`/payslips/${payslipId}/view`);
-    return res.data;
-  } catch (error) {
-    console.error("Error marking payslip as viewed:", error);
-    throw error;
-  }
+/* =========================
+   UTILITIES
+========================= */
+const UtilsAPI = {
+  getJobTitles: () => {
+    return [
+      "Software Engineer",
+      "Senior Software Engineer",
+      "Project Manager",
+      "HR Manager",
+      "Accountant",
+      // ... (keep your existing list)
+    ];
+  },
 };
 
-// Get payslip by ID
-export const getPayslipById = async (payslipId) => {
-  try {
-    const res = await api.get(`/payslips/${payslipId}`);
-    return res.data;
-  } catch (error) {
-    console.error("Error fetching payslip:", error);
-    throw error;
-  }
+/* =========================
+   EXPORT ALL APIs
+========================= */
+export {
+  ProjectAPI,
+  TaskAPI,
+  EmployeeAPI,
+  PayslipAPI,
+  BankAPI,
+  UtilsAPI,
+  api
+};
+
+// For backward compatibility - export individual functions
+export const {
+  // Project APIs
+  createProject,
+  getAllProjects,
+  getMyProjects,
+  getProject,
+  updateProject,
+  approveProject,
+  rejectProject,
+  completeProject,
+  assignEmployeeToProject,
+  unassignEmployeeFromProject,
+  archiveProject,
+  unarchiveProject,
+  
+  // Task APIs
+  createTask,
+  getMyTasks,
+  getProjectTasks,
+  getTask,
+  updateTask,
+  approveTask,
+  unapproveTask,
+  getTaskStats,
+  
+  // Employee APIs
+  getEmployees,
+  getDesignations,
+  updateEmployeeBankDetails,
+  
+  // Payslip APIs
+  checkExistingPayslip,
+  generatePayslip,
+  getEmployeePayslips,
+  downloadPayslipById,
+  sendPayslipToEmployee,
+  checkPayslipExists,
+  sendPayslip,
+  getMyPayslips,
+  getAllPayslips,
+  markPayslipAsViewed,
+  getPayslipById,
+  
+  // Bank APIs
+  getBankDetails,
+  updateBankDetails,
+  getBankHistory,
+  verifyBankDetails,
+  getEmployeesWithBankDetails,
+  
+  // Utils
+  getJobTitles
+} = {
+  // Project APIs
+  createProject: ProjectAPI.create,
+  getAllProjects: ProjectAPI.getAll,
+  getMyProjects: ProjectAPI.getMyProjects,
+  getProject: ProjectAPI.getById,
+  updateProject: ProjectAPI.update,
+  approveProject: ProjectAPI.approve,
+  rejectProject: ProjectAPI.reject,
+  completeProject: ProjectAPI.complete,
+  assignEmployeeToProject: ProjectAPI.assignEmployee,
+  unassignEmployeeFromProject: ProjectAPI.unassignEmployee,
+  archiveProject: ProjectAPI.archive,
+  unarchiveProject: ProjectAPI.unarchive,
+  
+  // Task APIs
+  createTask: TaskAPI.create,
+  getMyTasks: TaskAPI.getMyTasks,
+  getProjectTasks: TaskAPI.getProjectTasks,
+  getTask: TaskAPI.getById,
+  updateTask: TaskAPI.update,
+  approveTask: TaskAPI.approve,
+  unapproveTask: TaskAPI.unapprove,
+  getTaskStats: TaskAPI.getStats,
+  
+  // Employee APIs
+  getEmployees: EmployeeAPI.getAll,
+  getDesignations: EmployeeAPI.getDesignations,
+  updateEmployeeBankDetails: EmployeeAPI.updateBankDetails,
+  
+  // Payslip APIs
+  checkExistingPayslip: PayslipAPI.checkExists,
+  generatePayslip: PayslipAPI.generate,
+  getEmployeePayslips: PayslipAPI.getMyPayslips,
+  downloadPayslipById: PayslipAPI.download,
+  sendPayslipToEmployee: PayslipAPI.send,
+  checkPayslipExists: PayslipAPI.checkExists,
+  sendPayslip: PayslipAPI.send,
+  getMyPayslips: PayslipAPI.getMyPayslips,
+  getAllPayslips: PayslipAPI.getAll,
+  markPayslipAsViewed: PayslipAPI.markAsViewed,
+  getPayslipById: PayslipAPI.getById,
+  
+  // Bank APIs
+  getBankDetails: BankAPI.getDetails,
+  updateBankDetails: BankAPI.updateDetails,
+  getBankHistory: BankAPI.getHistory,
+  verifyBankDetails: BankAPI.verify,
+  getEmployeesWithBankDetails: BankAPI.getEmployeesWithDetails,
+  
+  // Utils
+  getJobTitles: UtilsAPI.getJobTitles
 };
 
 export default api;

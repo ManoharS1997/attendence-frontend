@@ -8,6 +8,12 @@ import { calculateProjectHours } from "../utils/hours";
 import { buildHolidayCalendar } from "../utils/holidays";
 import logo from "../assets/Company Logo.png";
 
+// Add these imports after existing imports
+import ProjectStatusBadge from "../components/projects/ProjectStatusBadge";
+import ProjectActions from "../components/projects/ProjectActions";
+import TaskApproval from "../components/projects/TaskApproval";
+import BalanceDisplay from "../components/projects/BalanceDisplay";
+
 const monthNames = [
   "January",
   "February",
@@ -467,12 +473,10 @@ export default function ManagerDashboard() {
   const [summaries, setSummaries] = useState([]);
   const [taskSearch, setTaskSearch] = useState("");
 
-
-
-
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
+  const [selectedProject, setSelectedProject] = useState(null); // Added missing state
 
   const [projectTasks, setProjectTasks] = useState([]);
   const [editingTaskId, setEditingTaskId] = useState(null);
@@ -889,6 +893,39 @@ export default function ManagerDashboard() {
     }
   }, [birthdays, user, loadBirthdays]);
 
+  // Add this function to refresh project balance
+  const refreshProjectBalance = useCallback(async (projectId) => {
+    if (!projectId) return;
+    
+    try {
+      const response = await api.get(`/projects/${projectId}`);
+      if (response.data) {
+        const updatedProject = response.data;
+        
+        // Update selected project
+        setSelectedProject(prev => ({
+          ...prev,
+          balanceHours: updatedProject.balanceHours,
+          consumedHours: updatedProject.consumedHours,
+          consumptionByRole: updatedProject.consumptionByRole
+        }));
+        
+        // Update projects list
+        setProjects(prev => prev.map(p => 
+          p._id === projectId 
+            ? {...p, 
+               balanceHours: updatedProject.balanceHours,
+               consumedHours: updatedProject.consumedHours,
+               consumptionByRole: updatedProject.consumptionByRole
+              }
+            : p
+        ));
+      }
+    } catch (err) {
+      console.error("Error refreshing project balance:", err);
+    }
+  }, []);
+
   // Debug useEffect to monitor state changes
   useEffect(() => {
     console.log("=== BIRTHDAY STATE DEBUG ===");
@@ -929,6 +966,16 @@ export default function ManagerDashboard() {
     }, 0);
     return () => clearTimeout(id);
   }, [selectedProjectId, loadProjectTasks]);
+
+  // Update selectedProject when selectedProjectId changes
+  useEffect(() => {
+    if (selectedProjectId && projects.length > 0) {
+      const project = projects.find(p => p._id === selectedProjectId);
+      setSelectedProject(project || null);
+    } else {
+      setSelectedProject(null);
+    }
+  }, [selectedProjectId, projects]);
 
   // Rebuild default Taken/NotTaken map
   useEffect(() => {
@@ -1419,9 +1466,6 @@ export default function ManagerDashboard() {
     };
     return acc;
   }, {});
-
-  const selectedProject =
-    projects.find((p) => p._id === selectedProjectId) || null;
 
   const selectedEmployeeHours =
     (selectedEmployeeId && hoursByEmployee[selectedEmployeeId]) || 0;
@@ -2192,15 +2236,15 @@ export default function ManagerDashboard() {
                   <div className="table-wrapper small-table">
                     <table>
                       <thead>
-                        <tr>
-                          <th>Date</th>
-                          <th>Employee</th>
-                          <th>Status</th>
-                          <th>In</th>
-                          <th>Out</th>
-                          <th>Decision</th>
-
-                        </tr>
+                       <tr>
+  <th>Date</th>
+  <th>Employee</th>
+  <th>Status</th>
+  <th>In</th>
+  <th>Out</th>
+  <th>Lunch</th> {/* ADD THIS LINE */}
+  <th>Decision</th>
+</tr>
                       </thead>
                       <tbody>
   {attendance.map((a) => (
@@ -2873,6 +2917,7 @@ export default function ManagerDashboard() {
                           <th>Code</th>
                           <th>Start Date</th>
                           <th>End Date</th>
+                          <th>Status</th> {/* ADD THIS */}
                           <th>Duration</th>
                           <th>Total Hours</th>
                           <th>Employees</th>
@@ -2910,6 +2955,12 @@ export default function ManagerDashboard() {
                               <td style={{ padding: '8px' }}>{p.code || "-"}</td>
                               <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{p.startDate || "-"}</td>
                               <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{p.endDate || "-"}</td>
+                              
+                              {/* ADD STATUS BADGE */}
+                              <td style={{ padding: '8px' }}>
+                                <ProjectStatusBadge status={p.status} />
+                              </td>
+                              
                               <td style={{ padding: '8px', textAlign: 'center' }}>{p.durationMonths || 0} mo</td>
                               <td style={{ padding: '8px', textAlign: 'right' }}>
                                 <div>
@@ -2918,7 +2969,11 @@ export default function ManagerDashboard() {
                               </td>
                               <td style={{ padding: '8px', textAlign: 'center' }}>{count}</td>
                               <td style={{ padding: '8px', textAlign: 'right' }}>{totals.used} hrs</td>
-                              <td style={{ padding: '8px', textAlign: 'right' }}>{totals.remaining} hrs</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>
+                                <span className={p.balanceHours < 0 ? "text-red-600 font-bold" : ""}>
+                                  {p.balanceHours ?? 0} hrs
+                                </span>
+                              </td>
                             </tr>
                           );
                         })}
@@ -2943,11 +2998,45 @@ export default function ManagerDashboard() {
                         — {selectedProject.description || "No description"}.
                       </p>
                       <p style={{ fontSize: 12, marginBottom: 8 }}>
-                        <strong>Duration:</strong> {selectedProject.startDate} to {selectedProject.endDate} ({selectedProject.durationMonths || 0} months)<br />
                         <strong>Estimate:</strong> {selectedProject.totalEstimatedHours || 0} hrs •
                         <strong> Worked:</strong> {projectTotals[selectedProject._id]?.used || 0} hrs •
-                        <strong> Balance:</strong> {projectTotals[selectedProject._id]?.remaining || 0} hrs
+                        <strong> Balance:</strong> {selectedProject.balanceHours ?? 0} hrs
                       </p>
+                      
+                      {/* ADD PROJECT ACTIONS */}
+                      <ProjectActions 
+                        projectId={selectedProject._id}
+                        currentStatus={selectedProject.status}
+                        balanceHours={selectedProject.balanceHours}
+                        onStatusChange={(newStatus) => {
+                          // Update the project in the list
+                          setProjects(prev => prev.map(p => 
+                            p._id === selectedProject._id ? {...p, status: newStatus} : p
+                          ));
+                          // Update the selected project
+                          setSelectedProject(prev => ({...prev, status: newStatus}));
+                          addAlert(`Project status updated to ${newStatus}`);
+                        }}
+                      />
+
+                      {/* ADD BALANCE DISPLAY */}
+                      <BalanceDisplay 
+                        totalEstimatedHours={selectedProject.totalEstimatedHours || 0}
+                        consumedHours={selectedProject.consumedHours || 0}
+                        balanceHours={selectedProject.balanceHours || 0}
+                        consumptionByRole={selectedProject.consumptionByRole || []}
+                      />
+
+                      {/* ADD BALANCE REFRESH BUTTON */}
+                      <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={() => refreshProjectBalance(selectedProject._id)}
+                          className="outline-btn"
+                          style={{ fontSize: '12px', padding: '4px 8px' }}
+                        >
+                          🔄 Refresh Balance
+                        </button>
+                      </div>
 
                       <h3 style={{ fontSize: 14, marginBottom: 6 }}>
                         Allocated Employees (this month)
@@ -3305,6 +3394,7 @@ export default function ManagerDashboard() {
                               <th>Client Priority</th>
                               <th>Given By</th>
                               <th>Created By</th>
+                              <th>Approval</th> {/* ADD THIS */}
                               <th>Actions</th>
                             </tr>
                           </thead>
@@ -3405,6 +3495,34 @@ export default function ManagerDashboard() {
                                   </td>
                                   <td>
                                     {t.createdByUserId?.fullName || t.createdBy || "-"}
+                                  </td>
+                                  <td>
+                                    <TaskApproval 
+                                      taskId={t._id}
+                                      isApproved={t.approvedByManager}
+                                      projectStatus={selectedProject?.status}
+                                      onApprovalChange={(isApproved, newBalance) => {
+                                        // Update task approval status
+                                        const updatedTasks = projectTasks.map(task => 
+                                          task._id === t._id 
+                                            ? {...task, approvedByManager: isApproved}
+                                            : task
+                                        );
+                                        setProjectTasks(updatedTasks);
+                                        
+                                        // Update project balance if provided
+                                        if (newBalance !== undefined && selectedProject) {
+                                          setSelectedProject(prev => ({...prev, balanceHours: newBalance}));
+                                          setProjects(prev => prev.map(p => 
+                                            p._id === selectedProject._id 
+                                              ? {...p, balanceHours: newBalance}
+                                              : p
+                                          ));
+                                        }
+                                        
+                                        addAlert(isApproved ? "Task approved" : "Task unapproved");
+                                      }}
+                                    />
                                   </td>
                                   <td>
                                     <button
@@ -3774,6 +3892,7 @@ export default function ManagerDashboard() {
                           <th>Code</th>
                           <th>Start Date</th>
                           <th>End Date</th>
+                          <th>Status</th> {/* ADD THIS */}
                           <th>Duration</th>
                           <th>Total Hours</th>
                           <th>Employees</th>
@@ -3793,11 +3912,12 @@ export default function ManagerDashboard() {
                               <td>{p.code || "-"}</td>
                               <td>{p.startDate || "-"}</td>
                               <td>{p.endDate || "-"}</td>
+                              <td><ProjectStatusBadge status={p.status} /></td>
                               <td>{p.durationMonths || 0} mo</td>
                               <td>{p.totalEstimatedHours || 0}</td>
                               <td>{p.assignments?.length || 0}</td>
                               <td>{totals.used}</td>
-                              <td>{totals.remaining}</td>
+                              <td>{p.balanceHours ?? 0}</td>
                             </tr>
                           );
                         })}
