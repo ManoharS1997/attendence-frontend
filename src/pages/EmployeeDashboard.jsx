@@ -345,7 +345,8 @@ export default function EmployeeDashboard() {
   const [summary, setSummary] = useState(null);
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const [filteredTasks, setFilteredTasks] = useState([]);
+  const [filteredTasks, setFilteredTasks] = useState(() => []);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [payslips, setPayslips] = useState([]);
   const [loadingSave, setLoadingSave] = useState(false);
@@ -2364,29 +2365,36 @@ export default function EmployeeDashboard() {
                         }}
                         value={searchTerm}
                         onChange={(e) => {
-                          const term = e.target.value;
-                          setSearchTerm(term);
+  const term = e.target.value;
+  setSearchTerm(term);
 
-                          if (term.trim() === '') {
-                            setFilteredTasks(tasks);
-                          } else {
-                            const searchLower = term.toLowerCase();
-                            const filtered = tasks.filter(task => {
-                              const requirement = (task.recentRequirement || '').toLowerCase();
-                              const project = (task.projectId?.name || '').toLowerCase();
-                              const status = (task.status || '').toLowerCase();
-                              const createdBy = (task.createdByUserId?.fullName || '').toLowerCase();
-                              const clientPriority = (task.clientPriority || '').toLowerCase();
+  const safeTasks = Array.isArray(tasks) ? tasks : [];
 
-                              return requirement.includes(searchLower) ||
-                                project.includes(searchLower) ||
-                                status.includes(searchLower) ||
-                                createdBy.includes(searchLower) ||
-                                clientPriority.includes(searchLower);
-                            });
-                            setFilteredTasks(filtered);
-                          }
-                        }}
+  if (term.trim() === "") {
+    setFilteredTasks(safeTasks);
+  } else {
+    const searchLower = term.toLowerCase();
+
+    const filtered = safeTasks.filter((task) => {
+      const requirement = (task?.recentRequirement || "").toLowerCase();
+      const project = (task?.projectId?.name || "").toLowerCase();
+      const status = (task?.status || "").toLowerCase();
+      const createdBy = (task?.createdByUserId?.fullName || "").toLowerCase();
+      const clientPriority = (task?.clientPriority || "").toLowerCase();
+
+      return (
+        requirement.includes(searchLower) ||
+        project.includes(searchLower) ||
+        status.includes(searchLower) ||
+        createdBy.includes(searchLower) ||
+        clientPriority.includes(searchLower)
+      );
+    });
+
+    setFilteredTasks(filtered);
+  }
+}}
+
                       />
                       <div style={{
                         position: 'absolute',
@@ -2440,7 +2448,9 @@ export default function EmployeeDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredTasks.map((t, index) => {
+                        {Array.isArray(filteredTasks) &&
+  filteredTasks.map((t, index) => {
+
                           const meta = priorityColors[t.clientPriority] || null;
                           const givenBy =
                             (t.prioritySource || "")
