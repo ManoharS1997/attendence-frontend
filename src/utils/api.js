@@ -33,14 +33,16 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Handle common errors (401, 403, 500, etc.)
     if (error.response?.status === 401) {
+      console.warn("401 detected – token invalid or expired");
       localStorage.removeItem("token");
-      window.location.href = "/login";
+      localStorage.removeItem("user");
+      // DO NOT redirect here
     }
     return Promise.reject(error);
   }
 );
+
 
 /* =========================
    API METHODS
