@@ -321,7 +321,6 @@ const buildMonthMatrix = (month, year) => {
         week.push({ day: dayCounter, dateKey, date });
       }
     }
-    weeks.push(week);
   }
 
   return weeks;
@@ -3501,8 +3500,8 @@ export default function ManagerDashboard() {
                                       taskId={t._id}
                                       isApproved={t.approvedByManager}
                                       projectStatus={selectedProject?.status}
-                                      onApprovalChange={(isApproved, newBalance) => {
-                                        // Update task approval status
+                                      onApprovalChange={(isApproved) => {
+                                        // Update task approval status locally
                                         const updatedTasks = projectTasks.map(task => 
                                           task._id === t._id 
                                             ? {...task, approvedByManager: isApproved}
@@ -3510,14 +3509,9 @@ export default function ManagerDashboard() {
                                         );
                                         setProjectTasks(updatedTasks);
                                         
-                                        // Update project balance if provided
-                                        if (newBalance !== undefined && selectedProject) {
-                                          setSelectedProject(prev => ({...prev, balanceHours: newBalance}));
-                                          setProjects(prev => prev.map(p => 
-                                            p._id === selectedProject._id 
-                                              ? {...p, balanceHours: newBalance}
-                                              : p
-                                          ));
+                                        // ✅ CRITICAL: Refresh project balance from backend
+                                        if (selectedProject?._id) {
+                                          refreshProjectBalance(selectedProject._id);
                                         }
                                         
                                         addAlert(isApproved ? "Task approved" : "Task unapproved");

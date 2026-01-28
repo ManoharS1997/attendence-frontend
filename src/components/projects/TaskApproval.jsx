@@ -5,24 +5,25 @@ const TaskApproval = ({ taskId, isApproved, projectStatus, onApprovalChange }) =
   const [loading, setLoading] = useState('');
   const [error, setError] = useState('');
 
-  const handleApproval = async (approve) => {
-    setLoading(approve ? 'approve' : 'unapprove');
-    setError('');
+ const handleApproval = async (approve) => {
+  setLoading(approve ? 'approve' : 'unapprove');
+  setError('');
+  
+  try {
+    const endpoint = `/tasks/${taskId}/${approve ? 'approve' : 'unapprove'}`;
+    // Remove the variable assignment since we don't use the response
+    await api.patch(endpoint);
     
-    try {
-      const endpoint = `/tasks/${taskId}/${approve ? 'approve' : 'unapprove'}`;
-      const response = await api.patch(endpoint);
-      
-      if (response.data) {
-        onApprovalChange(!isApproved, response.data.projectBalance);
-      }
-      
-    } catch (err) {
-      setError(err.response?.data?.message || `Failed to ${approve ? 'approve' : 'unapprove'} task`);
-    } finally {
-      setLoading('');
-    }
-  };
+    // ✅ FIX: Only pass the approval status, NOT the balance
+    // Backend will handle balance calculation
+    onApprovalChange(!isApproved);
+    
+  } catch (err) {
+    setError(err.response?.data?.message || `Failed to ${approve ? 'approve' : 'unapprove'} task`);
+  } finally {
+    setLoading('');
+  }
+};
 
   // Don't show approval buttons if project is not approved
   if (projectStatus !== 'APPROVED') {
