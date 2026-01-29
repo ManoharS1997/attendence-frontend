@@ -85,8 +85,6 @@ export default function AdminDashboard() {
     document.body.style.overflow = sidebarOpen ? "hidden" : "auto";
   }, [sidebarOpen]);
 
-
-
   const [activeTab, setActiveTab] = useState("dashboard");
 
   const [{ month, year }, setMonthYear] = useState(getCurrentMonth);
@@ -143,36 +141,71 @@ export default function AdminDashboard() {
     });
   }, [payslips, selectedEmployeeId, searchText]);
 
-  
   // All project tasks (view only)
   const [allTasks, setAllTasks] = useState([]);
   const [taskSearch, setTaskSearch] = useState("");
-  const filteredAdminTasks = (allTasks || []).filter((t) => {
-  if (!taskSearch.trim()) return true;
 
-  const q = taskSearch.toLowerCase();
+  // Load all tasks for admin with proper fields
+  const loadAllAdminTasks = useCallback(async () => {
+    try {
+      const res = await api.get("/tasks/all-admin");
+      const tasks = res.data || [];
+      
+      // Format tasks with all required fields
+      const formattedTasks = tasks.map((task, index) => ({
+        sno: index + 1,
+        _id: task._id,
+        project: task.project || task.projectId || {},
+        requirement: task.requirement || task.title || "",
+        requirementType: task.requirementType || "NEW",
+        assignedTo: task.assignedTo || task.assignedUserId || {},
+        status: task.status || "OPEN",
+        scope: task.scope || "AGREED",
+        notes: task.notes || "",
+        discussedDate: task.discussedDate || task.discussed || "",
+        startDate: task.startDate || task.estimatedDate || "",
+        closeDate: task.closeDate || task.originalClosureDate || "",
+        workingDays: task.workingDays || task.noOfDays || 0,
+        clientPriority: task.clientPriority || "P3",
+        givenBy: task.givenBy || task.prioritySource || "CLIENT",
+        createdBy: task.createdBy || task.createdByUserId || {},
+        createdByRole: task.createdByRole || "employee",
+        estimateHours: task.estimateHours || 0,
+        month: task.month,
+        year: task.year,
+        createdAt: task.createdAt
+      }));
+      
+      setAllTasks(formattedTasks);
+    } catch (err) {
+      console.error("Failed to load admin tasks:", err);
+      setAllTasks([]);
+    }
+  }, []);
 
-  const projectName =
-    t.project?.name ||
-    projects.find(p => p._id === t.projectId)?.name ||
-    "";
-
-  const assignedName =
-    t.assignedUser?.fullName ||
-    t.assignedUser?.email ||
-    "";
-
-  return (
-    (t.recentRequirement || "").toLowerCase().includes(q) ||
-    (t.status || "").toLowerCase().includes(q) ||
-    (t.scope || "").toLowerCase().includes(q) ||
-    (t.clientPriority || "").toLowerCase().includes(q) ||
-    projectName.toLowerCase().includes(q) ||
-    assignedName.toLowerCase().includes(q)
-  );
-});
-
-
+  // Filter tasks based on search
+  const filteredAdminTasks = useMemo(() => {
+    return allTasks.filter((t) => {
+      if (!taskSearch.trim()) return true;
+      const q = taskSearch.toLowerCase();
+      
+      const projectName = t.project?.name || "";
+      const requirement = t.requirement || "";
+      const assignedName = t.assignedTo?.fullName || t.assignedTo?.email || "";
+      const createdByName = t.createdBy?.fullName || t.createdBy?.email || "";
+      
+      return (
+        projectName.toLowerCase().includes(q) ||
+        requirement.toLowerCase().includes(q) ||
+        assignedName.toLowerCase().includes(q) ||
+        createdByName.toLowerCase().includes(q) ||
+        (t.status || "").toLowerCase().includes(q) ||
+        (t.scope || "").toLowerCase().includes(q) ||
+        (t.clientPriority || "").toLowerCase().includes(q) ||
+        (t.notes || "").toLowerCase().includes(q)
+      );
+    });
+  }, [allTasks, taskSearch]);
 
   // Holidays (read-only)
   const [calendarDays, setCalendarDays] = useState([]); // from /leave/calendar
@@ -193,7 +226,6 @@ export default function AdminDashboard() {
   };
 
   // ---------- LOADERS ----------
-
   const loadAttendance = useCallback(async () => {
     try {
       const res = await api.get("/attendance", { params: { month, year } });
@@ -240,58 +272,9 @@ export default function AdminDashboard() {
       const res = await api.get("/projects");
       const list = res.data || [];
       setProjects(list);
-
-      // Prefer single admin API for all tasks
-      try {
-        const allRes = await api.get("/tasks/all-admin");
-        const data = allRes.data || [];
-        const mapped = data.map((t) => {
-          const projectId =
-            t.project?._id ||
-            t.projectId ||
-            (typeof t.project === "string" ? t.project : null);
-          const project =
-            t.project ||
-            t.projectId ||
-            list.find((p) => p._id === projectId) ||
-            null;
-          return {
-            ...t,
-            project,
-          };
-        });
-        setAllTasks(mapped);
-        return;
-      } catch (errAll) {
-        // fallback
-        console.warn(
-          "/tasks/all-admin not available, falling back to per-project fetch",
-          errAll?.response || errAll
-        );
-      }
-
-      // Fallback: per-project calls
-      const all = [];
-      for (const p of list) {
-        if (!p._id) continue;
-        try {
-          const tr = await api.get(`/tasks/project/${p._id}`);
-          const tasksForProject = tr.data || [];
-          tasksForProject.forEach((t) => {
-            all.push({
-              ...t,
-              project: t.project || t.projectId || p,
-            });
-          });
-        } catch (err) {
-          console.warn(`Failed to load tasks for project ${p._id}`, err);
-        }
-      }
-      setAllTasks(all);
     } catch (err) {
       console.error("loadProjects error:", err);
       setProjects([]);
-      setAllTasks([]);
     }
   }, []);
 
@@ -324,18 +307,18 @@ export default function AdminDashboard() {
     }
   }, [selectedEmployeeId]);
 
+  // Load all data on component mount
   useEffect(() => {
-    // load projects asap
     loadProjects();
-  }, [loadProjects]);
-
-  useEffect(() => {
     loadEmployees();
-  }, [loadEmployees]);
+    loadAllAdminTasks();
+  }, [loadProjects, loadEmployees, loadAllAdminTasks]);
 
   useEffect(() => {
-    loadEmployeePayslips();
-  }, [loadEmployeePayslips]);
+    loadAttendance();
+    loadSummaries();
+    loadHolidays();
+  }, [loadAttendance, loadSummaries, loadHolidays]);
 
   // 🔁 Reload payslips when switching to Payslips tab
   useEffect(() => {
@@ -343,12 +326,6 @@ export default function AdminDashboard() {
       loadEmployeePayslips();
     }
   }, [activeTab, selectedEmployeeId, loadEmployeePayslips]);
-
-  useEffect(() => {
-    loadAttendance();
-    loadSummaries();
-    loadHolidays();
-  }, [loadAttendance, loadSummaries, loadHolidays]);
 
   // ---------- CSV DOWNLOAD HELPERS ----------
   const downloadCsv = async (url, params = {}, filename) => {
@@ -955,7 +932,6 @@ export default function AdminDashboard() {
         </aside>
 
         <div className="main-area" style={{ overflowX: "hidden" }}>
-
           <header className="topbar">
             {/* ☰ MOBILE HAMBURGER BUTTON */}
             <button
@@ -975,7 +951,6 @@ export default function AdminDashboard() {
               </button>
             </div>
           </header>
-
 
           {/* ========== TIMESHEET MANAGEMENT TAB ========== */}
           {activeTab === "attendance" && (
@@ -1016,10 +991,6 @@ export default function AdminDashboard() {
                   </p>
 
                   <div className="table-wrapper">
-
-                    <div className="table-wrapper">
-                    </div>
-
                     <table>
                       <thead>
                         <tr>
@@ -1184,7 +1155,6 @@ export default function AdminDashboard() {
                       width: "100%",
                     }}
                   >
-
                     {/* Calendar grid */}
                     <div style={{ flex: "1 1 360px" }}>
                       <div
@@ -1524,180 +1494,6 @@ export default function AdminDashboard() {
           )}
 
           {/* ========== DASHBOARD TAB (Reports & Tasks view) ========== */}
-          {/* ========== PAYSLIPS TAB (ADMIN) ========== */}
-          {activeTab === "payslips" && (
-            <main className="layout single-column">
-              <section className="full-width">
-                <div className="card">
-                  <h2>Employee Payslips</h2>
-
-                  <div style={{
-                    display: "flex",
-                    gap: 16,
-                    alignItems: "flex-end",
-                    marginBottom: 20,
-                    padding: 16,
-                    background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)",
-                    borderRadius: 12,
-                    border: "1px solid #d1d9e6"
-                  }}>
-                    <div className="filter-group" style={{ flex: 1 }}>
-                      <label style={{
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: "#5a6c7d",
-                        marginBottom: 6,
-                        display: "block"
-                      }}>
-                        Select Employee
-                      </label>
-                      <select
-                        value={selectedEmployeeId}
-                        onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                        style={{
-                          padding: "10px 12px",
-                          borderRadius: 8,
-                          border: "2px solid #e1e8f0",
-                          background: "white",
-                          fontSize: 13,
-                          width: "100%",
-                          cursor: "pointer",
-                          transition: "all 0.2s",
-                          boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
-                        }}
-                      >
-                        <option value="">-- Select Employee --</option>
-                        {employees.length === 0 && (
-                          <option disabled>Loading employees...</option>
-                        )}
-                        {employeeOptions.map((e) => (
-                          <option key={e._id} value={e._id}>
-                            {e.fullName} ({e.email})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="filter-group" style={{ flex: 1 }}>
-                      <label style={{
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: "#5a6c7d",
-                        marginBottom: 6,
-                        display: "block"
-                      }}>
-                        Search
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Search by name, email, employee ID"
-                        value={searchText}
-                        onChange={(e) => setSearchText(e.target.value)}
-                        style={{
-                          padding: "10px 12px",
-                          borderRadius: 8,
-                          border: "2px solid #e1e8f0",
-                          background: "white",
-                          fontSize: 13,
-                          width: "100%",
-                          transition: "all 0.2s",
-                          boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="table-wrapper" style={{ marginTop: 16 }}>
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Month</th>
-                          <th>Employee ID</th>
-                          <th>Name</th>
-                          <th>Email</th>
-                          <th>Status</th>
-                          <th>Net Pay</th>
-                          <th>Download</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredPayslips.map((p) => (
-                          <tr key={p._id}>
-                            <td>
-                              <span style={{
-                                display: "inline-block",
-                                padding: "4px 8px",
-                                background: "#f1f5f9",
-                                borderRadius: "6px",
-                                fontSize: "12px",
-                                fontWeight: "600"
-                              }}>
-                                {monthNames[p.month - 1]} {p.year}
-                              </span>
-                            </td>
-                            <td>{p.employee?.employeeId || "-"}</td>
-                            <td>{p.employee?.fullName || "-"}</td>
-                            <td>{p.employee?.email || "-"}</td>
-                            <td>
-                              <span style={{
-                                padding: "4px 8px",
-                                borderRadius: "12px",
-                                fontSize: "11px",
-                                fontWeight: "600",
-                                background: p.status === "Generated" ? "#d1fae5" : "#f1f5f9",
-                                color: p.status === "Generated" ? "#065f46" : "#64748b"
-                              }}>
-                                {p.status || "Generated"}
-                              </span>
-                            </td>
-                            <td>
-                              <span style={{
-                                fontWeight: "700",
-                                color: "#10b981",
-                                fontSize: "14px"
-                              }}>
-                                ₹{p.salary?.netPay || 0}
-                              </span>
-                            </td>
-                            <td>
-                              <button
-                                className="export-btn"
-                                onClick={() =>
-                                  api.get(`/payslips/${p._id}/download`, { responseType: "blob" })
-                                    .then(res => {
-                                      const blob = new Blob([res.data], { type: "application/pdf" });
-                                      const url = window.URL.createObjectURL(blob);
-                                      const a = document.createElement("a");
-                                      a.href = url;
-                                      a.download = `${p.employee?.fullName || "Employee"}_${monthNames[p.month - 1]}_${p.year}.pdf`;
-
-                                      a.click();
-                                      window.URL.revokeObjectURL(url);
-                                    })
-                                }
-                                style={{
-                                  background: "#4a6cf7",
-                                  padding: "8px 12px",
-                                  fontSize: "12px"
-                                }}
-                              >
-                                ⬇ Download
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-
-                    {selectedEmployeeId && payslips.length === 0 && (
-                      <p className="empty">No payslips available for this employee.</p>
-                    )}
-                  </div>
-                </div>
-              </section>
-            </main>
-          )}
-
           {activeTab === "dashboard" && (
             <main className="layout single-column">
               <section className="full-width">
@@ -1968,7 +1764,7 @@ export default function AdminDashboard() {
                     Tasks created by Manager or Employees. Admin can review but
                     cannot edit.
                   </p>
-                  <div className="table-wrapper small-table">
+                  <div className="table-wrapper">
                     <table>
                       <thead>
                         <tr>
@@ -1976,13 +1772,13 @@ export default function AdminDashboard() {
                           <th>Project</th>
                           <th>Requirement</th>
                           <th>Type</th>
-                          <th>Assigned To</th>
+                          <th>Employee</th>
                           <th>Status</th>
                           <th>Scope</th>
                           <th>Notes</th>
                           <th>Discussed</th>
-                          <th>Start</th>
-                          <th>Close</th>
+                          <th>Start Date</th>
+                          <th>Close Date</th>
                           <th>Working Days</th>
                           <th>Client Priority</th>
                           <th>Given By</th>
@@ -1990,57 +1786,42 @@ export default function AdminDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredAdminTasks.map((t, index) => {
-
-
-                          const assigned = t.assignedUser || t.assignedUserId || {};
-
-                          const projectName =
-                            t.project?.name ||
-                            projects.find(p => p._id === t.projectId)?.name ||
-                            "-";
-
-
-                          const assignedName = assigned.fullName || assigned.email || "-";
-
-                          return (
-                            <tr key={t._id || index}>
-                              <td>{index + 1}</td>
-                              <td>{projectName}</td>
-                              <td style={{ maxWidth: 260, whiteSpace: "pre-wrap" }}>
-                                {t.recentRequirement}
-                              </td>
-                              <td>{t.requirementType || "NEW"}</td>
-                              <td>{assignedName}</td>
-                              <td>
-                                <span style={{
-                                  padding: "4px 8px",
-                                  borderRadius: "12px",
-                                  fontSize: "11px",
-                                  fontWeight: "600",
-                                  background: t.status === "Completed" ? "#d1fae5" :
-                                    t.status === "In Progress" ? "#dbeafe" : "#f1f5f9",
-                                  color: t.status === "Completed" ? "#065f46" :
-                                    t.status === "In Progress" ? "#1e40af" : "#64748b"
-                                }}>
-                                  {t.status}
-                                </span>
-                              </td>
-                              <td>{t.scope || "-"}</td>
-                              <td style={{ maxWidth: 220, whiteSpace: "pre-wrap" }}>
-                                {t.notes || "-"}
-                              </td>
-                              <td>{t.discussedDate || "-"}</td>
-                              <td>{t.originalClosureDate || "-"}</td>
-                              <td>{t.estimatedDate || "-"}</td>
-                              <td>{t.noOfDays || 0}</td>
-                              <td>{t.clientPriority || "-"}</td>
-                              <td>{t.prioritySource || "-"}</td>
-                              <td>{t.createdByUserId?.fullName || "-"}</td>
-
-                            </tr>
-                          );
-                        })}
+                        {filteredAdminTasks.map((task) => (
+                          <tr key={task._id}>
+                            <td>{task.sno}</td>
+                            <td>{task.project?.name || "N/A"}</td>
+                            <td style={{ maxWidth: 260, whiteSpace: "pre-wrap" }}>
+                              {task.requirement}
+                            </td>
+                            <td>{task.requirementType}</td>
+                            <td>{task.assignedTo?.fullName || task.assignedTo?.email || "Unassigned"}</td>
+                            <td>
+                              <span style={{
+                                padding: "4px 8px",
+                                borderRadius: "12px",
+                                fontSize: "11px",
+                                fontWeight: "600",
+                                background: task.status === "COMPLETED" ? "#d1fae5" :
+                                  task.status === "IN_PROGRESS" ? "#dbeafe" : "#f1f5f9",
+                                color: task.status === "COMPLETED" ? "#065f46" :
+                                  task.status === "IN_PROGRESS" ? "#1e40af" : "#64748b"
+                              }}>
+                                {task.status}
+                              </span>
+                            </td>
+                            <td>{task.scope}</td>
+                            <td style={{ maxWidth: 220, whiteSpace: "pre-wrap" }}>
+                              {task.notes || "-"}
+                            </td>
+                            <td>{task.discussedDate || "-"}</td>
+                            <td>{task.startDate || "-"}</td>
+                            <td>{task.closeDate || "-"}</td>
+                            <td>{task.workingDays || 0}</td>
+                            <td>{task.clientPriority}</td>
+                            <td>{task.givenBy}</td>
+                            <td>{task.createdBy?.fullName || task.createdBy?.email || "-"}</td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                     {allTasks.length === 0 && (
@@ -2055,6 +1836,180 @@ export default function AdminDashboard() {
                           All are read-only for Admin.
                         </p>
                       </>
+                    )}
+                  </div>
+                </div>
+              </section>
+            </main>
+          )}
+
+          {/* ========== PAYSLIPS TAB (ADMIN) ========== */}
+          {activeTab === "payslips" && (
+            <main className="layout single-column">
+              <section className="full-width">
+                <div className="card">
+                  <h2>Employee Payslips</h2>
+
+                  <div style={{
+                    display: "flex",
+                    gap: 16,
+                    alignItems: "flex-end",
+                    marginBottom: 20,
+                    padding: 16,
+                    background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)",
+                    borderRadius: 12,
+                    border: "1px solid #d1d9e6"
+                  }}>
+                    <div className="filter-group" style={{ flex: 1 }}>
+                      <label style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "#5a6c7d",
+                        marginBottom: 6,
+                        display: "block"
+                      }}>
+                        Select Employee
+                      </label>
+                      <select
+                        value={selectedEmployeeId}
+                        onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                        style={{
+                          padding: "10px 12px",
+                          borderRadius: 8,
+                          border: "2px solid #e1e8f0",
+                          background: "white",
+                          fontSize: 13,
+                          width: "100%",
+                          cursor: "pointer",
+                          transition: "all 0.2s",
+                          boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
+                        }}
+                      >
+                        <option value="">-- Select Employee --</option>
+                        {employees.length === 0 && (
+                          <option disabled>Loading employees...</option>
+                        )}
+                        {employeeOptions.map((e) => (
+                          <option key={e._id} value={e._id}>
+                            {e.fullName} ({e.email})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="filter-group" style={{ flex: 1 }}>
+                      <label style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "#5a6c7d",
+                        marginBottom: 6,
+                        display: "block"
+                      }}>
+                        Search
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Search by name, email, employee ID"
+                        value={searchText}
+                        onChange={(e) => setSearchText(e.target.value)}
+                        style={{
+                          padding: "10px 12px",
+                          borderRadius: 8,
+                          border: "2px solid #e1e8f0",
+                          background: "white",
+                          fontSize: 13,
+                          width: "100%",
+                          transition: "all 0.2s",
+                          boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="table-wrapper" style={{ marginTop: 16 }}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Month</th>
+                          <th>Employee ID</th>
+                          <th>Name</th>
+                          <th>Email</th>
+                          <th>Status</th>
+                          <th>Net Pay</th>
+                          <th>Download</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredPayslips.map((p) => (
+                          <tr key={p._id}>
+                            <td>
+                              <span style={{
+                                display: "inline-block",
+                                padding: "4px 8px",
+                                background: "#f1f5f9",
+                                borderRadius: "6px",
+                                fontSize: "12px",
+                                fontWeight: "600"
+                              }}>
+                                {monthNames[p.month - 1]} {p.year}
+                              </span>
+                            </td>
+                            <td>{p.employee?.employeeId || "-"}</td>
+                            <td>{p.employee?.fullName || "-"}</td>
+                            <td>{p.employee?.email || "-"}</td>
+                            <td>
+                              <span style={{
+                                padding: "4px 8px",
+                                borderRadius: "12px",
+                                fontSize: "11px",
+                                fontWeight: "600",
+                                background: p.status === "Generated" ? "#d1fae5" : "#f1f5f9",
+                                color: p.status === "Generated" ? "#065f46" : "#64748b"
+                              }}>
+                                {p.status || "Generated"}
+                              </span>
+                            </td>
+                            <td>
+                              <span style={{
+                                fontWeight: "700",
+                                color: "#10b981",
+                                fontSize: "14px"
+                              }}>
+                                ₹{p.salary?.netPay || 0}
+                              </span>
+                            </td>
+                            <td>
+                              <button
+                                className="export-btn"
+                                onClick={() =>
+                                  api.get(`/payslips/${p._id}/download`, { responseType: "blob" })
+                                    .then(res => {
+                                      const blob = new Blob([res.data], { type: "application/pdf" });
+                                      const url = window.URL.createObjectURL(blob);
+                                      const a = document.createElement("a");
+                                      a.href = url;
+                                      a.download = `${p.employee?.fullName || "Employee"}_${monthNames[p.month - 1]}_${p.year}.pdf`;
+
+                                      a.click();
+                                      window.URL.revokeObjectURL(url);
+                                    })
+                                }
+                                style={{
+                                  background: "#4a6cf7",
+                                  padding: "8px 12px",
+                                  fontSize: "12px"
+                                }}
+                              >
+                                ⬇ Download
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+
+                    {selectedEmployeeId && payslips.length === 0 && (
+                      <p className="empty">No payslips available for this employee.</p>
                     )}
                   </div>
                 </div>

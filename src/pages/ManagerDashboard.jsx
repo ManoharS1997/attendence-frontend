@@ -11,7 +11,7 @@ import logo from "../assets/Company Logo.png";
 // Add these imports after existing imports
 import ProjectStatusBadge from "../components/projects/ProjectStatusBadge";
 import ProjectActions from "../components/projects/ProjectActions";
-import TaskApproval from "../components/projects/TaskApproval";
+//import TaskApproval from "../components/projects/TaskApproval";
 import BalanceDisplay from "../components/projects/BalanceDisplay";
 
 const monthNames = [
@@ -1326,81 +1326,126 @@ export default function ManagerDashboard() {
 
   // -------- PROJECT TASKS ----------
   const handleSubmitTask = async (e) => {
-    e.preventDefault();
-    if (!selectedProjectId) {
-      addAlert("Select a project first");
-      return;
+  e.preventDefault();
+  
+  if (!selectedProjectId) {
+    addAlert("Select a project first");
+    return;
+  }
+
+  // Get the selected project to check if it exists
+  const selectedProjectObj = projects.find(p => p._id === selectedProjectId);
+  if (!selectedProjectObj) {
+    addAlert("Selected project not found");
+    return;
+  }
+
+  // Validate required fields
+  if (!taskForm.recentRequirement?.trim()) {
+    addAlert("Requirement field is required");
+    return;
+  }
+
+  // Calculate days and hours
+  const calculatedDays = diffDays(
+    taskForm.originalClosureDate,
+    taskForm.estimatedDate
+  );
+  
+  const finalDays = taskForm.noOfDays || calculatedDays || 0;
+  const hoursAllocated = taskForm.hoursAllocated || (finalDays > 0 ? finalDays * 8 : 0);
+
+  try {
+    // ✅ CORRECT PAYLOAD STRUCTURE - matches backend requirements
+    const payload = {
+      // REQUIRED FIELDS (Backend will reject without these)
+      project: selectedProjectId, // Changed from projectId to project
+      title: taskForm.recentRequirement?.trim() || "Project Requirement",
+      estimateHours: hoursAllocated,
+      month: Number(month),
+      year: Number(year),
+      role: assignRole || "Developer", // Use dropdown value or default
+
+      // Optional fields (if you want to include them)
+      description: taskForm.notes || "",
+      notes: taskForm.notes || "",
+      status: taskForm.status || "OPEN",
+      
+      // Your existing fields (mapped to correct schema)
+      requirementType: taskForm.requirementType,
+      scope: taskForm.scope,
+      discussedDate: taskForm.discussedDate,
+      originalClosureDate: taskForm.originalClosureDate,
+      estimatedDate: taskForm.estimatedDate,
+      noOfDays: finalDays,
+      clientPriority: taskForm.clientPriority,
+      prioritySource: taskForm.prioritySource,
+      
+      // Assignment fields
+      assignedUserId: taskForm.assignedUserId || null,
+      
+      // Created by information
+      createdBy: user.fullName,
+      createdByRole: "manager",
+      createdByUserId: user._id || user.id
+    };
+
+    // Clean up empty fields
+    if (!payload.assignedUserId) {
+      delete payload.assignedUserId;
     }
 
-    const calculatedDays = diffDays(
-      taskForm.originalClosureDate,
-      taskForm.estimatedDate
-    );
-
-    const finalDays = taskForm.noOfDays || calculatedDays || 0;
-    const hoursAllocated =
-      taskForm.hoursAllocated || (finalDays > 0 ? finalDays * 8 : 0);
-
-    try {
-      const payload = {
-        ...taskForm,
-        projectId: selectedProjectId,
-        noOfDays: finalDays,
-        hoursAllocated,
-        createdBy: user.fullName, // Always set created by as current manager
-        createdByRole: "manager", // Set role as manager
-        createdByUserId: user._id || user.id // Set current user ID
-      };
-
-      if (!payload.assignedUserId) {
-        delete payload.assignedUserId;
-      }
-
-      if (!payload.recentRequirement || !payload.recentRequirement.trim()) {
-        payload.recentRequirement = "Requirement not specified";
-      }
-
-      if (!editingTaskId) {
-        await api.post("/tasks", payload);
-        addAlert("Task created / noted");
-      } else {
-        await api.patch(`/tasks/${editingTaskId}`, payload);
-        addAlert("Task updated");
-      }
-
-      setEditingTaskId(null);
-      setTaskForm({
-        projectId: selectedProjectId,
-        assignedUserId: "",
-        recentRequirement: "",
-        requirementType: "NEW",
-        status: "OPEN",
-        scope: "AGREED",
-        notes: "",
-        discussedDate: formatToday(),
-        originalClosureDate: "",
-        estimatedDate: "",
-        noOfDays: 0,
-        clientPriority: "P3",
-        prioritySource: "CLIENT",
-        hoursAllocated: 0,
-        createdBy: user.fullName,
-        createdByRole: "manager",
-        createdByUserId: user._id || user.id
-      });
-      loadProjectTasks(selectedProjectId);
-    } catch (err) {
-      console.error("Error saving task", err);
-      addAlert(err.response?.data?.message || "Error saving task");
+    if (editingTaskId) {
+      // Update existing task
+      await api.patch(`/tasks/${editingTaskId}`, payload);
+      addAlert("Task updated successfully");
+    } else {
+      // Create new task
+      await api.post("/tasks", payload);
+      addAlert("Task created successfully");
     }
-  };
+
+    // Reset form
+    setEditingTaskId(null);
+    setTaskForm({
+      projectId: selectedProjectId,
+      assignedUserId: "",
+      recentRequirement: "",
+      requirementType: "NEW",
+      status: "OPEN",
+      scope: "AGREED",
+      notes: "",
+      discussedDate: formatToday(),
+      originalClosureDate: "",
+      estimatedDate: "",
+      noOfDays: 0,
+      clientPriority: "P3",
+      prioritySource: "CLIENT",
+      hoursAllocated: 0,
+      createdBy: user.fullName,
+      createdByRole: "manager",
+      createdByUserId: user._id || user.id
+    });
+    
+    // Reload tasks
+    loadProjectTasks(selectedProjectId);
+    
+  } catch (err) {
+    console.error("Error saving task", err);
+    const errorMsg = err.response?.data?.message || 
+                     err.response?.data?.error || 
+                     "Error saving task";
+    addAlert(`Error: ${errorMsg}`);
+  }
+};
 
   const startEditTask = (t) => {
     setEditingTaskId(t._id);
+    setAssignRole(t.role || "Developer"); // Populate role from task
+    
     setTaskForm({
       projectId: selectedProjectId,
-      assignedUserId:
-        t.assignedUserId || (t.assignedUser && t.assignedUser._id) || "",
+      assignedUserId: t.assignedUserId || (t.assignedUser && t.assignedUser._id) || "",
       recentRequirement: t.recentRequirement || "",
       requirementType: t.requirementType || "NEW",
       status: t.status || "OPEN",
@@ -3215,6 +3260,19 @@ export default function ManagerDashboard() {
                           </select>
                         </label>
                         <label>
+                          Role for Task
+                          <select
+                            value={assignRole}
+                            onChange={(e) => setAssignRole(e.target.value)}
+                          >
+                            {PROJECT_ROLE_OPTIONS.map((role) => (
+                              <option key={role} value={role}>
+                                {role}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
                           Status
                           <select
                             value={taskForm.status}
@@ -3393,7 +3451,6 @@ export default function ManagerDashboard() {
                               <th>Client Priority</th>
                               <th>Given By</th>
                               <th>Created By</th>
-                              <th>Approval</th> {/* ADD THIS */}
                               <th>Actions</th>
                             </tr>
                           </thead>
@@ -3495,29 +3552,7 @@ export default function ManagerDashboard() {
                                   <td>
                                     {t.createdByUserId?.fullName || t.createdBy || "-"}
                                   </td>
-                                  <td>
-                                    <TaskApproval 
-                                      taskId={t._id}
-                                      isApproved={t.approvedByManager}
-                                      projectStatus={selectedProject?.status}
-                                      onApprovalChange={(isApproved) => {
-                                        // Update task approval status locally
-                                        const updatedTasks = projectTasks.map(task => 
-                                          task._id === t._id 
-                                            ? {...task, approvedByManager: isApproved}
-                                            : task
-                                        );
-                                        setProjectTasks(updatedTasks);
-                                        
-                                        // ✅ CRITICAL: Refresh project balance from backend
-                                        if (selectedProject?._id) {
-                                          refreshProjectBalance(selectedProject._id);
-                                        }
-                                        
-                                        addAlert(isApproved ? "Task approved" : "Task unapproved");
-                                      }}
-                                    />
-                                  </td>
+                            
                                   <td>
                                     <button
                                       className="link-btn"

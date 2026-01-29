@@ -7,6 +7,19 @@ import { buildHolidayCalendar } from "../utils/holidays";
 import "../../styles/employeeDashboard.css";
 import { FaEdit, FaCalendarAlt } from "react-icons/fa";
 
+// ADD HELPER FUNCTION FOR RULE 7 FIX
+const getMyRoleFromProject = (project, userId) => {
+  if (!project?.assignments || !Array.isArray(project.assignments)) return null;
+
+  const assignment = project.assignments.find(a => {
+    const assignedUserId =
+      typeof a.user === "object" ? a.user._id : a.user;
+    return String(assignedUserId) === String(userId);
+  });
+
+  return assignment?.role || null;
+};
+
 const STATUS_OPTIONS = [
   "PRESENT FULL DAY",
   "PRESENT HALF DAY",
@@ -354,7 +367,7 @@ export default function EmployeeDashboard() {
   projectId: "",
   recentRequirement: "",
   requirementType: "NEW",
-  requirementRole: "DEVELOPER", // ADD THIS LINE
+  requirementRole: "DEVELOPER",
   status: "OPEN",
   scope: "AGREED",
   notes: "",
@@ -421,9 +434,9 @@ export default function EmployeeDashboard() {
     try {
       const res = await api.get("/tasks/my");
       console.log("Employee /tasks/my result:", res.data);
-      const tasksData = res.data || [];
+      const tasksData = Array.isArray(res.data?.tasks) ? res.data.tasks : [];
       setTasks(tasksData);
-      setFilteredTasks(tasksData);
+setFilteredTasks(tasksData);
       setSearchTerm("");
       
       // Load project-specific tasks
@@ -986,7 +999,7 @@ const forceRefreshAll = useCallback(async () => {
   projectId: keepProjectId ? prev.projectId : "",
   recentRequirement: "",
   requirementType: "NEW",
-  requirementRole: "DEVELOPER", // ADD THIS LINE
+  requirementRole: "DEVELOPER",
   status: "OPEN",
   scope: "AGREED",
   notes: "",
@@ -1031,27 +1044,35 @@ const forceRefreshAll = useCallback(async () => {
 
   try {
     // EXPLICITLY include requirementRole in payload
+    const now = new Date(); 
     const payload = {
-      projectId: taskForm.projectId,
-      recentRequirement: taskForm.recentRequirement,
-      requirementType: taskForm.requirementType,
-      requirementRole: taskForm.requirementRole || "DEVELOPER", // MAKE SURE THIS IS INCLUDED
-      status: taskForm.status,
-      scope: taskForm.scope,
-      notes: taskForm.notes,
-      discussedDate: taskForm.discussedDate,
-      originalClosureDate: taskForm.originalClosureDate,
-      estimatedDate: taskForm.estimatedDate,
-      noOfDays: finalDays,
-      clientPriority: taskForm.clientPriority,
-      prioritySource: taskForm.prioritySource,
-      estimateHours: Number(taskForm.hoursAllocated) > 0
-        ? Number(taskForm.hoursAllocated)
-        : PRIORITY_DEFAULT_HOURS[taskForm.clientPriority] || 8,
-      assignedUserId: user._id || user.id,
-      createdByUserId: user._id || user.id,
-      createdBy: editingTaskId ? undefined : (user.fullName || user.email)
-    };
+  // ✅ REQUIRED — DO NOT MISS
+  projectId: taskForm.projectId,
+  title: taskForm.recentRequirement?.trim(),   // ✅ FIX
+  estimateHours:
+    Number(taskForm.hoursAllocated) > 0
+      ? Number(taskForm.hoursAllocated)
+      : PRIORITY_DEFAULT_HOURS[taskForm.clientPriority] || 8,
+  month: now.getMonth() + 1,                    // ✅ FIX
+  year: now.getFullYear(),                      // ✅ FIX
+
+  // ✅ VALID OPTIONAL FIELDS
+  recentRequirement: taskForm.recentRequirement,
+  requirementType: taskForm.requirementType,
+  status: taskForm.status,
+  scope: taskForm.scope,
+  notes: taskForm.notes,
+  discussedDate: taskForm.discussedDate,
+  originalClosureDate: taskForm.originalClosureDate,
+  estimatedDate: taskForm.estimatedDate,
+  noOfDays: finalDays,
+  clientPriority: taskForm.clientPriority,
+  prioritySource: taskForm.prioritySource,
+
+  // ✅ EMPLOYEE RULES
+  assignedUserId: user._id || user.id,
+  createdByUserId: user._id || user.id
+};
 
     console.log("DEBUG - Creating task with payload:", payload);
 
@@ -1102,7 +1123,7 @@ const forceRefreshAll = useCallback(async () => {
   projectId: t.projectId?._id || t.projectId || "",
   recentRequirement: t.recentRequirement || "",
   requirementType: t.requirementType || "NEW",
-  requirementRole: t.requirementRole || "DEVELOPER", // ADD THIS LINE
+  requirementRole: t.requirementRole || "DEVELOPER",
   status: t.status || "OPEN",
   scope: t.scope || "AGREED",
   notes: t.notes || "",
@@ -1172,17 +1193,14 @@ const forceRefreshAll = useCallback(async () => {
   const handleProjectSelect = async (project) => {
   setSelectedProject(project);
   try {
-    const tasksRes = await api.get(`/projects/${project._id}/tasks`);
-    setProjectTasks(tasksRes.data || []);
-    
-    // REMOVED: const balanceRes = await api.get(`/projects/${project._id}/balance`);
-    // REMOVED: setProjectBalanceDetails(balanceRes.data);
+    const res = await api.get(`/tasks/project/${project._id}`);
+    setProjectTasks(Array.isArray(res.data?.tasks) ? res.data.tasks : []);
   } catch (error) {
-    console.error("Error loading project details:", error);
+    console.error("Error loading project tasks:", error);
     setProjectTasks([]);
-    // REMOVED: setProjectBalanceDetails(null);
   }
 };
+
 
   const NextMonthPopup = () => {
     if (!showNextMonthPopup) return null;
@@ -1526,8 +1544,8 @@ const forceRefreshAll = useCallback(async () => {
                         <FaCalendarAlt className="date-icon" />
                         <input
                           type="date"
-                          value={toInputDate(date)}          // yyyy-mm-dd for browser
-                          onChange={(e) => setDate(fromInputDate(e.target.value))} // back to dd-mm-yyyy
+                          value={toInputDate(date)}
+                          onChange={(e) => setDate(fromInputDate(e.target.value))}
                           disabled={isSystemHoliday}
                         />
                       </div>
@@ -2211,7 +2229,8 @@ const forceRefreshAll = useCallback(async () => {
                                 </span>
                               </td>
                               <td>
-                                {project.assignments?.find(a => a.user?._id === user._id)?.role || 'Not assigned'}
+                                {getMyRoleFromProject(project, user._id) || "Not assigned"}
+
                               </td>
                               <td>
                                 <button
@@ -2271,7 +2290,7 @@ const forceRefreshAll = useCallback(async () => {
                       <div style={{ padding: '10px', backgroundColor: '#fff7e6', borderRadius: '6px' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>My Role</div>
                         <div style={{ fontWeight: 'bold' }}>
-                          {selectedProject.assignments?.find(a => a.user?._id === user._id)?.role || 'Not assigned'}
+                          {getMyRoleFromProject(selectedProject, user._id) || "Not assigned"}
                         </div>
                       </div>
                     </div>
@@ -2432,6 +2451,34 @@ const forceRefreshAll = useCallback(async () => {
                       )}
                     </label>
 
+                    {/* OPTIONAL UX IMPROVEMENT: Check if user has role in selected project */}
+                    {taskForm.projectId && (
+                      (() => {
+                        const selectedProj = projects.find(p => p._id === taskForm.projectId);
+                        const myRole = selectedProj ? getMyRoleFromProject(selectedProj, user._id) : null;
+                        
+                        if (selectedProj && !myRole) {
+                          return (
+                            <div className="full-row" style={{
+                              padding: '10px',
+                              backgroundColor: '#fff7e6',
+                              border: '1px solid #ffe58f',
+                              borderRadius: '6px',
+                              marginBottom: '15px',
+                              color: '#d48806'
+                            }}>
+                              ⚠️ <strong>No Role Assigned</strong>
+                              <p style={{ margin: '5px 0 0 0', fontSize: '13px' }}>
+                                You are not assigned any role in project "{selectedProj.name}". 
+                                Please contact your manager to get assigned a role before creating tasks.
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()
+                    )}
+
                     <label className="full-row">
                       Requirement
                       <textarea
@@ -2464,29 +2511,30 @@ const forceRefreshAll = useCallback(async () => {
                         <option value="BUG">Bug</option>
                       </select>
                     </label>
-{/* ADD THIS NEW FIELD IMMEDIATELY AFTER REQUIREMENT TYPE */}
-<label>
-  Requirement Role
-  <select
-    value={taskForm.requirementRole}
-    onChange={(e) =>
-      setTaskForm({
-        ...taskForm,
-        requirementRole: e.target.value
-      })
-    }
-    required
-  >
-    <option value="DEVELOPER">Developer</option>
-    <option value="DEVOPS">DevOps</option>
-    <option value="QA">QA/Tester</option>
-    <option value="TESTER">Tester</option>
-    <option value="PRODUCT_MANAGER">Product Manager</option>
-    <option value="TECH_LEAD">Tech Lead</option>
-    <option value="SUPPORT">Support</option>
-    <option value="OTHER">Other</option>
-  </select>
-</label>
+
+                    <label>
+                      Requirement Role
+                      <select
+                        value={taskForm.requirementRole}
+                        onChange={(e) =>
+                          setTaskForm({
+                            ...taskForm,
+                            requirementRole: e.target.value
+                          })
+                        }
+                        required
+                      >
+                        <option value="DEVELOPER">Developer</option>
+                        <option value="DEVOPS">DevOps</option>
+                        <option value="QA">QA/Tester</option>
+                        <option value="TESTER">Tester</option>
+                        <option value="PRODUCT_MANAGER">Product Manager</option>
+                        <option value="TECH_LEAD">Tech Lead</option>
+                        <option value="SUPPORT">Support</option>
+                        <option value="OTHER">Other</option>
+                      </select>
+                    </label>
+
                     <label>
                       Status
                       <select
@@ -2737,32 +2785,37 @@ const forceRefreshAll = useCallback(async () => {
                         onChange={(e) => {
                           const term = e.target.value;
                           setSearchTerm(term);
+                          
 
                           const safeTasks = Array.isArray(tasks) ? tasks : [];
 
-                          if (term.trim() === "") {
-                            setFilteredTasks(safeTasks);
-                          } else {
-                            const searchLower = term.toLowerCase();
+if (term.trim() === "") {
 
-                            const filtered = safeTasks.filter((task) => {
-                              const requirement = (task?.recentRequirement || "").toLowerCase();
-                              const project = (task?.projectId?.name || "").toLowerCase();
-                              const status = (task?.status || "").toLowerCase();
-                              const createdBy = (task?.createdByUserId?.fullName || "").toLowerCase();
-                              const clientPriority = (task?.clientPriority || "").toLowerCase();
+  setFilteredTasks(safeTasks);
+} else {
+  const searchLower = searchTerm.toLowerCase();
 
-                              return (
-                                requirement.includes(searchLower) ||
-                                project.includes(searchLower) ||
-                                status.includes(searchLower) ||
-                                createdBy.includes(searchLower) ||
-                                clientPriority.includes(searchLower)
-                              );
-                            });
+  const filtered = safeTasks.filter((task) => {
+    const requirement = (task?.recentRequirement || task?.title || "").toLowerCase();
+    const project = (task?.projectId?.name || "").toLowerCase();
+    const status = (task?.status || "").toLowerCase();
+    const createdBy = (task?.createdByUserId?.fullName || "").toLowerCase();
+    const role = (task?.role || "").toLowerCase();
+    const priority = (task?.clientPriority || "").toLowerCase();
 
-                            setFilteredTasks(filtered);
-                          }
+    return (
+      requirement.includes(searchLower) ||
+      project.includes(searchLower) ||
+      status.includes(searchLower) ||
+      createdBy.includes(searchLower) ||
+      role.includes(searchLower) ||
+      priority.includes(searchLower)
+    );
+  });
+
+  setFilteredTasks(filtered);
+}
+
                         }}
                       />
                       <div style={{
@@ -3166,7 +3219,9 @@ const forceRefreshAll = useCallback(async () => {
                                   {project.balanceHours || 0} hrs
                                 </span>
                               </td>
-                              <td>{project.assignments?.find(a => a.user?._id === user._id)?.role || 'Not assigned'}</td>
+                              <td>{getMyRoleFromProject(project, user._id) || "Not assigned"}
+
+</td>
                             </tr>
                           ))
                         ) : (
