@@ -1,12 +1,27 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
-// https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
+
   server: {
-    host: '0.0.0.0',
+    host: "0.0.0.0",
     port: 5173,
-    strictPort: true
-  }
-})
+    strictPort: true,
+
+    // ✅ FIX: allow custom domain
+    allowedHosts: [
+      "attendencetracker.nowitservices.com",
+      "www.attendencetracker.nowitservices.com",
+    ],
+
+    // DEV-only proxy
+    proxy: mode === "development" ? {
+      "/api": {
+        target: "http://localhost:5000",
+        changeOrigin: true,
+        secure: false,
+      },
+    } : undefined,
+  },
+}));
