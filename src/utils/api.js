@@ -5,7 +5,7 @@ import axios from "axios";
    BASE URL & AXIOS INSTANCE
 ========================= */
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "https://api.attendencetracker.nowitservices.com/api";
+  import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
 
 

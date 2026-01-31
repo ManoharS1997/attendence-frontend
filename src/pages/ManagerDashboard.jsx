@@ -529,7 +529,8 @@ export default function ManagerDashboard() {
   // Optional holiday "Taken / Not Taken" state
   const [holidayTakenMap, setHolidayTakenMap] = useState({});
 
-  // ---------- LOGS (Manager View) ----------
+  // ---------- LOGS (HR View) ----------
+
   const [logs, setLogs] = useState([]);
   const [logsError] = useState(null);
 
@@ -1514,7 +1515,8 @@ export default function ManagerDashboard() {
   const selectedEmployeeHours =
     (selectedEmployeeId && hoursByEmployee[selectedEmployeeId]) || 0;
 
-  // -------- REPORT METRICS (Manager) ----------
+  // -------- REPORT METRICS (HR) ----------
+
   const totalEmployees = employees.length;
   const activeEmployees = employees.filter((e) => e.isActive).length;
   const totalProjects = projects.length;
@@ -1707,7 +1709,8 @@ export default function ManagerDashboard() {
         <div className="main-area">
           <header className="topbar">
             <div>
-              <strong>{user.fullName}</strong> (Manager) — {user.email}
+              <strong>{user.fullName}</strong> (HR) — {user.email}
+
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 12, position: "relative" }}>
@@ -2023,7 +2026,8 @@ export default function ManagerDashboard() {
                   </form>
                   <p className="note" style={{ marginTop: 6 }}>
                     Public holidays and weekend holidays are calculated from the
-                    holiday calendar and cannot be changed by Manager.
+holiday calendar and cannot be changed by HR.
+
                   </p>
                 </div>
 
@@ -2932,9 +2936,9 @@ export default function ManagerDashboard() {
                       </div>
 
                       <p className="note" style={{ marginTop: 8 }}>
-                        These settings are controlled by Manager. Optional
-                        holidays marked as <strong>Taken</strong> will also be
-                        visible in Employee and Admin views.
+                        These settings are controlled by HR. Optional
+holidays marked as Taken will also be visible in Employee and Admin views.
+
                       </p>
                       <p className="note">
                         Total public holidays for {monthLabel}:{" "}
@@ -3614,8 +3618,9 @@ export default function ManagerDashboard() {
                   </div>
                   <p className="note" style={{ marginBottom: 8 }}>
                     View all system activity for this month – login attempts,
-                    logout events and key operations performed by Manager /
-                    Employees / Admin.
+logout events and key operations performed by HR /
+Employees / Admin.
+
                   </p>
 
                   {/* KPI Row for logs */}
@@ -4395,7 +4400,8 @@ export default function ManagerDashboard() {
 
                       <p className="note" style={{ marginTop: 8 }}>
                         <strong>Auto-Wish Feature:</strong> The system automatically sends birthday wishes
-                        to employees on their birthday date. Manager will receive notifications 3 days in advance.
+                        to employees on their birthday date. HR will receive notifications 3 days in advance.
+
                         <br />
                         <strong>Debug Info:</strong> Check browser console (F12) for detailed state updates and API responses.
                       </p>

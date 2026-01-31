@@ -13,7 +13,6 @@ export default function LoginPage() {
 
   const handleModeChange = (newMode) => {
     setMode(newMode);
-    // when switching tab, clear fields so user always types manually
     setEmail("");
     setPassword("");
   };
@@ -25,15 +24,16 @@ export default function LoginPage() {
       mode === "admin"
         ? "admin"
         : mode === "manager"
-        ? "manager"
+        ? "manager" // ✅ HR still logs in as manager role
         : "employee";
 
     await login({ email, password, role, auto: false });
   };
 
+  // ✅ Updated helper messages
   const resetMessage =
     mode === "employee"
-      ? "Forgot password? Ask your Manager to reset it from the Manager dashboard."
+      ? "Forgot password? Ask HR to reset it from the HR dashboard."
       : mode === "manager"
       ? "Forgot password? Ask the Admin to reset it from the Admin dashboard."
       : "Forgot password? Another Admin can reset it from the Admin dashboard.";
@@ -41,9 +41,7 @@ export default function LoginPage() {
   return (
     <div className="login-page">
       <div className="login-card">
-        {/* Company logo at the very top */}
         <div className="login-logo-wrapper">
-          {/* File is in /public as "Company Logo.PNG" */}
           <img
             src="/Company Logo.PNG"
             alt="NowIT Services"
@@ -62,13 +60,16 @@ export default function LoginPage() {
           >
             Admin Login
           </button>
+
+          {/* ✅ Manager renamed to HR */}
           <button
             type="button"
             className={mode === "manager" ? "tab active" : "tab"}
             onClick={() => handleModeChange("manager")}
           >
-            Manager Login
+            HR Login
           </button>
+
           <button
             type="button"
             className={mode === "employee" ? "tab active" : "tab"}
