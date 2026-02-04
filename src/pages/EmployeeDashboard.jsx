@@ -39,6 +39,23 @@ const HALF_DAY_STATUSES = [
   "Half Day - Development"
 ];
 
+const normalizeAttendanceStatus = (a) => {
+  if (!a) return "-";
+
+  if (a.status === "Half Day - Fun Thursday") {
+    return "Half Day (Fun Activity)";
+  }
+
+  if (a.status === "Half Day - Development") {
+    return "Half Day (Development)";
+  }
+
+  return a.status;
+};
+
+
+
+
 const APPROVAL_STATUSES = [
   "PRESENT HALF DAY",
   "Half Day - Fun Thursday",
@@ -364,28 +381,28 @@ export default function EmployeeDashboard() {
   const [taskError, setTaskError] = useState("");
 
   const [taskForm, setTaskForm] = useState({
-  projectId: "",
-  recentRequirement: "",
-  requirementType: "NEW",
-  requirementRole: "DEVELOPER",
-  status: "OPEN",
-  scope: "AGREED",
-  notes: "",
-  discussedDate: formatToday(),
-  originalClosureDate: "",
-  estimatedDate: "",
-  noOfDays: 0,
-  clientPriority: "P3",
-  prioritySource: "CLIENT",
-  hoursAllocated: PRIORITY_DEFAULT_HOURS.P3
-});
+    projectId: "",
+    recentRequirement: "",
+    requirementType: "NEW",
+    requirementRole: "DEVELOPER",
+    status: "OPEN",
+    scope: "AGREED",
+    notes: "",
+    discussedDate: formatToday(),
+    originalClosureDate: "",
+    estimatedDate: "",
+    noOfDays: 0,
+    clientPriority: "P3",
+    prioritySource: "CLIENT",
+    hoursAllocated: PRIORITY_DEFAULT_HOURS.P3
+  });
   const [editingTaskId, setEditingTaskId] = useState(null);
 
   // Project State for Employee
   const [myProjects, setMyProjects] = useState([]);
   const [projectTasks, setProjectTasks] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
-  
+
 
   const loadDashboard = useCallback(async () => {
     const res = await api.get("/utils/dashboard");
@@ -415,30 +432,30 @@ export default function EmployeeDashboard() {
     setSummary(res.data || null);
   }, [month, year]);
 
- const loadProjects = useCallback(async () => {
-  try {
-    const res = await api.get("/projects/my");
-    console.log("Employee projects loaded:", res.data);
-    const projectsData = res.data || [];
-    
-    // Use the same data for both states
-    setProjects(projectsData);
-    setMyProjects(projectsData);
-  } catch (error) {
-    console.error("Error loading projects", error);
-    setProjects([]);
-    setMyProjects([]);
-  }
-}, []);
+  const loadProjects = useCallback(async () => {
+    try {
+      const res = await api.get("/projects/my");
+      console.log("Employee projects loaded:", res.data);
+      const projectsData = res.data || [];
+
+      // Use the same data for both states
+      setProjects(projectsData);
+      setMyProjects(projectsData);
+    } catch (error) {
+      console.error("Error loading projects", error);
+      setProjects([]);
+      setMyProjects([]);
+    }
+  }, []);
   const loadTasks = useCallback(async () => {
     try {
       const res = await api.get("/tasks/my");
       console.log("Employee /tasks/my result:", res.data);
       const tasksData = Array.isArray(res.data?.tasks) ? res.data.tasks : [];
       setTasks(tasksData);
-setFilteredTasks(tasksData);
+      setFilteredTasks(tasksData);
       setSearchTerm("");
-      
+
       // Load project-specific tasks
       if (selectedProject) {
         const projectTasksRes = await api.get(`/projects/${selectedProject._id}/tasks`);
@@ -463,7 +480,7 @@ setFilteredTasks(tasksData);
   }, []);
 
 
-const forceRefreshAll = useCallback(async () => {
+  const forceRefreshAll = useCallback(async () => {
     try {
       await Promise.all([
         loadAttendance(),
@@ -881,6 +898,9 @@ const forceRefreshAll = useCallback(async () => {
       }
 
       const payload = {
+        requestType: "UPDATE",
+        isLeaveRequest: APPROVAL_STATUSES.includes(status),
+
         date,
         status,
         workInTime,
@@ -889,6 +909,7 @@ const forceRefreshAll = useCallback(async () => {
         lunchOutTime,
         note
       };
+
 
       if (status === "COMPOFF") {
         const {
@@ -916,15 +937,17 @@ const forceRefreshAll = useCallback(async () => {
 
         payload.isLeaveRequest = true;
         payload.extraWork = {
-          hours: Number(hours),
           workedDate,
-          workedTime,
-          compOffDate: compOffDate || date,
-          compOffTime
+          workedMinutes: Number(hours) * 60,
+          approved: false
         };
+
       }
 
       await api.post("/attendance", payload);
+      // 🔥 FORCE IMMEDIATE DASHBOARD REFRESH
+      await forceRefreshAll();
+
 
       await forceRefreshAll();
 
@@ -996,103 +1019,103 @@ const forceRefreshAll = useCallback(async () => {
   const resetTaskForm = (keepProjectId = false) => {
     setEditingTaskId(null);
     setTaskForm((prev) => ({
-  projectId: keepProjectId ? prev.projectId : "",
-  recentRequirement: "",
-  requirementType: "NEW",
-  requirementRole: "DEVELOPER",
-  status: "OPEN",
-  scope: "AGREED",
-  notes: "",
-  discussedDate: formatToday(),
-  originalClosureDate: "",
-  estimatedDate: "",
-  noOfDays: 0,
-  clientPriority: "P3",
-  prioritySource: "CLIENT",
-  hoursAllocated: PRIORITY_DEFAULT_HOURS.P3
-}));
+      projectId: keepProjectId ? prev.projectId : "",
+      recentRequirement: "",
+      requirementType: "NEW",
+      requirementRole: "DEVELOPER",
+      status: "OPEN",
+      scope: "AGREED",
+      notes: "",
+      discussedDate: formatToday(),
+      originalClosureDate: "",
+      estimatedDate: "",
+      noOfDays: 0,
+      clientPriority: "P3",
+      prioritySource: "CLIENT",
+      hoursAllocated: PRIORITY_DEFAULT_HOURS.P3
+    }));
     setTaskError("");
   };
 
   const handleCreateOrUpdateTask = async (e) => {
-  e.preventDefault();
-  setTaskError("");
+    e.preventDefault();
+    setTaskError("");
 
-  if (!taskForm.projectId) {
-    setTaskError("Please select a project");
-    return;
-  }
-
-  // Check if project is approved
-  const selectedProject = projects.find(p => p._id === taskForm.projectId);
-  if (selectedProject && selectedProject.status !== "APPROVED") {
-    setTaskError(`Cannot create task for project "${selectedProject.name}". Project status: ${selectedProject.status}. Only APPROVED projects allow task creation.`);
-    return;
-  }
-
-  if (!taskForm.recentRequirement || taskForm.recentRequirement.trim().length === 0) {
-    setTaskError("Please enter a requirement description");
-    return;
-  }
-
-  if (!taskForm.hoursAllocated || taskForm.hoursAllocated <= 0) {
-    setTaskError("Please enter estimated hours greater than 0");
-    return;
-  }
-
-  const finalDays = taskForm.noOfDays || 0;
-
-  try {
-    // EXPLICITLY include requirementRole in payload
-    const now = new Date(); 
-    const payload = {
-  // ✅ REQUIRED — DO NOT MISS
-  projectId: taskForm.projectId,
-  title: taskForm.recentRequirement?.trim(),   // ✅ FIX
-  estimateHours:
-    Number(taskForm.hoursAllocated) > 0
-      ? Number(taskForm.hoursAllocated)
-      : PRIORITY_DEFAULT_HOURS[taskForm.clientPriority] || 8,
-  month: now.getMonth() + 1,                    // ✅ FIX
-  year: now.getFullYear(),                      // ✅ FIX
-
-  // ✅ VALID OPTIONAL FIELDS
-  recentRequirement: taskForm.recentRequirement,
-  requirementType: taskForm.requirementType,
-  status: taskForm.status,
-  scope: taskForm.scope,
-  notes: taskForm.notes,
-  discussedDate: taskForm.discussedDate,
-  originalClosureDate: taskForm.originalClosureDate,
-  estimatedDate: taskForm.estimatedDate,
-  noOfDays: finalDays,
-  clientPriority: taskForm.clientPriority,
-  prioritySource: taskForm.prioritySource,
-
-  // ✅ EMPLOYEE RULES
-  assignedUserId: user._id || user.id,
-  createdByUserId: user._id || user.id
-};
-
-    console.log("DEBUG - Creating task with payload:", payload);
-
-    if (!editingTaskId) {
-      await api.post("/tasks", payload);
-      alert("Task / requirement added successfully");
-    } else {
-      console.log("UPDATE PAYLOAD →", payload);
-      await api.patch(`/tasks/${editingTaskId}`, payload);
-      alert("Task updated successfully");
+    if (!taskForm.projectId) {
+      setTaskError("Please select a project");
+      return;
     }
 
-    resetTaskForm(true);
-    await loadTasks();
+    // Check if project is approved
+    const selectedProject = projects.find(p => p._id === taskForm.projectId);
+    if (selectedProject && selectedProject.status !== "APPROVED") {
+      setTaskError(`Cannot create task for project "${selectedProject.name}". Project status: ${selectedProject.status}. Only APPROVED projects allow task creation.`);
+      return;
+    }
 
-  } catch (error) {
-    console.error("Employee create/update task error", error?.response || error);
-    setTaskError(error.response?.data?.message || "Error saving task. Please check your input.");
-  }
-};
+    if (!taskForm.recentRequirement || taskForm.recentRequirement.trim().length === 0) {
+      setTaskError("Please enter a requirement description");
+      return;
+    }
+
+    if (!taskForm.hoursAllocated || taskForm.hoursAllocated <= 0) {
+      setTaskError("Please enter estimated hours greater than 0");
+      return;
+    }
+
+    const finalDays = taskForm.noOfDays || 0;
+
+    try {
+      // EXPLICITLY include requirementRole in payload
+      const now = new Date();
+      const payload = {
+        // ✅ REQUIRED — DO NOT MISS
+        projectId: taskForm.projectId,
+        title: taskForm.recentRequirement?.trim(),   // ✅ FIX
+        estimateHours:
+          Number(taskForm.hoursAllocated) > 0
+            ? Number(taskForm.hoursAllocated)
+            : PRIORITY_DEFAULT_HOURS[taskForm.clientPriority] || 8,
+        month: now.getMonth() + 1,                    // ✅ FIX
+        year: now.getFullYear(),                      // ✅ FIX
+
+        // ✅ VALID OPTIONAL FIELDS
+        recentRequirement: taskForm.recentRequirement,
+        requirementType: taskForm.requirementType,
+        status: taskForm.status,
+        scope: taskForm.scope,
+        notes: taskForm.notes,
+        discussedDate: taskForm.discussedDate,
+        originalClosureDate: taskForm.originalClosureDate,
+        estimatedDate: taskForm.estimatedDate,
+        noOfDays: finalDays,
+        clientPriority: taskForm.clientPriority,
+        prioritySource: taskForm.prioritySource,
+
+        // ✅ EMPLOYEE RULES
+        assignedUserId: user._id || user.id,
+        createdByUserId: user._id || user.id
+      };
+
+      console.log("DEBUG - Creating task with payload:", payload);
+
+      if (!editingTaskId) {
+        await api.post("/tasks", payload);
+        alert("Task / requirement added successfully");
+      } else {
+        console.log("UPDATE PAYLOAD →", payload);
+        await api.patch(`/tasks/${editingTaskId}`, payload);
+        alert("Task updated successfully");
+      }
+
+      resetTaskForm(true);
+      await loadTasks();
+
+    } catch (error) {
+      console.error("Employee create/update task error", error?.response || error);
+      setTaskError(error.response?.data?.message || "Error saving task. Please check your input.");
+    }
+  };
   const startEditTask = (t) => {
     const canEdit = (() => {
       const userRole = user.role;
@@ -1120,24 +1143,24 @@ const forceRefreshAll = useCallback(async () => {
 
     setEditingTaskId(t._id);
     setTaskForm({
-  projectId: t.projectId?._id || t.projectId || "",
-  recentRequirement: t.recentRequirement || "",
-  requirementType: t.requirementType || "NEW",
-  requirementRole: t.requirementRole || "DEVELOPER",
-  status: t.status || "OPEN",
-  scope: t.scope || "AGREED",
-  notes: t.notes || "",
-  discussedDate: t.discussedDate || formatToday(),
-  originalClosureDate: t.originalClosureDate || "",
-  estimatedDate: t.estimatedDate || "",
-  noOfDays: t.noOfDays || 0,
-  clientPriority: t.clientPriority || "P3",
-  prioritySource: t.prioritySource || "CLIENT",
-  hoursAllocated:
-    t.estimateHours ||
-    PRIORITY_DEFAULT_HOURS[t.clientPriority || "P3"] ||
-    8
-});
+      projectId: t.projectId?._id || t.projectId || "",
+      recentRequirement: t.recentRequirement || "",
+      requirementType: t.requirementType || "NEW",
+      requirementRole: t.requirementRole || "DEVELOPER",
+      status: t.status || "OPEN",
+      scope: t.scope || "AGREED",
+      notes: t.notes || "",
+      discussedDate: t.discussedDate || formatToday(),
+      originalClosureDate: t.originalClosureDate || "",
+      estimatedDate: t.estimatedDate || "",
+      noOfDays: t.noOfDays || 0,
+      clientPriority: t.clientPriority || "P3",
+      prioritySource: t.prioritySource || "CLIENT",
+      hoursAllocated:
+        t.estimateHours ||
+        PRIORITY_DEFAULT_HOURS[t.clientPriority || "P3"] ||
+        8
+    });
   };
 
   const monthYearSelect = (
@@ -1191,15 +1214,15 @@ const forceRefreshAll = useCallback(async () => {
   };
 
   const handleProjectSelect = async (project) => {
-  setSelectedProject(project);
-  try {
-    const res = await api.get(`/tasks/project/${project._id}`);
-    setProjectTasks(Array.isArray(res.data?.tasks) ? res.data.tasks : []);
-  } catch (error) {
-    console.error("Error loading project tasks:", error);
-    setProjectTasks([]);
-  }
-};
+    setSelectedProject(project);
+    try {
+      const res = await api.get(`/tasks/project/${project._id}`);
+      setProjectTasks(Array.isArray(res.data?.tasks) ? res.data.tasks : []);
+    } catch (error) {
+      console.error("Error loading project tasks:", error);
+      setProjectTasks([]);
+    }
+  };
 
 
   const NextMonthPopup = () => {
@@ -1307,8 +1330,8 @@ const forceRefreshAll = useCallback(async () => {
           <span style={{ fontWeight: "bold", color: isNegative ? "#ff4d4f" : isLow ? "#fa8c16" : "#52c41a" }}>
             Project Balance
           </span>
-          <span style={{ 
-            fontWeight: "bold", 
+          <span style={{
+            fontWeight: "bold",
             fontSize: "16px",
             color: isNegative ? "#ff4d4f" : isLow ? "#fa8c16" : "#52c41a"
           }}>
@@ -1325,7 +1348,7 @@ const forceRefreshAll = useCallback(async () => {
           )}
           {isLow && !isNegative && (
             <div style={{ color: "#fa8c16", fontWeight: "bold", marginTop: "5px" }}>
-              ⚠️ Low balance remaining ({((balance/estimated)*100).toFixed(1)}%)
+              ⚠️ Low balance remaining ({((balance / estimated) * 100).toFixed(1)}%)
             </div>
           )}
         </div>
@@ -1557,8 +1580,17 @@ const forceRefreshAll = useCallback(async () => {
                       <select
                         value={status}
                         onChange={(e) => setStatus(e.target.value)}
-                        disabled={isSystemHoliday}
+                        disabled={
+                          isSystemHoliday ||
+                          (HALF_DAY_STATUSES.includes(status) &&
+                            attendance.some(
+                              (a) =>
+                                a.date === date &&
+                                a.managerDecision?.status === "APPROVED"
+                            ))
+                        }
                       >
+
                         {STATUS_OPTIONS.map((s) => (
                           <option key={s} value={s}>
                             {s}
@@ -2103,7 +2135,8 @@ const forceRefreshAll = useCallback(async () => {
                           return (
                             <tr key={a._id}>
                               <td>{a.date}</td>
-                              <td>{a.status}</td>
+                              <td>{normalizeAttendanceStatus(a)}</td>
+
                               <td>{a.workInTime}</td>
                               <td>{a.workOutTime}</td>
                               <td>{a.workedHours.toFixed(1)}</td>
@@ -2157,7 +2190,8 @@ const forceRefreshAll = useCallback(async () => {
                         {timesheetRows.map((r) => (
                           <tr key={r._id}>
                             <td>{r.date}</td>
-                            <td>{r.status}</td>
+                            <td>{normalizeAttendanceStatus(r)}</td>
+
                             <td>{r.workInTime}</td>
                             <td>{r.workOutTime}</td>
                             <td>{r.workedHours.toFixed(1)}</td>
@@ -2221,8 +2255,8 @@ const forceRefreshAll = useCallback(async () => {
                               <td>{project.totalEstimatedHours || 0} hrs</td>
                               <td>
                                 <span style={{
-                                  color: project.balanceHours < 0 ? '#ff4d4f' : 
-                                         project.balanceHours < (project.totalEstimatedHours * 0.1) ? '#fa8c16' : '#52c41a',
+                                  color: project.balanceHours < 0 ? '#ff4d4f' :
+                                    project.balanceHours < (project.totalEstimatedHours * 0.1) ? '#fa8c16' : '#52c41a',
                                   fontWeight: 'bold'
                                 }}>
                                   {project.balanceHours || 0} hrs
@@ -2262,16 +2296,16 @@ const forceRefreshAll = useCallback(async () => {
                       <h2>Project: {selectedProject.name} {selectedProject.code && `(${selectedProject.code})`}</h2>
                       <ProjectStatusBadge status={selectedProject.status} />
                     </div>
-                    
-                    <BalanceDisplay 
+
+                    <BalanceDisplay
                       balance={selectedProject.balanceHours || 0}
                       estimated={selectedProject.totalEstimatedHours || 0}
                       consumed={selectedProject.consumedHours || 0}
                     />
 
-                    <div style={{ 
-                      display: 'grid', 
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
                       gap: '15px',
                       marginBottom: '20px'
                     }}>
@@ -2355,7 +2389,7 @@ const forceRefreshAll = useCallback(async () => {
                       }}>
                         ⚠️ <strong>Project Not Approved</strong>
                         <p style={{ margin: '5px 0 0 0', fontSize: '13px' }}>
-                          This project is in <strong>{selectedProject.status}</strong> status. 
+                          This project is in <strong>{selectedProject.status}</strong> status.
                           Only APPROVED projects allow task creation. Please contact your manager.
                         </p>
                       </div>
@@ -2399,7 +2433,7 @@ const forceRefreshAll = useCallback(async () => {
                       {taskError}
                     </div>
                   )}
-                  
+
                   {/* PROJECT SELECTION WARNING */}
                   {projects.filter(p => p.status === "APPROVED").length === 0 && (
                     <div style={{
@@ -2412,7 +2446,7 @@ const forceRefreshAll = useCallback(async () => {
                     }}>
                       ⚠️ <strong>No Approved Projects Available</strong>
                       <p style={{ margin: '5px 0 0 0', fontSize: '13px' }}>
-                        You need at least one APPROVED project to create tasks. 
+                        You need at least one APPROVED project to create tasks.
                         Please contact your manager to approve your assigned projects.
                       </p>
                     </div>
@@ -2456,7 +2490,7 @@ const forceRefreshAll = useCallback(async () => {
                       (() => {
                         const selectedProj = projects.find(p => p._id === taskForm.projectId);
                         const myRole = selectedProj ? getMyRoleFromProject(selectedProj, user._id) : null;
-                        
+
                         if (selectedProj && !myRole) {
                           return (
                             <div className="full-row" style={{
@@ -2469,7 +2503,7 @@ const forceRefreshAll = useCallback(async () => {
                             }}>
                               ⚠️ <strong>No Role Assigned</strong>
                               <p style={{ margin: '5px 0 0 0', fontSize: '13px' }}>
-                                You are not assigned any role in project "{selectedProj.name}". 
+                                You are not assigned any role in project "{selectedProj.name}".
                                 Please contact your manager to get assigned a role before creating tasks.
                               </p>
                             </div>
@@ -2737,8 +2771,8 @@ const forceRefreshAll = useCallback(async () => {
                     </label>
 
                     <div className="full-row">
-                      <button 
-                        type="submit" 
+                      <button
+                        type="submit"
                         className="primary-btn"
                         disabled={projects.filter(p => p.status === "APPROVED").length === 0}
                       >
@@ -2785,36 +2819,37 @@ const forceRefreshAll = useCallback(async () => {
                         onChange={(e) => {
                           const term = e.target.value;
                           setSearchTerm(term);
-                          
+
 
                           const safeTasks = Array.isArray(tasks) ? tasks : [];
 
-if (term.trim() === "") {
+                          if (term.trim() === "") {
 
-  setFilteredTasks(safeTasks);
-} else {
-  const searchLower = searchTerm.toLowerCase();
+                            setFilteredTasks(safeTasks);
+                          } else {
+                            const searchLower = term.toLowerCase();
 
-  const filtered = safeTasks.filter((task) => {
-    const requirement = (task?.recentRequirement || task?.title || "").toLowerCase();
-    const project = (task?.projectId?.name || "").toLowerCase();
-    const status = (task?.status || "").toLowerCase();
-    const createdBy = (task?.createdByUserId?.fullName || "").toLowerCase();
-    const role = (task?.role || "").toLowerCase();
-    const priority = (task?.clientPriority || "").toLowerCase();
 
-    return (
-      requirement.includes(searchLower) ||
-      project.includes(searchLower) ||
-      status.includes(searchLower) ||
-      createdBy.includes(searchLower) ||
-      role.includes(searchLower) ||
-      priority.includes(searchLower)
-    );
-  });
+                            const filtered = safeTasks.filter((task) => {
+                              const requirement = (task?.recentRequirement || task?.title || "").toLowerCase();
+                              const project = (task?.projectId?.name || "").toLowerCase();
+                              const status = (task?.status || "").toLowerCase();
+                              const createdBy = (task?.createdByUserId?.fullName || "").toLowerCase();
+                              const role = (task?.role || "").toLowerCase();
+                              const priority = (task?.clientPriority || "").toLowerCase();
 
-  setFilteredTasks(filtered);
-}
+                              return (
+                                requirement.includes(searchLower) ||
+                                project.includes(searchLower) ||
+                                status.includes(searchLower) ||
+                                createdBy.includes(searchLower) ||
+                                role.includes(searchLower) ||
+                                priority.includes(searchLower)
+                              );
+                            });
+
+                            setFilteredTasks(filtered);
+                          }
 
                         }}
                       />
@@ -3212,8 +3247,8 @@ if (term.trim() === "") {
                               <td>{project.totalEstimatedHours || 0} hrs</td>
                               <td>
                                 <span style={{
-                                  color: project.balanceHours < 0 ? '#ff4d4f' : 
-                                         project.balanceHours < (project.totalEstimatedHours * 0.1) ? '#fa8c16' : '#52c41a',
+                                  color: project.balanceHours < 0 ? '#ff4d4f' :
+                                    project.balanceHours < (project.totalEstimatedHours * 0.1) ? '#fa8c16' : '#52c41a',
                                   fontWeight: 'bold'
                                 }}>
                                   {project.balanceHours || 0} hrs
@@ -3221,7 +3256,7 @@ if (term.trim() === "") {
                               </td>
                               <td>{getMyRoleFromProject(project, user._id) || "Not assigned"}
 
-</td>
+                              </td>
                             </tr>
                           ))
                         ) : (

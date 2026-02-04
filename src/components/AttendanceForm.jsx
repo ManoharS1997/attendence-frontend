@@ -94,7 +94,7 @@ export default function AttendanceForm({ onSaved }) {
     setNotificationMessage(message);
     setNotificationType(type);
     setShowNotification(true);
-    
+
     setTimeout(() => {
       setShowNotification(false);
     }, type === "error" ? 6000 : 4000);
@@ -136,7 +136,7 @@ export default function AttendanceForm({ onSaved }) {
     // Split and validate date components
     const [day, month, year] = date.split("-").map(Number);
     const dateObj = new Date(year, month - 1, day);
-    
+
     if (
       dateObj.getDate() !== day ||
       dateObj.getMonth() + 1 !== month ||
@@ -187,9 +187,15 @@ export default function AttendanceForm({ onSaved }) {
       setSaving(true);
 
       // Get lunch times from helper function
-      const { lunchInTime, lunchOutTime } = getLunchTimes();
+      const { lunchInTime, lunchOutTime } =
+        status === "PRESENT FULL DAY"
+          ? getLunchTimes()
+          : { lunchInTime: null, lunchOutTime: null };
+
 
       const payload = {
+        requestType: "AUTO", // helps backend understand intent (CREATE / UPDATE)
+
         date,
         status,
         workInTime: status.includes("PRESENT") ? workInTime : null,
@@ -201,23 +207,27 @@ export default function AttendanceForm({ onSaved }) {
 
       // Add extra work details for COMPOFF
       if (status === "COMPOFF") {
-        payload.extraWork = { ...extraWork };
+        payload.extraWork = {
+          workedDate: extraWork.workedDate,
+          workedMinutes: Number(extraWork.hours) * 60,
+          approved: false
+        };
         payload.isLeaveRequest = true;
       }
 
-      // Check if approval is needed
-      const needsApproval = APPROVAL_STATUSES.includes(status);
+
 
       // Submit attendance
       await api.post("/attendance", payload);
 
       // Show success message
       showMessage(
-        needsApproval
-          ? "Attendance saved! Request sent to Manager for approval."
-          : "Attendance saved successfully!",
+        status === "PRESENT FULL DAY" && date === todayString
+          ? "Attendance saved successfully!"
+          : "Attendance saved! Request sent to Manager for approval.",
         "success"
       );
+
 
       // Reset form and notify parent
       resetForm();
@@ -239,7 +249,7 @@ export default function AttendanceForm({ onSaved }) {
   const generateQuickDates = () => {
     const dates = [];
     const today = new Date();
-    
+
     for (let i = 0; i < 3; i++) {
       const nextDate = new Date(today);
       nextDate.setDate(today.getDate() + i);
@@ -248,7 +258,7 @@ export default function AttendanceForm({ onSaved }) {
         label: i === 0 ? "Today" : i === 1 ? "Tomorrow" : `Day +${i}`
       });
     }
-    
+
     return dates;
   };
 
@@ -260,7 +270,7 @@ export default function AttendanceForm({ onSaved }) {
       {showNotification && (
         <div className={`notification-popup ${notificationType}`}>
           <span>{notificationMessage}</span>
-          <button 
+          <button
             onClick={() => setShowNotification(false)}
             aria-label="Close notification"
           >
@@ -273,7 +283,7 @@ export default function AttendanceForm({ onSaved }) {
       <div className="form-header">
         <h2>Mark Attendance</h2>
         <p className="form-description">
-          Record your daily attendance. Sundays, 2nd Saturdays, and Public Holidays 
+          Record your daily attendance. Sundays, 2nd Saturdays, and Public Holidays
           are automatically marked as non-working days.
         </p>
       </div>
@@ -331,7 +341,8 @@ export default function AttendanceForm({ onSaved }) {
               value={status}
               onChange={(e) => setStatus(e.target.value)}
               required
-              disabled={saving}
+              disabled={saving || status.includes("Half Day")}
+
             >
               {STATUSES.map((s) => (
                 <option key={s} value={s}>
@@ -341,6 +352,8 @@ export default function AttendanceForm({ onSaved }) {
             </select>
             <div className="field-hint">
               {APPROVAL_STATUSES.includes(status) && (
+
+
                 <span className="approval-notice">Requires manager approval</span>
               )}
             </div>
