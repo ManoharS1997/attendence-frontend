@@ -5,7 +5,7 @@ import ChangePasswordCard from "../components/ChangePasswordCard";
 import logo from "../assets/Company Logo.png";
 import { buildHolidayCalendar } from "../utils/holidays";
 import "../../styles/employeeDashboard.css";
-import { FaEdit, FaCalendarAlt } from "react-icons/fa";
+import { FaEdit, FaCalendarAlt, FaBell, FaCheck, FaCheckCircle, FaTimes, FaExclamationCircle, FaInfoCircle, FaTrash, FaEye, FaEnvelope } from "react-icons/fa";
 
 // ADD HELPER FUNCTION FOR RULE 7 FIX
 const getMyRoleFromProject = (project, userId) => {
@@ -52,9 +52,6 @@ const normalizeAttendanceStatus = (a) => {
 
   return a.status;
 };
-
-
-
 
 const APPROVAL_STATUSES = [
   "PRESENT HALF DAY",
@@ -285,6 +282,164 @@ const getTeamBirthdayWish = () => {
   return wishes[wishIndex];
 };
 
+// Notification Component
+const NotificationCenter = ({ notifications, onClose, onMarkAsRead, onMarkAllAsRead, onDelete, onDeleteAll, onViewDetails }) => {
+  const unreadCount = notifications.filter(n => !n.read).length;
+  
+  const getNotificationIcon = (type) => {
+    switch(type) {
+      case 'success': return <FaCheckCircle style={{ color: '#52c41a' }} />;
+      case 'warning': return <FaExclamationCircle style={{ color: '#faad14' }} />;
+      case 'error': return <FaTimes style={{ color: '#ff4d4f' }} />;
+      case 'info': return <FaInfoCircle style={{ color: '#1890ff' }} />;
+      default: return <FaBell style={{ color: '#8c8c8c' }} />;
+    }
+  };
+
+  const getNotificationColor = (type) => {
+    switch(type) {
+      case 'success': return '#f6ffed';
+      case 'warning': return '#fff7e6';
+      case 'error': return '#fff2f0';
+      case 'info': return '#e6f7ff';
+      default: return '#fafafa';
+    }
+  };
+
+  const formatTimeAgo = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  return (
+    <div className="notification-center">
+      <div className="notification-header">
+        <div className="notification-title">
+          <FaBell style={{ marginRight: '8px' }} />
+          Notifications
+          {unreadCount > 0 && (
+            <span className="notification-badge">{unreadCount}</span>
+          )}
+        </div>
+        <div className="notification-actions">
+          {unreadCount > 0 && (
+            <button 
+              className="notification-action-btn"
+              onClick={onMarkAllAsRead}
+              title="Mark all as read"
+            >
+              <FaCheck /> Mark all read
+            </button>
+          )}
+          {notifications.length > 0 && (
+            <button 
+              className="notification-action-btn delete"
+              onClick={onDeleteAll}
+              title="Clear all notifications"
+            >
+              <FaTrash /> Clear all
+            </button>
+          )}
+          <button 
+            className="notification-close-btn"
+            onClick={onClose}
+            title="Close notifications"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
+      <div className="notification-list">
+        {notifications.length === 0 ? (
+          <div className="no-notifications">
+            <FaBell size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
+            <p>No notifications</p>
+            <p style={{ fontSize: '12px', opacity: 0.7 }}>You're all caught up!</p>
+          </div>
+        ) : (
+          notifications.map((notification) => (
+            <div 
+              key={notification._id} 
+              className={`notification-item ${!notification.read ? 'unread' : ''}`}
+              style={{ backgroundColor: getNotificationColor(notification.type) }}
+            >
+              <div className="notification-icon">
+                {getNotificationIcon(notification.type)}
+              </div>
+              <div className="notification-content">
+                <div className="notification-message">
+                  {notification.message}
+                </div>
+                <div className="notification-meta">
+                  <span className="notification-time">
+                    {formatTimeAgo(notification.createdAt || notification.timestamp)}
+                  </span>
+                  {notification.category && (
+                    <span className="notification-category">
+                      {notification.category}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="notification-item-actions">
+                {!notification.read && (
+                  <button 
+                    className="notification-item-btn"
+                    onClick={() => onMarkAsRead(notification._id)}
+                    title="Mark as read"
+                  >
+                    <FaCheck size={12} />
+                  </button>
+                )}
+                <button 
+                  className="notification-item-btn view"
+                  onClick={() => onViewDetails(notification)}
+                  title="View details"
+                >
+                  <FaEye size={12} />
+                </button>
+                <button 
+                  className="notification-item-btn delete"
+                  onClick={() => onDelete(notification._id)}
+                  title="Delete notification"
+                >
+                  <FaTrash size={12} />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {notifications.length > 0 && (
+        <div className="notification-footer">
+          <button 
+            className="notification-view-all-btn"
+            onClick={() => {
+              // Open modal or navigate to all notifications page
+              alert('View all notifications feature would open detailed view');
+            }}
+          >
+            <FaEnvelope style={{ marginRight: '8px' }} />
+            View All Notifications
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function EmployeeDashboard() {
   const { user, logout } = useAuth();
 
@@ -327,6 +482,12 @@ export default function EmployeeDashboard() {
   const [showNextMonthPopup, setShowNextMonthPopup] = useState(false);
   const [showBirthdayBanner, setShowBirthdayBanner] = useState(false);
   const [birthdayManagerMessage, setBirthdayManagerMessage] = useState("");
+
+  // Notification State
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [loadingNotifications, setLoadingNotifications] = useState(true);
 
   const popupShownRef = useRef(false);
 
@@ -403,6 +564,150 @@ export default function EmployeeDashboard() {
   const [projectTasks, setProjectTasks] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
 
+  // Load notifications from backend
+  const loadNotifications = useCallback(async () => {
+    try {
+      setLoadingNotifications(true);
+      const res = await api.get("/notifications/my");
+      
+      if (res.data && Array.isArray(res.data)) {
+        // Filter notifications for the current employee only
+        const employeeNotifications = res.data.filter(notification => 
+          notification.userId === user._id || 
+          notification.userId === user.id ||
+          notification.recipientId === user._id ||
+          notification.recipientId === user.id ||
+          (notification.recipientType === 'employee' && (!notification.recipientId || notification.recipientId === user._id))
+        );
+        
+        setNotifications(employeeNotifications);
+        const unread = employeeNotifications.filter(n => !n.read).length;
+        setUnreadNotificationCount(unread);
+      } else {
+        setNotifications([]);
+        setUnreadNotificationCount(0);
+      }
+    } catch (error) {
+      console.error("Error loading notifications", error);
+      // If API fails, show empty notifications
+      setNotifications([]);
+      setUnreadNotificationCount(0);
+    } finally {
+      setLoadingNotifications(false);
+    }
+  }, [user._id, user.id]);
+
+  // Poll for new notifications every 30 seconds
+  useEffect(() => {
+    loadNotifications();
+    
+    const interval = setInterval(() => {
+      loadNotifications();
+    }, 30000); // Poll every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [loadNotifications]);
+
+  // Refresh notifications when user interacts with attendance
+  const refreshNotificationsAfterAction = async () => {
+    await loadNotifications();
+  };
+
+  const markNotificationAsRead = async (notificationId) => {
+    try {
+      await api.patch(`/notifications/${notificationId}/read`);
+      
+      // Update local state
+      setNotifications(prev => 
+        prev.map(n => 
+          n._id === notificationId 
+            ? { ...n, read: true } 
+            : n
+        )
+      );
+      setUnreadNotificationCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error("Error marking notification as read", error);
+      // Update locally even if API fails
+      setNotifications(prev => 
+        prev.map(n => 
+          n._id === notificationId 
+            ? { ...n, read: true } 
+            : n
+        )
+      );
+      setUnreadNotificationCount(prev => Math.max(0, prev - 1));
+    }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    try {
+      await api.patch("/notifications/mark-all-read");
+      
+      // Update local state
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setUnreadNotificationCount(0);
+    } catch (error) {
+      console.error("Error marking all notifications as read", error);
+      // Update locally even if API fails
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setUnreadNotificationCount(0);
+    }
+  };
+
+  const deleteNotification = async (notificationId) => {
+    try {
+      await api.delete(`/notifications/${notificationId}`);
+      
+      // Update local state
+      const notification = notifications.find(n => n._id === notificationId);
+      setNotifications(prev => prev.filter(n => n._id !== notificationId));
+      
+      if (notification && !notification.read) {
+        setUnreadNotificationCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (error) {
+      console.error("Error deleting notification", error);
+      // Update locally even if API fails
+      const notification = notifications.find(n => n._id === notificationId);
+      setNotifications(prev => prev.filter(n => n._id !== notificationId));
+      
+      if (notification && !notification.read) {
+        setUnreadNotificationCount(prev => Math.max(0, prev - 1));
+      }
+    }
+  };
+
+  const deleteAllNotifications = async () => {
+    try {
+      await api.delete("/notifications/clear-all");
+      
+      // Update local state
+      setNotifications([]);
+      setUnreadNotificationCount(0);
+    } catch (error) {
+      console.error("Error deleting all notifications", error);
+      // Update locally even if API fails
+      setNotifications([]);
+      setUnreadNotificationCount(0);
+    }
+  };
+
+  const handleViewNotificationDetails = (notification) => {
+    // Show notification details
+    const details = `
+Notification Details:
+────────────────────
+Type: ${notification.type || 'info'}
+Category: ${notification.category || 'General'}
+Message: ${notification.message}
+Date: ${new Date(notification.createdAt || notification.timestamp).toLocaleString()}
+Status: ${notification.read ? 'Read' : 'Unread'}
+${notification.link ? `Link: ${notification.link}` : ''}
+    `;
+    
+    alert(details);
+  };
 
   const loadDashboard = useCallback(async () => {
     const res = await api.get("/utils/dashboard");
@@ -478,7 +783,6 @@ export default function EmployeeDashboard() {
       setPayslips([]);
     }
   }, []);
-
 
   const forceRefreshAll = useCallback(async () => {
     try {
@@ -676,10 +980,26 @@ export default function EmployeeDashboard() {
       setTimeout(() => {
         alert(message);
       }, 100);
+      
+      // Also create a notification for this approval
+      const newNotification = {
+        _id: `attendance-${latest._id}`,
+        type: decision === "APPROVED" ? 'success' : 'error',
+        message: message,
+        category: 'Attendance',
+        read: false,
+        createdAt: new Date().toISOString(),
+        userId: user._id
+      };
+      
+      setNotifications(prev => [newNotification, ...prev]);
+      if (!latest.read) {
+        setUnreadNotificationCount(prev => prev + 1);
+      }
     }
 
     setLastAlertAttendanceId(latest._id);
-  }, [attendance, lastAlertAttendanceId, month, year]);
+  }, [attendance, lastAlertAttendanceId, month, year, user._id]);
 
   const holidays = buildHolidayCalendar(month, year);
   const calendarWeeks = buildMonthMatrix(month, year);
@@ -944,19 +1264,48 @@ export default function EmployeeDashboard() {
 
       }
 
-      await api.post("/attendance", payload);
+     
+      
       // 🔥 FORCE IMMEDIATE DASHBOARD REFRESH
       await forceRefreshAll();
 
-
-      await forceRefreshAll();
+      // Refresh notifications after attendance action
+      await refreshNotificationsAfterAction();
 
       if (APPROVAL_STATUSES.includes(status)) {
-        alert(
-          "Attendance / leave change sent to Manager for approval. It will reflect in your dashboard and project views after Manager approval."
-        );
+        const message = `Attendance / leave change for ${date} sent to Manager for approval. It will reflect in your dashboard and project views after Manager approval.`;
+        alert(message);
+        
+        // Add a notification for the user
+        const newNotification = {
+          _id: `attendance-${Date.now()}`,
+          type: 'info',
+          message: `Attendance request for ${date} submitted. Waiting for manager approval.`,
+          category: 'Attendance',
+          read: false,
+          createdAt: new Date().toISOString(),
+          userId: user._id
+        };
+        
+        setNotifications(prev => [newNotification, ...prev]);
+        setUnreadNotificationCount(prev => prev + 1);
       } else {
-        alert("Attendance saved successfully!");
+        const message = `Attendance for ${date} saved successfully!`;
+        alert(message);
+        
+        // Add a notification for the user
+        const newNotification = {
+          _id: `attendance-${Date.now()}`,
+          type: 'success',
+          message: `Attendance for ${date} marked as ${status}.`,
+          category: 'Attendance',
+          read: false,
+          createdAt: new Date().toISOString(),
+          userId: user._id
+        };
+        
+        setNotifications(prev => [newNotification, ...prev]);
+        setUnreadNotificationCount(prev => prev + 1);
       }
 
       setDate(formatToday());
@@ -1101,15 +1450,48 @@ export default function EmployeeDashboard() {
 
       if (!editingTaskId) {
         await api.post("/tasks", payload);
-        alert("Task / requirement added successfully");
+        const message = "Task / requirement added successfully";
+        alert(message);
+        
+        // Add notification
+        const newNotification = {
+          _id: `task-${Date.now()}`,
+          type: 'success',
+          message: `Task created: "${taskForm.recentRequirement.substring(0, 50)}..."`,
+          category: 'Tasks',
+          read: false,
+          createdAt: new Date().toISOString(),
+          userId: user._id
+        };
+        
+        setNotifications(prev => [newNotification, ...prev]);
+        setUnreadNotificationCount(prev => prev + 1);
       } else {
         console.log("UPDATE PAYLOAD →", payload);
         await api.patch(`/tasks/${editingTaskId}`, payload);
-        alert("Task updated successfully");
+        const message = "Task updated successfully";
+        alert(message);
+        
+        // Add notification
+        const newNotification = {
+          _id: `task-${Date.now()}`,
+          type: 'info',
+          message: `Task updated: "${taskForm.recentRequirement.substring(0, 50)}..."`,
+          category: 'Tasks',
+          read: false,
+          createdAt: new Date().toISOString(),
+          userId: user._id
+        };
+        
+        setNotifications(prev => [newNotification, ...prev]);
+        setUnreadNotificationCount(prev => prev + 1);
       }
 
       resetTaskForm(true);
       await loadTasks();
+      
+      // Refresh notifications
+      await refreshNotificationsAfterAction();
 
     } catch (error) {
       console.error("Employee create/update task error", error?.response || error);
@@ -1207,6 +1589,20 @@ export default function EmployeeDashboard() {
       document.body.removeChild(link);
 
       window.URL.revokeObjectURL(url);
+      
+      // Add notification for payslip download
+      const newNotification = {
+        _id: `payslip-${Date.now()}`,
+        type: 'info',
+        message: `Payslip for ${monthName} ${year} downloaded.`,
+        category: 'Payslip',
+        read: false,
+        createdAt: new Date().toISOString(),
+        userId: user._id
+      };
+      
+      setNotifications(prev => [newNotification, ...prev]);
+      setUnreadNotificationCount(prev => prev + 1);
     } catch (error) {
       console.error("Error downloading payslip:", error);
       alert("Failed to download payslip.");
@@ -1536,10 +1932,139 @@ export default function EmployeeDashboard() {
             <div>
               <strong>{user.fullName}</strong> (Employee) — {user.email}
             </div>
+            
+            {/* Notification Button */}
+            <div style={{ position: "relative", marginLeft: "16px" }}>
+              <button
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="notification-btn"
+                style={{
+                  position: "relative",
+                  background: "none",
+                  border: "none",
+                  fontSize: "20px",
+                  cursor: "pointer",
+                  color: "#1890ff",
+                  padding: "8px",
+                  borderRadius: "50%",
+                  transition: "all 0.3s ease",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "40px",
+                  height: "40px",
+                  backgroundColor: unreadNotificationCount > 0 ? "#e6f7ff" : "transparent"
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f0f5ff"}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = unreadNotificationCount > 0 ? "#e6f7ff" : "transparent"}
+              >
+                <FaBell />
+                {unreadNotificationCount > 0 && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: "2px",
+                      right: "2px",
+                      backgroundColor: "#ff4d4f",
+                      color: "white",
+                      borderRadius: "50%",
+                      width: "18px",
+                      height: "18px",
+                      fontSize: "10px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: "bold",
+                      animation: "pulse 2s infinite"
+                    }}
+                  >
+                    {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Notification Center */}
+              {showNotifications && (
+                <>
+                  <div
+                    style={{
+                      position: "fixed",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      zIndex: 9998
+                    }}
+                    onClick={() => setShowNotifications(false)}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "50px",
+                      right: 0,
+                      zIndex: 9999,
+                      minWidth: "380px",
+                      maxWidth: "400px",
+                      backgroundColor: "white",
+                      borderRadius: "12px",
+                      boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
+                      border: "1px solid #e8e8e8",
+                      overflow: "hidden",
+                      animation: "slideDown 0.3s ease-out"
+                    }}
+                  >
+                    {loadingNotifications ? (
+                      <div className="notification-center">
+                        <div className="notification-header">
+                          <div className="notification-title">
+                            <FaBell style={{ marginRight: '8px' }} />
+                            Loading Notifications...
+                          </div>
+                          <button 
+                            className="notification-close-btn"
+                            onClick={() => setShowNotifications(false)}
+                            title="Close notifications"
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <div className="notification-list">
+                          <div className="no-notifications">
+                            <div style={{ marginBottom: '16px' }}>
+                              <div className="loading-spinner" style={{
+                                width: '40px',
+                                height: '40px',
+                                border: '3px solid #f3f3f3',
+                                borderTop: '3px solid #1890ff',
+                                borderRadius: '50%',
+                                animation: 'spin 1s linear infinite',
+                                margin: '0 auto'
+                              }}></div>
+                            </div>
+                            <p>Loading your notifications...</p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <NotificationCenter
+                        notifications={notifications}
+                        onClose={() => setShowNotifications(false)}
+                        onMarkAsRead={markNotificationAsRead}
+                        onMarkAllAsRead={markAllNotificationsAsRead}
+                        onDelete={deleteNotification}
+                        onDeleteAll={deleteAllNotifications}
+                        onViewDetails={handleViewNotificationDetails}
+                      />
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
             <button
               onClick={logout}
               className="outline-btn"
-              style={{ marginLeft: 24 }}
+              style={{ marginLeft: "8px" }}
             >
               Logout
             </button>
@@ -3280,6 +3805,248 @@ export default function EmployeeDashboard() {
           )}
         </div>
       </div>
+      
+      {/* Add CSS for notifications */}
+      <style>
+        {`
+          @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+          }
+          
+          @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          
+          .notification-center {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          }
+          
+          .notification-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+            color: white;
+            border-bottom: 1px solid #e8e8e8;
+          }
+          
+          .notification-title {
+            display: flex;
+            align-items: center;
+            font-size: 16px;
+            font-weight: 600;
+          }
+          
+          .notification-badge {
+            background: #ff4d4f;
+            color: white;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 8px;
+          }
+          
+          .notification-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+          
+          .notification-action-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s;
+          }
+          
+          .notification-action-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+          }
+          
+          .notification-action-btn.delete {
+            background: rgba(255, 77, 79, 0.3);
+            border-color: rgba(255, 77, 79, 0.5);
+          }
+          
+          .notification-action-btn.delete:hover {
+            background: rgba(255, 77, 79, 0.5);
+          }
+          
+          .notification-close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background 0.2s;
+          }
+          
+          .notification-close-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+          }
+          
+          .notification-list {
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 8px;
+          }
+          
+          .notification-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            border: 1px solid #e8e8e8;
+            transition: all 0.2s;
+            animation: slideDown 0.3s ease-out;
+          }
+          
+          .notification-item.unread {
+            border-left: 3px solid #1890ff;
+          }
+          
+          .notification-item:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transform: translateY(-1px);
+          }
+          
+          .notification-icon {
+            margin-right: 12px;
+            margin-top: 2px;
+            font-size: 16px;
+          }
+          
+          .notification-content {
+            flex: 1;
+            min-width: 0;
+          }
+          
+          .notification-message {
+            font-size: 13px;
+            line-height: 1.4;
+            color: #262626;
+            margin-bottom: 4px;
+          }
+          
+          .notification-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 11px;
+            color: #8c8c8c;
+          }
+          
+          .notification-category {
+            background: #f5f5f5;
+            padding: 1px 6px;
+            border-radius: 10px;
+            font-weight: 500;
+          }
+          
+          .notification-item-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-left: 8px;
+          }
+          
+          .notification-item-btn {
+            background: none;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #8c8c8c;
+          }
+          
+          .notification-item-btn:hover {
+            background: #f5f5f5;
+          }
+          
+          .notification-item-btn.view {
+            color: #1890ff;
+            border-color: #91d5ff;
+          }
+          
+          .notification-item-btn.delete {
+            color: #ff4d4f;
+            border-color: #ffccc7;
+          }
+          
+          .notification-footer {
+            padding: 12px 20px;
+            border-top: 1px solid #e8e8e8;
+            text-align: center;
+          }
+          
+          .notification-view-all-btn {
+            background: #1890ff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+          }
+          
+          .notification-view-all-btn:hover {
+            background: #096dd9;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
+          }
+          
+          .no-notifications {
+            text-align: center;
+            padding: 40px 20px;
+            color: #8c8c8c;
+          }
+          
+          .no-notifications p {
+            margin: 0;
+          }
+          
+          .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #1890ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+          }
+        `}
+      </style>
     </div>
   );
 }
