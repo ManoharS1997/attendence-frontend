@@ -511,14 +511,16 @@ export default function EmployeeDashboard() {
   }, [getTaglineOfTheDay]);
 
   const [activeTab, setActiveTab] = useState("timesheet");
+
+  
   const [{ month, year }, setMonthYear] = useState(getCurrentMonth());
 
   const [date, setDate] = useState(formatToday());
   const [status, setStatus] = useState("PRESENT FULL DAY");
   const [workInTime, setWorkInTime] = useState("10:00");
   const [workOutTime, setWorkOutTime] = useState("18:00");
-  const [lunchInTime, setLunchInTime] = useState("");
-  const [lunchOutTime, setLunchOutTime] = useState("");
+  const [lunchInTime, setLunchInTime] = useState("13:00");
+const [lunchOutTime, setLunchOutTime] = useState("14:00");
   const [note, setNote] = useState("");
 
   const [extraWork, setExtraWork] = useState({
@@ -1142,17 +1144,17 @@ ${notification.link ? `Link: ${notification.link}` : ''}
   const isSystemHoliday = !!selectedHolidayInfo?.isSystemHoliday;
 
   useEffect(() => {
-    if (!systemHolidayStatus) return;
-    const id = setTimeout(() => {
-      setStatus(systemHolidayStatus);
-      setWorkInTime("");
-      setWorkOutTime("");
-      setLunchInTime("");
-      setLunchOutTime("");
-      setNote("");
-    }, 0);
-    return () => clearTimeout(id);
-  }, [systemHolidayStatus, date]);
+  if (!systemHolidayStatus) return;
+  const id = setTimeout(() => {
+    setStatus(systemHolidayStatus);
+    setWorkInTime("");
+    setWorkOutTime("");
+    setLunchInTime("13:00");   // ✅ fixed
+    setLunchOutTime("14:00");  // ✅ fixed
+    setNote("");
+  }, 0);
+  return () => clearTimeout(id);
+}, [systemHolidayStatus, date]);
 
   const holidayBanner =
     selectedHolidayInfo && selectedHolidayInfo.isSystemHoliday ? (
