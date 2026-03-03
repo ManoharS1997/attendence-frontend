@@ -450,20 +450,9 @@ export default function ManagerDashboard() {
     return false;
   };
 
-  // ------- ALERT CENTER (bell icon) -------
-  const [alerts, setAlerts] = useState([]);
+  // ------- NOTIFICATION CENTER (bell icon) -------
+  const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
-
-
-  const addAlert = (message) => {
-    if (!message) return;
-    setAlerts((prev) => [message, ...prev].slice(0, 30));
-    try {
-      window.alert(message);
-    } catch (err) {
-      console.error("Manager alert popup error:", err);
-    }
-  };
 
   // Tabs: dashboard | projects | timesheet | logs | birthdays
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -681,6 +670,22 @@ export default function ManagerDashboard() {
     [month, year, CURRENT_YEAR]
   );
 
+  // -------- NOTIFICATION LOADER ----------
+  const loadNotifications = useCallback(async () => {
+    try {
+      // 1️⃣ Generate daily summary (creates if not exists)
+      await api.post("/notifications/manager/daily-summary");
+
+      // 2️⃣ Fetch notifications
+      const res = await api.get("/notifications/my", {
+        params: { unreadOnly: false }
+      });
+
+      setNotifications(res.data || []);
+    } catch (err) {
+      console.error("Notification load error", err);
+    }
+  }, []);
 
   // -------- BIRTHDAY FUNCTIONS ----------
   const loadBirthdays = useCallback(async () => {
@@ -752,7 +757,6 @@ export default function ManagerDashboard() {
       setBirthdays([]);
       setEmployeeBirthdayMap({});
       setUpcomingBirthdays([]);
-      addAlert("Error loading birthdays. Backend endpoint mismatch.");
     } finally {
       setBirthdaysLoading(false);
     }
@@ -764,20 +768,20 @@ export default function ManagerDashboard() {
 
     try {
       if (!birthdayForm.employeeId || !birthdayForm.month || !birthdayForm.day) {
-        addAlert("Please select employee, month and day");
+        alert("Please select employee, month and day");
         return;
       }
 
       // Get the selected employee info for better feedback
       const selectedEmp = employees.find(emp => emp._id === birthdayForm.employeeId);
       if (!selectedEmp) {
-        addAlert("Selected employee not found");
+        alert("Selected employee not found");
         return;
       }
 
       // Check if employee already has a birthday record
       if (employeeBirthdayMap[birthdayForm.employeeId]) {
-        addAlert("This employee already has a birthday record. Please update the existing record instead.");
+        alert("This employee already has a birthday record. Please update the existing record instead.");
         return;
       }
 
@@ -810,7 +814,7 @@ export default function ManagerDashboard() {
         });
       }
 
-      addAlert(`🎉 Birthday for ${selectedEmp.fullName} saved successfully!`);
+      alert(`🎉 Birthday for ${selectedEmp.fullName} saved successfully!`);
 
       // Reset form
       setBirthdayForm({
@@ -829,7 +833,7 @@ export default function ManagerDashboard() {
 
     } catch (err) {
       console.error("Birthday save error:", err?.response?.data || err.message || err);
-      addAlert(err.response?.data?.message || "Error saving birthday. Please check console for details.");
+      alert(err.response?.data?.message || "Error saving birthday. Please check console for details.");
     } finally {
       setCreatingBirthday(false);
     }
@@ -840,14 +844,14 @@ export default function ManagerDashboard() {
 
     try {
       await api.delete(`/birthday/${id}`);
-      addAlert("Birthday record deleted");
+      alert("Birthday record deleted");
 
       // Reload birthdays immediately
       await loadBirthdays();
       await loadEmployees();
     } catch (err) {
       console.error("Error deleting birthday", err);
-      addAlert("Error deleting birthday");
+      alert("Error deleting birthday");
     }
   };
 
@@ -857,13 +861,13 @@ export default function ManagerDashboard() {
         wishedBy: user.fullName,
         wishedByEmail: user.email
       });
-      addAlert("Birthday wish sent to employee!");
+      alert("Birthday wish sent to employee!");
 
       // Reload birthdays to update wish status
       await loadBirthdays();
     } catch (err) {
       console.error("Error sending birthday wish", err);
-      addAlert("Error sending birthday wish");
+      alert("Error sending birthday wish");
     }
   };
 
@@ -949,9 +953,10 @@ export default function ManagerDashboard() {
       loadEmployees();
       loadProjects();
       loadBirthdays();
+      loadNotifications();   // ✅ ADD THIS
     }, 0);
     return () => clearTimeout(id);
-  }, [loadEmployees, loadProjects, loadBirthdays]);
+  }, [loadEmployees, loadProjects, loadBirthdays, loadNotifications]);
 
   useEffect(() => {
     const id = setTimeout(() => {
@@ -1037,6 +1042,7 @@ export default function ManagerDashboard() {
       loadPendingRequests();
       loadBirthdays();
       loadLogs();
+      loadNotifications(); // ✅ ADD THIS
     });
 
     return () => {
@@ -1051,6 +1057,7 @@ export default function ManagerDashboard() {
     loadPendingRequests,
     loadBirthdays,
     loadLogs,
+    loadNotifications, // ✅ ADD THIS
     selectedProjectId // Add this since loadProjectTasks uses it
   ]);
 
@@ -1088,7 +1095,7 @@ export default function ManagerDashboard() {
 
       const generatedEmployeeId = response.data.employeeId;
 
-      addAlert(
+      alert(
         `✅ Employee created successfully!
         
         Employee Details:
@@ -1115,7 +1122,7 @@ export default function ManagerDashboard() {
 
     } catch (err) {
       console.error("Create employee error:", err);
-      addAlert(err.response?.data?.message || "Error creating employee");
+      alert(err.response?.data?.message || "Error creating employee");
     }
   };
 
@@ -1143,7 +1150,7 @@ export default function ManagerDashboard() {
         carryForward2025
       });
 
-      addAlert(
+      alert(
         `Leave configuration updated for ${emp.fullName} (${emp.employeeId}).`
       );
 
@@ -1155,7 +1162,7 @@ export default function ManagerDashboard() {
 
     } catch (err) {
       console.error("Edit leave config error:", err);
-      addAlert(err.response?.data?.message || "Error updating leave config");
+      alert(err.response?.data?.message || "Error updating leave config");
     }
   };
 
@@ -1165,14 +1172,14 @@ export default function ManagerDashboard() {
       loadAttendance();
       loadSummaries();
       loadPendingRequests();
-      addAlert(
+      alert(
         decision === "APPROVED"
           ? "Leave / attendance request approved."
           : "Leave / attendance request rejected."
       );
     } catch (err) {
       console.error("Error deciding leave request", err?.response || err);
-      addAlert(
+      alert(
         err?.response?.data?.message ||
         "Error applying decision on leave / attendance request"
       );
@@ -1189,7 +1196,7 @@ export default function ManagerDashboard() {
         role: "employee",
         newPassword: resetNewPassword
       });
-      addAlert(
+      alert(
         `Password reset for ${resetEmail}. Share new password with the employee.`
       );
       setResetEmail("");
@@ -1200,7 +1207,7 @@ export default function ManagerDashboard() {
         err.response?.data?.message ||
         err.message ||
         "Error resetting password";
-      addAlert(msg);
+      alert(msg);
     }
   };
 
@@ -1281,7 +1288,7 @@ export default function ManagerDashboard() {
     try {
       // Validate dates
       if (!projectForm.startDate || !projectForm.endDate) {
-        addAlert("Start date and end date are required");
+        alert("Start date and end date are required");
         return;
       }
 
@@ -1296,7 +1303,7 @@ export default function ManagerDashboard() {
       const endDate = parseDate(projectForm.endDate);
 
       if (endDate < startDate) {
-        addAlert("End date cannot be before start date");
+        alert("End date cannot be before start date");
         return;
       }
 
@@ -1311,7 +1318,7 @@ export default function ManagerDashboard() {
       };
 
       const res = await api.post("/projects", payload);
-      addAlert("✅ Project created successfully with date range and auto-calculated hours");
+      alert("✅ Project created successfully with date range and auto-calculated hours");
       setSelectedProjectId(res.data._id);
       setTaskForm((prev) => ({
         ...prev,
@@ -1331,14 +1338,14 @@ export default function ManagerDashboard() {
       });
     } catch (err) {
       console.error("Create project error:", err);
-      addAlert(err.response?.data?.message || "Error creating project");
+      alert(err.response?.data?.message || "Error creating project");
     }
   };
 
   const handleAssignProject = async (e) => {
     e.preventDefault();
     if (!selectedProjectId || !assignUserId) {
-      addAlert("Select project and employee");
+      alert("Select project and employee");
       return;
     }
     try {
@@ -1346,12 +1353,12 @@ export default function ManagerDashboard() {
         userId: assignUserId,
         role: assignRole
       });
-      addAlert("Employee assigned to project");
+      alert("Employee assigned to project");
       setAssignUserId("");
       setAssignRole("Developer");
       loadProjects();
     } catch (err) {
-      addAlert(err.response?.data?.message || "Error assigning employee");
+      alert(err.response?.data?.message || "Error assigning employee");
     }
   };
 
@@ -1367,20 +1374,20 @@ export default function ManagerDashboard() {
   e.preventDefault();
   
   if (!selectedProjectId) {
-    addAlert("Select a project first");
+    alert("Select a project first");
     return;
   }
 
   // Get the selected project to check if it exists
   const selectedProjectObj = projects.find(p => p._id === selectedProjectId);
   if (!selectedProjectObj) {
-    addAlert("Selected project not found");
+    alert("Selected project not found");
     return;
   }
 
   // Validate required fields
   if (!taskForm.recentRequirement?.trim()) {
-    addAlert("Requirement field is required");
+    alert("Requirement field is required");
     return;
   }
 
@@ -1436,11 +1443,11 @@ export default function ManagerDashboard() {
     if (editingTaskId) {
       // Update existing task
       await api.patch(`/tasks/${editingTaskId}`, payload);
-      addAlert("Task updated successfully");
+      alert("Task updated successfully");
     } else {
       // Create new task
       await api.post("/tasks", payload);
-      addAlert("Task created successfully");
+      alert("Task created successfully");
     }
 
     // Reset form
@@ -1473,7 +1480,7 @@ export default function ManagerDashboard() {
     const errorMsg = err.response?.data?.message || 
                      err.response?.data?.error || 
                      "Error saving task";
-    addAlert(`Error: ${errorMsg}`);
+    alert(`Error: ${errorMsg}`);
   }
 };
 
@@ -1509,7 +1516,7 @@ export default function ManagerDashboard() {
       loadProjectTasks();
     } catch (err) {
       console.error("Error updating task", err);
-      addAlert(err.response?.data?.message || "Error updating task");
+      alert(err.response?.data?.message || "Error updating task");
     }
   };
 
@@ -1764,7 +1771,7 @@ export default function ManagerDashboard() {
                   <span role="img" aria-label="alerts">
                     🔔
                   </span>
-                  {alerts.length > 0 && (
+                  {notifications.filter(n => !n.read).length > 0 && (
                     <span
                       style={{
                         position: "absolute",
@@ -1781,7 +1788,7 @@ export default function ManagerDashboard() {
                         justifyContent: "center"
                       }}
                     >
-                      {alerts.length}
+                      {notifications.filter(n => !n.read).length}
                     </span>
                   )}
                 </button>
@@ -1816,32 +1823,10 @@ export default function ManagerDashboard() {
                       }}
                     >
                       <strong style={{ fontSize: 14, color: "#e6f7ff" }}>
-                        Notifications ({alerts.length})
+                        Notifications ({notifications.length})
                       </strong>
 
                       <div style={{ display: "flex", gap: 10 }}>
-                        {alerts.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (window.confirm("Clear all notifications?")) {
-                                setAlerts([]);
-                              }
-                            }}
-                            style={{
-                              background: "rgba(255,77,79,0.12)",
-                              border: "1px solid #ff4d4f",
-                              color: "#ff7875",
-                              padding: "4px 12px",
-                              borderRadius: 6,
-                              fontSize: 12,
-                              cursor: "pointer"
-                            }}
-                          >
-                            Clear All
-                          </button>
-                        )}
-
                         <button
                           type="button"
                           onClick={() => setShowNotifications(false)}
@@ -1864,7 +1849,7 @@ export default function ManagerDashboard() {
                       overflowY: "auto",
                       padding: 0
                     }}>
-                      {alerts.length === 0 ? (
+                      {notifications.length === 0 ? (
                         <div style={{
                           padding: "40px 20px",
                           textAlign: "center",
@@ -1874,58 +1859,52 @@ export default function ManagerDashboard() {
                           No notifications yet
                         </div>
                       ) : (
-                        alerts.map((alert, index) => (
+                        notifications.map((n) => (
                           <div
-                            key={index}
+                            key={n._id}
                             style={{
                               padding: "12px 16px",
                               borderBottom: "1px solid #333",
-                              background: index % 2 === 0 ? "#1a1a1a" : "#222",
+                              background: n.read ? "#1a1a1a" : "#262626",
                               position: "relative"
                             }}
                           >
                             <div style={{
                               fontSize: 13,
-                              lineHeight: 1.4,
-                              color: "#fff",
-                              marginBottom: 4,
-                              paddingRight: 20
+                              fontWeight: 600,
+                              marginBottom: 4
                             }}>
-                              {alert.split('\n').map((line, i) => (
-                                <div key={i} style={{ marginBottom: 2 }}>
-                                  {line}
-                                </div>
-                              ))}
+                              {n.title}
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const newAlerts = [...alerts];
-                                newAlerts.splice(index, 1);
-                                setAlerts(newAlerts);
-                              }}
-                              style={{
-                                position: "absolute",
-                                top: 8,
-                                right: 8,
-                                background: "transparent",
-                                border: "none",
-                                color: "#ff4d4f",
-                                fontSize: 16,
-                                cursor: "pointer",
-                                width: 20,
-                                height: 20,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                borderRadius: "50%",
-                                transition: "background 0.2s"
-                              }}
-                              onMouseOver={(e) => e.target.style.background = "rgba(255,77,79,0.2)"}
-                              onMouseOut={(e) => e.target.style.background = "transparent"}
-                            >
-                              ×
-                            </button>
+
+                            <div style={{
+                              fontSize: 12,
+                              color: "#ccc",
+                              marginBottom: 6,
+                              whiteSpace: "pre-wrap"
+                            }}>
+                              {n.message}
+                            </div>
+
+                            {!n.read && (
+                              <button
+                                style={{
+                                  fontSize: 11,
+                                  background: "#1890ff",
+                                  color: "#fff",
+                                  border: "none",
+                                  padding: "3px 8px",
+                                  borderRadius: 4,
+                                  cursor: "pointer"
+                                }}
+                                onClick={async () => {
+                                  await api.patch(`/notifications/${n._id}/read`);
+                                  loadNotifications();
+                                }}
+                              >
+                                Mark Read
+                              </button>
+                            )}
                           </div>
                         ))
                       )}
@@ -2458,7 +2437,7 @@ holiday calendar and cannot be changed by HR.
                           const endDate = new Date(ey, em - 1, ed);
 
                           if (endDate < startDate) {
-                            addAlert("❌ End date cannot be before start date");
+                            alert("❌ End date cannot be before start date");
                             return;
                           }
 
@@ -2518,7 +2497,7 @@ holiday calendar and cannot be changed by HR.
                           const endDate = new Date(ey, em - 1, ed);
 
                           if (endDate < startDate) {
-                            addAlert("❌ End date cannot be before start date");
+                            alert("❌ End date cannot be before start date");
                             return;
                           }
 
@@ -3100,7 +3079,7 @@ holidays marked as Taken will also be visible in Employee and Admin views.
                           ));
                           // Update the selected project
                           setSelectedProject(prev => ({...prev, status: newStatus}));
-                          addAlert(`Project status updated to ${newStatus}`);
+                          alert(`Project status updated to ${newStatus}`);
                         }}
                       />
 
@@ -4173,7 +4152,7 @@ Employees / Admin.
                       className="outline-btn"
                       onClick={() => {
                         loadBirthdays();
-                        addAlert("Upcoming birthdays refreshed");
+                        alert("Upcoming birthdays refreshed");
                       }}
                       disabled={birthdaysLoading}
                     >
@@ -4296,7 +4275,7 @@ Employees / Admin.
                         className="outline-btn"
                         onClick={() => {
                           loadBirthdays();
-                          addAlert("Birthday list refreshed");
+                          alert("Birthday list refreshed");
                         }}
                         style={{ fontSize: 12 }}
                         disabled={birthdaysLoading}
@@ -4398,7 +4377,7 @@ Employees / Admin.
                       onClick={() => {
                         loadBirthdays();
                         loadEmployees();
-                        addAlert("Birthday statistics refreshed");
+                        alert("Birthday statistics refreshed");
                       }}
                       style={{ fontSize: 12 }}
                       disabled={birthdaysLoading}
