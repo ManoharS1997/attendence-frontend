@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import ManagerPayslip from "./ManagerPayslip";
 import { useAuth } from "../context/AuthContext";
 import api from "../utils/api";
@@ -7,6 +7,7 @@ import ProjectEstimateCard from "../components/ProjectEstimateCard";
 import { calculateProjectHours } from "../utils/hours";
 import { buildHolidayCalendar } from "../utils/holidays";
 import logo from "../assets/Company Logo.png";
+import { io } from "socket.io-client";
 
 // Add these imports after existing imports
 import ProjectStatusBadge from "../components/projects/ProjectStatusBadge";
@@ -420,6 +421,7 @@ const getUpcomingBirthdays = (birthdaysList, daysAhead = 3) => {
 };
 
 export default function ManagerDashboard() {
+    const socketRef = useRef(null);
 
   const CURRENT_YEAR = new Date().getFullYear().toString();
 
@@ -1016,6 +1018,41 @@ export default function ManagerDashboard() {
     }, 1000); // Wait 1 second after component mounts
     return () => clearTimeout(id);
   }, [autoSendBirthdayWishes]);
+
+    // Socket.IO connection for real-time updates
+    // Socket.IO connection for real-time updates
+  useEffect(() => {
+    socketRef.current = io(import.meta.env.VITE_API_URL || "http://localhost:5000");
+
+    socketRef.current.on("connect", () => {
+      console.log("Manager connected:", socketRef.current.id);
+    });
+
+    socketRef.current.on("dashboardUpdated", () => {
+      loadEmployees();
+      loadAttendance();
+      loadSummaries();
+      loadProjects();
+      loadProjectTasks(selectedProjectId);
+      loadPendingRequests();
+      loadBirthdays();
+      loadLogs();
+    });
+
+    return () => {
+      socketRef.current.disconnect();
+    };
+  }, [
+    loadEmployees,
+    loadAttendance,
+    loadSummaries,
+    loadProjects,
+    loadProjectTasks,
+    loadPendingRequests,
+    loadBirthdays,
+    loadLogs,
+    selectedProjectId // Add this since loadProjectTasks uses it
+  ]);
 
   // -------- EMPLOYEE CRUD / LEAVES ----------
   const handleCreateEmployee = async (e) => {

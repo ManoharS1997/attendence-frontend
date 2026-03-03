@@ -5,6 +5,7 @@ import api from "../utils/api";
 import ChangePasswordCard from "../components/ChangePasswordCard";
 import logo from "../assets/Company Logo.png";
 import { calculateProjectHours } from "../utils/hours";
+import socket from "../utils/socket"; // ✅ Added socket import
 
 // ---------- CONSTANTS ----------
 const monthNames = [
@@ -306,6 +307,24 @@ export default function AdminDashboard() {
       setPayslips([]);
     }
   }, [selectedEmployeeId]);
+
+  // ✅ SOCKET INTEGRATION: Listen for real-time updates
+  useEffect(() => {
+    // Listen for dashboard updates from server
+    socket.on("dashboard:update", () => {
+      console.log("📡 Received dashboard update via socket");
+      loadAttendance();
+      loadSummaries();
+      loadProjects();
+      loadAllAdminTasks();
+      loadHolidays();
+    });
+
+    // Cleanup listener on component unmount
+    return () => {
+      socket.off("dashboard:update");
+    };
+  }, [loadAttendance, loadSummaries, loadProjects, loadAllAdminTasks, loadHolidays]);
 
   // Load all data on component mount
   useEffect(() => {

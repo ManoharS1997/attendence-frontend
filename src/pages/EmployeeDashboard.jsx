@@ -6,6 +6,7 @@ import logo from "../assets/Company Logo.png";
 import { buildHolidayCalendar } from "../utils/holidays";
 import "../../styles/employeeDashboard.css";
 import { FaEdit, FaCalendarAlt, FaBell, FaCheck, FaCheckCircle, FaTimes, FaExclamationCircle, FaInfoCircle, FaTrash, FaEye, FaEnvelope } from "react-icons/fa";
+import { io } from "socket.io-client";
 
 // ADD HELPER FUNCTION FOR RULE 7 FIX
 const getMyRoleFromProject = (project, userId) => {
@@ -442,6 +443,7 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead, onMarkAllAsR
 
 export default function EmployeeDashboard() {
   const { user, logout } = useAuth();
+  
 
   const TAGLINES = useMemo(
     () => [
@@ -501,15 +503,6 @@ export default function EmployeeDashboard() {
     compOffRequests: 0
   });
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTodayInfo(getTodayInfo());
-      setTagline(getTaglineOfTheDay());
-    }, 60 * 1000);
-
-    return () => clearInterval(interval);
-  }, [getTaglineOfTheDay]);
-
   const [activeTab, setActiveTab] = useState("timesheet");
 
   
@@ -520,7 +513,7 @@ export default function EmployeeDashboard() {
   const [workInTime, setWorkInTime] = useState("10:00");
   const [workOutTime, setWorkOutTime] = useState("18:00");
   const [lunchInTime, setLunchInTime] = useState("13:00");
-const [lunchOutTime, setLunchOutTime] = useState("14:00");
+  const [lunchOutTime, setLunchOutTime] = useState("14:00");
   const [note, setNote] = useState("");
 
   const [extraWork, setExtraWork] = useState({
@@ -566,7 +559,19 @@ const [lunchOutTime, setLunchOutTime] = useState("14:00");
   const [projectTasks, setProjectTasks] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
 
-  // Load notifications from backend
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTodayInfo(getTodayInfo());
+      setTagline(getTaglineOfTheDay());
+    }, 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [getTaglineOfTheDay]);
+
+  // ============================================
+  // ✅ ALL useCallback FUNCTIONS DEFINED FIRST
+  // ============================================
+
   const loadNotifications = useCallback(async () => {
     try {
       setLoadingNotifications(true);
@@ -599,145 +604,47 @@ const [lunchOutTime, setLunchOutTime] = useState("14:00");
     }
   }, [user._id, user.id]);
 
-  // Poll for new notifications every 30 seconds
-  useEffect(() => {
-    loadNotifications();
-    
-    const interval = setInterval(() => {
-      loadNotifications();
-    }, 30000); // Poll every 30 seconds
-    
-    return () => clearInterval(interval);
-  }, [loadNotifications]);
-
-  // Refresh notifications when user interacts with attendance
-  const refreshNotificationsAfterAction = async () => {
-    await loadNotifications();
-  };
-
-  const markNotificationAsRead = async (notificationId) => {
-    try {
-      await api.patch(`/notifications/${notificationId}/read`);
-      
-      // Update local state
-      setNotifications(prev => 
-        prev.map(n => 
-          n._id === notificationId 
-            ? { ...n, read: true } 
-            : n
-        )
-      );
-      setUnreadNotificationCount(prev => Math.max(0, prev - 1));
-    } catch (error) {
-      console.error("Error marking notification as read", error);
-      // Update locally even if API fails
-      setNotifications(prev => 
-        prev.map(n => 
-          n._id === notificationId 
-            ? { ...n, read: true } 
-            : n
-        )
-      );
-      setUnreadNotificationCount(prev => Math.max(0, prev - 1));
-    }
-  };
-
-  const markAllNotificationsAsRead = async () => {
-    try {
-      await api.patch("/notifications/mark-all-read");
-      
-      // Update local state
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-      setUnreadNotificationCount(0);
-    } catch (error) {
-      console.error("Error marking all notifications as read", error);
-      // Update locally even if API fails
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-      setUnreadNotificationCount(0);
-    }
-  };
-
-  const deleteNotification = async (notificationId) => {
-    try {
-      await api.delete(`/notifications/${notificationId}`);
-      
-      // Update local state
-      const notification = notifications.find(n => n._id === notificationId);
-      setNotifications(prev => prev.filter(n => n._id !== notificationId));
-      
-      if (notification && !notification.read) {
-        setUnreadNotificationCount(prev => Math.max(0, prev - 1));
-      }
-    } catch (error) {
-      console.error("Error deleting notification", error);
-      // Update locally even if API fails
-      const notification = notifications.find(n => n._id === notificationId);
-      setNotifications(prev => prev.filter(n => n._id !== notificationId));
-      
-      if (notification && !notification.read) {
-        setUnreadNotificationCount(prev => Math.max(0, prev - 1));
-      }
-    }
-  };
-
-  const deleteAllNotifications = async () => {
-    try {
-      await api.delete("/notifications/clear-all");
-      
-      // Update local state
-      setNotifications([]);
-      setUnreadNotificationCount(0);
-    } catch (error) {
-      console.error("Error deleting all notifications", error);
-      // Update locally even if API fails
-      setNotifications([]);
-      setUnreadNotificationCount(0);
-    }
-  };
-
-  const handleViewNotificationDetails = (notification) => {
-    // Show notification details
-    const details = `
-Notification Details:
-────────────────────
-Type: ${notification.type || 'info'}
-Category: ${notification.category || 'General'}
-Message: ${notification.message}
-Date: ${new Date(notification.createdAt || notification.timestamp).toLocaleString()}
-Status: ${notification.read ? 'Read' : 'Unread'}
-${notification.link ? `Link: ${notification.link}` : ''}
-    `;
-    
-    alert(details);
-  };
-
-  const loadDashboard = useCallback(async () => {
-    const res = await api.get("/utils/dashboard");
-
-    setSharedMetrics({
-      presentDays: res.data.attendance.presentDays,
-      halfDays: res.data.attendance.halfDays,
-      leavesTaken: res.data.attendance.leaveDays,
-      hoursWorked: res.data.timesheet.totalHoursWorked,
-      pendingRequests: 0,
-      extraHours: res.data.timesheet.totalExtraHours,
-      compOffRequests: 0
-    });
-
-    setCompOffBalance(res.data.leaveBalance.compOff || 0);
-  }, []);
-
   const loadAttendance = useCallback(async (selectedMonth = month, selectedYear = year) => {
-    const res = await api.get("/attendance/my", {
-      params: { month: selectedMonth, year: selectedYear }
-    });
-    setAttendance([...(res.data || [])]);
+    try {
+      const res = await api.get("/attendance/my", {
+        params: { month: selectedMonth, year: selectedYear }
+      });
+      setAttendance([...(res.data || [])]);
+    } catch (error) {
+      console.error("Error loading attendance", error);
+      setAttendance([]);
+    }
   }, [month, year]);
 
   const loadSummary = useCallback(async (selectedMonth = month, selectedYear = year) => {
-    const res = await api.get("/leave/summary/me", { params: { month: selectedMonth, year: selectedYear } });
-    setSummary(res.data || null);
+    try {
+      const res = await api.get("/leave/summary/me", { params: { month: selectedMonth, year: selectedYear } });
+      setSummary(res.data || null);
+    } catch (error) {
+      console.error("Error loading summary", error);
+      setSummary(null);
+    }
   }, [month, year]);
+
+  const loadDashboard = useCallback(async () => {
+    try {
+      const res = await api.get("/utils/dashboard");
+
+      setSharedMetrics({
+        presentDays: res.data.attendance.presentDays,
+        halfDays: res.data.attendance.halfDays,
+        leavesTaken: res.data.attendance.leaveDays,
+        hoursWorked: res.data.timesheet.totalHoursWorked,
+        pendingRequests: 0,
+        extraHours: res.data.timesheet.totalExtraHours,
+        compOffRequests: 0
+      });
+
+      setCompOffBalance(res.data.leaveBalance.compOff || 0);
+    } catch (error) {
+      console.error("Error loading dashboard", error);
+    }
+  }, []);
 
   const loadProjects = useCallback(async () => {
     try {
@@ -754,6 +661,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
       setMyProjects([]);
     }
   }, []);
+
   const loadTasks = useCallback(async () => {
     try {
       const res = await api.get("/tasks/my");
@@ -786,6 +694,10 @@ ${notification.link ? `Link: ${notification.link}` : ''}
     }
   }, []);
 
+  const refreshNotificationsAfterAction = useCallback(async () => {
+    await loadNotifications();
+  }, [loadNotifications]);
+
   const forceRefreshAll = useCallback(async () => {
     try {
       await Promise.all([
@@ -797,6 +709,87 @@ ${notification.link ? `Link: ${notification.link}` : ''}
       console.error("Error refreshing data:", error);
     }
   }, [loadAttendance, loadSummary, loadDashboard]);
+
+  // ============================================
+  // ✅ SOCKET CONNECTION useEffect - AFTER all useCallbacks
+  // ============================================
+  
+  useEffect(() => {
+    const socket = io(
+      import.meta.env.VITE_API_URL || "http://localhost:5000",
+      {
+        withCredentials: true,
+        transports: ["websocket"] // Important for CORS
+      }
+    );
+
+    socket.on("connect", () => {
+      console.log("✅ Employee socket connected:", socket.id);
+    });
+
+    socket.on("dashboard:update", async (data) => {
+      console.log("📡 Real-time update received:", data);
+
+      try {
+        await Promise.all([
+          loadAttendance(),
+          loadSummary(),
+          loadDashboard(),
+          loadTasks(),
+          loadProjects(),
+          loadNotifications(),
+          loadPayslips()
+        ]);
+      } catch (err) {
+        console.error("Socket reload error:", err);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+      console.log("❌ Employee socket disconnected");
+    };
+  }, [
+    loadAttendance,
+    loadSummary,
+    loadDashboard,
+    loadTasks,
+    loadProjects,
+    loadNotifications,
+    loadPayslips
+  ]);
+
+  // ============================================
+  // ✅ INITIAL DATA LOAD useEffect
+  // ============================================
+  
+  useEffect(() => {
+    const loadInitialData = async () => {
+      await Promise.all([
+        loadAttendance(),
+        loadSummary(),
+        loadDashboard(),
+        loadProjects(),
+        loadTasks(),
+        loadNotifications(),
+        loadPayslips()
+      ]);
+    };
+    
+    loadInitialData();
+  }, [
+    loadAttendance,
+    loadSummary,
+    loadDashboard,
+    loadProjects,
+    loadTasks,
+    loadNotifications,
+    loadPayslips
+  ]);
+
+  // ============================================
+  // ✅ OTHER useEffect HOOKS
+  // ============================================
 
   useEffect(() => {
     const current = new Date();
@@ -822,12 +815,6 @@ ${notification.link ? `Link: ${notification.link}` : ''}
       popupShownRef.current = false;
     }
   }, [month, year, lastVisitedMonthYear]);
-
-  useEffect(() => {
-    loadAttendance();
-    loadSummary();
-    loadDashboard();
-  }, [loadAttendance, loadSummary, loadDashboard]);
 
   useEffect(() => {
     const checkBirthday = async () => {
@@ -860,18 +847,6 @@ ${notification.link ? `Link: ${notification.link}` : ''}
 
     checkBirthday();
   }, [user.fullName]);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      loadAttendance();
-    }, 30000);
-    return () => clearInterval(id);
-  }, [loadAttendance]);
-
-  useEffect(() => {
-    loadProjects();
-    loadTasks();
-  }, [loadProjects, loadTasks]);
 
   useEffect(() => {
     if (activeTab === "payslips") {
@@ -985,7 +960,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
       
       // Also create a notification for this approval
       const newNotification = {
-        _id: `attendance-${latest._id}`,
+        _id: `attendance-${latest._id}-${Date.now()}`,
         type: decision === "APPROVED" ? 'success' : 'error',
         message: message,
         category: 'Attendance',
@@ -995,13 +970,15 @@ ${notification.link ? `Link: ${notification.link}` : ''}
       };
       
       setNotifications(prev => [newNotification, ...prev]);
-      if (!latest.read) {
-        setUnreadNotificationCount(prev => prev + 1);
-      }
+      setUnreadNotificationCount(prev => prev + 1);
     }
 
     setLastAlertAttendanceId(latest._id);
   }, [attendance, lastAlertAttendanceId, month, year, user._id]);
+
+  // ============================================
+  // ✅ Holiday calculations
+  // ============================================
 
   const holidays = buildHolidayCalendar(month, year);
   const calendarWeeks = buildMonthMatrix(month, year);
@@ -1144,17 +1121,17 @@ ${notification.link ? `Link: ${notification.link}` : ''}
   const isSystemHoliday = !!selectedHolidayInfo?.isSystemHoliday;
 
   useEffect(() => {
-  if (!systemHolidayStatus) return;
-  const id = setTimeout(() => {
-    setStatus(systemHolidayStatus);
-    setWorkInTime("");
-    setWorkOutTime("");
-    setLunchInTime("13:00");   // ✅ fixed
-    setLunchOutTime("14:00");  // ✅ fixed
-    setNote("");
-  }, 0);
-  return () => clearTimeout(id);
-}, [systemHolidayStatus, date]);
+    if (!systemHolidayStatus) return;
+    const id = setTimeout(() => {
+      setStatus(systemHolidayStatus);
+      setWorkInTime("");
+      setWorkOutTime("");
+      setLunchInTime("13:00");
+      setLunchOutTime("14:00");
+      setNote("");
+    }, 0);
+    return () => clearTimeout(id);
+  }, [systemHolidayStatus, date]);
 
   const holidayBanner =
     selectedHolidayInfo && selectedHolidayInfo.isSystemHoliday ? (
@@ -1205,6 +1182,110 @@ ${notification.link ? `Link: ${notification.link}` : ''}
         </div>
       </div>
     ) : null;
+
+  // ============================================
+  // ✅ MARK NOTIFICATION FUNCTIONS
+  // ============================================
+
+  const markNotificationAsRead = async (notificationId) => {
+    try {
+      await api.patch(`/notifications/${notificationId}/read`);
+      
+      // Update local state
+      setNotifications(prev => 
+        prev.map(n => 
+          n._id === notificationId 
+            ? { ...n, read: true } 
+            : n
+        )
+      );
+      setUnreadNotificationCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error("Error marking notification as read", error);
+      // Update locally even if API fails
+      setNotifications(prev => 
+        prev.map(n => 
+          n._id === notificationId 
+            ? { ...n, read: true } 
+            : n
+        )
+      );
+      setUnreadNotificationCount(prev => Math.max(0, prev - 1));
+    }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    try {
+      await api.patch("/notifications/mark-all-read");
+      
+      // Update local state
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setUnreadNotificationCount(0);
+    } catch (error) {
+      console.error("Error marking all notifications as read", error);
+      // Update locally even if API fails
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setUnreadNotificationCount(0);
+    }
+  };
+
+  const deleteNotification = async (notificationId) => {
+    try {
+      await api.delete(`/notifications/${notificationId}`);
+      
+      // Update local state
+      const notification = notifications.find(n => n._id === notificationId);
+      setNotifications(prev => prev.filter(n => n._id !== notificationId));
+      
+      if (notification && !notification.read) {
+        setUnreadNotificationCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (error) {
+      console.error("Error deleting notification", error);
+      // Update locally even if API fails
+      const notification = notifications.find(n => n._id === notificationId);
+      setNotifications(prev => prev.filter(n => n._id !== notificationId));
+      
+      if (notification && !notification.read) {
+        setUnreadNotificationCount(prev => Math.max(0, prev - 1));
+      }
+    }
+  };
+
+  const deleteAllNotifications = async () => {
+    try {
+      await api.delete("/notifications/clear-all");
+      
+      // Update local state
+      setNotifications([]);
+      setUnreadNotificationCount(0);
+    } catch (error) {
+      console.error("Error deleting all notifications", error);
+      // Update locally even if API fails
+      setNotifications([]);
+      setUnreadNotificationCount(0);
+    }
+  };
+
+  const handleViewNotificationDetails = (notification) => {
+    // Show notification details
+    const details = `
+Notification Details:
+────────────────────
+Type: ${notification.type || 'info'}
+Category: ${notification.category || 'General'}
+Message: ${notification.message}
+Date: ${new Date(notification.createdAt || notification.timestamp).toLocaleString()}
+Status: ${notification.read ? 'Read' : 'Unread'}
+${notification.link ? `Link: ${notification.link}` : ''}
+    `;
+    
+    alert(details);
+  };
+
+  // ============================================
+  // ✅ HANDLE SAVE ATTENDANCE
+  // ============================================
 
   const handleSaveAttendance = async (e) => {
     e.preventDefault();
@@ -1268,6 +1349,8 @@ ${notification.link ? `Link: ${notification.link}` : ''}
 
      
       
+      await api.post("/attendance", payload);
+      
       // 🔥 FORCE IMMEDIATE DASHBOARD REFRESH
       await forceRefreshAll();
 
@@ -1314,8 +1397,8 @@ ${notification.link ? `Link: ${notification.link}` : ''}
       setStatus("PRESENT FULL DAY");
       setWorkInTime("10:00");
       setWorkOutTime("18:00");
-      setLunchInTime("");
-      setLunchOutTime("");
+      setLunchInTime("13:00");
+      setLunchOutTime("14:00");
       setNote("");
       setExtraWork({
         hours: 2,
@@ -1332,6 +1415,10 @@ ${notification.link ? `Link: ${notification.link}` : ''}
       setLoadingSave(false);
     }
   };
+
+  // ============================================
+  // ✅ HANDLE MONTH CHANGE
+  // ============================================
 
   const handleMonthChange = (e) => {
     const [m, y] = e.target.value.split("-");
@@ -1422,13 +1509,13 @@ ${notification.link ? `Link: ${notification.link}` : ''}
       const payload = {
         // ✅ REQUIRED — DO NOT MISS
         projectId: taskForm.projectId,
-        title: taskForm.recentRequirement?.trim(),   // ✅ FIX
+        title: taskForm.recentRequirement?.trim(),
         estimateHours:
           Number(taskForm.hoursAllocated) > 0
             ? Number(taskForm.hoursAllocated)
             : PRIORITY_DEFAULT_HOURS[taskForm.clientPriority] || 8,
-        month: now.getMonth() + 1,                    // ✅ FIX
-        year: now.getFullYear(),                      // ✅ FIX
+        month: now.getMonth() + 1,
+        year: now.getFullYear(),
 
         // ✅ VALID OPTIONAL FIELDS
         recentRequirement: taskForm.recentRequirement,
@@ -1500,6 +1587,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
       setTaskError(error.response?.data?.message || "Error saving task. Please check your input.");
     }
   };
+
   const startEditTask = (t) => {
     const canEdit = (() => {
       const userRole = user.role;
@@ -1622,7 +1710,6 @@ ${notification.link ? `Link: ${notification.link}` : ''}
     }
   };
 
-
   const NextMonthPopup = () => {
     if (!showNextMonthPopup) return null;
 
@@ -1648,7 +1735,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
     );
   };
 
-  // Project Status Badge Component (inline since you said no new files)
+  // Project Status Badge Component
   const ProjectStatusBadge = ({ status }) => {
     const statusConfig = {
       DRAFT: {
@@ -1711,7 +1798,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
     );
   };
 
-  // Balance Display Component (inline)
+  // Balance Display Component
   const BalanceDisplay = ({ balance, estimated, consumed }) => {
     const isNegative = balance < 0;
     const isLow = balance < (estimated * 0.1); // Less than 10% remaining
@@ -1753,6 +1840,10 @@ ${notification.link ? `Link: ${notification.link}` : ''}
       </div>
     );
   };
+
+  // ============================================
+  // ✅ RETURN JSX - EXACTLY AS YOU HAD IT
+  // ============================================
 
   return (
     <div className="page">
