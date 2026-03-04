@@ -307,7 +307,6 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead, onMarkAllAsR
     return date.toLocaleDateString();
   };
 
-  // Generate a stable key for notification items
   const getNotificationKey = (notification, index) => {
     return notification?._id || `notification-${index}`;
   };
@@ -471,6 +470,40 @@ const ExportToExcel = ({ data, filename, sheetName, buttonText }) => {
   );
 };
 
+// Success Popup Component
+const SuccessPopup = ({ message, onClose }) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onClose();
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: "20%",
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 10000,
+        backgroundColor: "#52c41a",
+        color: "white",
+        padding: "16px 24px",
+        borderRadius: "8px",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+        animation: "slideDown 0.3s ease-out",
+        display: "flex",
+        alignItems: "center",
+        gap: "12px"
+      }}
+    >
+      <FaCheckCircle size={20} />
+      <span>{message}</span>
+    </div>
+  );
+};
+
 export default function EmployeeDashboard() {
   const { user, logout } = useAuth();
 
@@ -520,6 +553,10 @@ export default function EmployeeDashboard() {
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(true);
 
+  // Success Popup State
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+
   const popupShownRef = useRef(false);
 
   const [sharedMetrics, setSharedMetrics] = useState({
@@ -564,25 +601,21 @@ export default function EmployeeDashboard() {
   const [lastAlertAttendanceId, setLastAlertAttendanceId] = useState(null);
   const [taskError, setTaskError] = useState("");
 
-  const [showTaskSuccess, setShowTaskSuccess] = useState(false);
-  const [successMessage, setSuccessMessage] = useState("");
-
-  // UPDATED TASK FORM WITH CORRECT FIELD NAMES
   const [taskForm, setTaskForm] = useState({
     projectId: "",
-    requirement: "", // was recentRequirement
-    type: "NEW", // was requirementType
+    requirement: "",
+    type: "NEW",
     requirementRole: "DEVELOPER",
     status: "OPEN",
     scope: "AGREED",
     notes: "",
     discussedDate: formatToday(),
-    startDate: "", // was originalClosureDate
-    closeDate: "", // was estimatedDate
-    workingDays: 0, // was noOfDays
+    startDate: "",
+    closeDate: "",
+    workingDays: 0,
     clientPriority: "P3",
     prioritySource: "CLIENT",
-    estHours: PRIORITY_DEFAULT_HOURS.P3 // was hoursAllocated
+    estHours: PRIORITY_DEFAULT_HOURS.P3
   });
   const [editingTaskId, setEditingTaskId] = useState(null);
 
@@ -1481,37 +1514,30 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
     0
   );
 
-  // UPDATED RESET FUNCTION WITH CORRECT FIELD NAMES
   const resetTaskForm = (keepProjectId = false) => {
     setEditingTaskId(null);
     setTaskForm((prev) => ({
       projectId: keepProjectId ? prev.projectId : "",
-      requirement: "", // was recentRequirement
-      type: "NEW", // was requirementType
+      requirement: "",
+      type: "NEW",
       requirementRole: "DEVELOPER",
       status: "OPEN",
       scope: "AGREED",
       notes: "",
       discussedDate: formatToday(),
-      startDate: "", // was originalClosureDate
-      closeDate: "", // was estimatedDate
-      workingDays: 0, // was noOfDays
+      startDate: "",
+      closeDate: "",
+      workingDays: 0,
       clientPriority: "P3",
       prioritySource: "CLIENT",
-      estHours: PRIORITY_DEFAULT_HOURS.P3 // was hoursAllocated
+      estHours: PRIORITY_DEFAULT_HOURS.P3
     }));
     setTaskError("");
-    setShowTaskSuccess(false);
-    setSuccessMessage("");
   };
 
-  const showSuccessPopup = (message) => {
+  const showSuccess = (message) => {
     setSuccessMessage(message);
-    setShowTaskSuccess(true);
-    setTimeout(() => {
-      setShowTaskSuccess(false);
-      setSuccessMessage("");
-    }, 3000);
+    setShowSuccessPopup(true);
   };
 
   // UPDATED CREATE/UPDATE TASK FUNCTION WITH CORRECT PAYLOAD
@@ -1538,21 +1564,20 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
 
     try {
       const now = new Date();
-      // UPDATED PAYLOAD WITH CORRECT FIELD NAMES
       const payload = {
         projectId: taskForm.projectId,
-        requirement: taskForm.requirement?.trim(), // was recentRequirement
-        type: taskForm.type, // was requirementType
+        requirement: taskForm.requirement?.trim(),
+        type: taskForm.type,
         status: taskForm.status,
         scope: taskForm.scope,
         notes: taskForm.notes,
         discussedDate: taskForm.discussedDate,
-        startDate: taskForm.startDate, // was originalClosureDate
-        closeDate: taskForm.closeDate, // was estimatedDate
-        workingDays: finalDays, // was noOfDays
+        startDate: taskForm.startDate,
+        closeDate: taskForm.closeDate,
+        workingDays: finalDays,
         clientPriority: taskForm.clientPriority,
-        givenBy: taskForm.prioritySource, // was prioritySource
-        estHours: Number(taskForm.estHours) > 0 ? Number(taskForm.estHours) : PRIORITY_DEFAULT_HOURS[taskForm.clientPriority] || 8, // was estimateHours/hoursAllocated
+        givenBy: taskForm.prioritySource,
+        estHours: Number(taskForm.estHours) > 0 ? Number(taskForm.estHours) : PRIORITY_DEFAULT_HOURS[taskForm.clientPriority] || 8,
         month: now.getMonth() + 1,
         year: now.getFullYear(),
         assignedUserId: user?._id || user?.id,
@@ -1563,14 +1588,7 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
 
       if (!editingTaskId) {
         await api.post("/tasks", payload);
-        setSuccessMessage("Task created successfully");
-setShowTaskSuccess(true);
-
-setTimeout(() => {
-  setShowTaskSuccess(false);
-}, 3000);
-        const message = "Task / requirement added successfully";
-        showSuccessPopup(message);
+        showSuccess("Task created successfully");
 
         const newNotification = {
           _id: `task-${Date.now()}`,
@@ -1587,8 +1605,7 @@ setTimeout(() => {
       } else {
         console.log("UPDATE PAYLOAD →", payload);
         await api.patch(`/tasks/${editingTaskId}`, payload);
-        const message = "Task updated successfully";
-        showSuccessPopup(message);
+        showSuccess("Task updated successfully");
 
         const newNotification = {
           _id: `task-${Date.now()}`,
@@ -1605,12 +1622,6 @@ setTimeout(() => {
       }
 
       resetTaskForm(true);
-      setSuccessMessage("Task created successfully");
-
-
-      setTimeout(() => {
-
-      }, 3000);
       await loadTasks();
       await refreshNotificationsAfterAction();
 
@@ -1651,20 +1662,23 @@ setTimeout(() => {
     setEditingTaskId(t._id);
     setTaskForm({
       projectId: t.projectId?._id || t.projectId || "",
-      requirement: t.requirement || t.recentRequirement || "", // handle both old and new
-      type: t.type || t.requirementType || "NEW", // handle both old and new
+      requirement: t.requirement || t.recentRequirement || "",
+      type: t.type || t.requirementType || "NEW",
       requirementRole: t.requirementRole || "DEVELOPER",
       status: t.status || "OPEN",
       scope: t.scope || "AGREED",
       notes: t.notes || "",
       discussedDate: t.discussedDate || formatToday(),
-      startDate: t.startDate || t.originalClosureDate || "", // handle both old and new
-      closeDate: t.closeDate || t.estimatedDate || "", // handle both old and new
-      workingDays: t.workingDays || t.noOfDays || 0, // handle both old and new
+      startDate: t.startDate || "",
+      closeDate: t.closeDate || "",
+      workingDays: t.workingDays || 0,
       clientPriority: t.clientPriority || "P3",
-      prioritySource: t.givenBy || t.prioritySource || "CLIENT", // handle both old and new
-      estHours: t.estHours || t.estimateHours || PRIORITY_DEFAULT_HOURS[t.clientPriority || "P3"] || 8 // handle both old and new
+      prioritySource: t.givenBy || t.prioritySource || "CLIENT",
+      estHours: t.estHours || t.estimateHours || PRIORITY_DEFAULT_HOURS[t.clientPriority || "P3"] || 8
     });
+
+    // Scroll to form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const monthYearSelect = (
@@ -1766,69 +1780,6 @@ setTimeout(() => {
     );
   };
 
-  // Project Status Badge Component
-  const ProjectStatusBadge = ({ status }) => {
-    const statusConfig = {
-      DRAFT: {
-        label: "DRAFT",
-        color: "#8c8c8c",
-        bgColor: "#f5f5f5",
-        borderColor: "#d9d9d9"
-      },
-      PENDING_APPROVAL: {
-        label: "PENDING APPROVAL",
-        color: "#fa8c16",
-        bgColor: "#fff7e6",
-        borderColor: "#ffa940"
-      },
-      APPROVED: {
-        label: "APPROVED",
-        color: "#52c41a",
-        bgColor: "#f6ffed",
-        borderColor: "#95de64"
-      },
-      REJECTED: {
-        label: "REJECTED",
-        color: "#ff4d4f",
-        bgColor: "#fff2f0",
-        borderColor: "#ff7875"
-      },
-      COMPLETED: {
-        label: "COMPLETED",
-        color: "#1890ff",
-        bgColor: "#e6f7ff",
-        borderColor: "#69c0ff"
-      },
-      ARCHIVED: {
-        label: "ARCHIVED",
-        color: "#722ed1",
-        bgColor: "#f9f0ff",
-        borderColor: "#b37feb"
-      }
-    };
-
-    const config = statusConfig[status] || statusConfig.DRAFT;
-
-    return (
-      <span
-        style={{
-          display: "inline-block",
-          padding: "4px 10px",
-          borderRadius: "12px",
-          fontSize: "11px",
-          fontWeight: "600",
-          color: config.color,
-          backgroundColor: config.bgColor,
-          border: `1px solid ${config.borderColor}`,
-          textTransform: "uppercase",
-          letterSpacing: "0.3px"
-        }}
-      >
-        {config.label}
-      </span>
-    );
-  };
-
   // Balance Display Component
   const BalanceDisplay = ({ balance, estimated, consumed }) => {
     const isNegative = balance < 0;
@@ -1889,7 +1840,7 @@ setTimeout(() => {
       const filtered = safeTasks.filter((task) => {
         if (!task) return false;
 
-        const requirement = (task.requirement || task.recentRequirement || task.title || "").toLowerCase(); // handle both old and new
+        const requirement = (task.requirement || task.recentRequirement || task.title || "").toLowerCase();
         const project = (task.projectId?.name || task.project || "").toLowerCase();
         const status = (task.status || "").toLowerCase();
         const createdBy = (task.createdByUserId?.fullName || "").toLowerCase();
@@ -1927,19 +1878,18 @@ setTimeout(() => {
     }));
   }, [timesheetRows]);
 
-  // UPDATED EXPORT FUNCTION WITH CORRECT FIELD NAMES
   const getTasksExportData = useCallback(() => {
     return filteredTasks.map((task, index) => ({
       'S.No': index + 1,
       Project: task.projectId?.name || '-',
-      Requirement: task.requirement || task.recentRequirement || task.title, // handle both old and new
-      Type: task.type || task.requirementType || 'NEW', // handle both old and new
+      Requirement: task.requirement || task.recentRequirement || task.title,
+      Type: task.type || task.requirementType || 'NEW',
       Status: task.status,
       Scope: task.scope || '-',
       'Discussed Date': task.discussedDate || '-',
-      'Est. Hours': task.estHours || task.estimateHours || 0, // handle both old and new
+      'Est. Hours': task.estHours || task.estimateHours || 0,
       Priority: task.clientPriority || '-',
-      'Given By': task.givenBy || task.prioritySource || '-', // handle both old and new
+      'Given By': task.givenBy || task.prioritySource || '-',
       'Created By': task.createdByUserId?.fullName || '-'
     }));
   }, [filteredTasks]);
@@ -1948,7 +1898,6 @@ setTimeout(() => {
     return myProjects.map(project => ({
       'Project Name': project.name,
       Code: project.code || '-',
-      Status: project.status,
       'Total Estimated Hours': project.totalEstimatedHours || 0,
       'Balance Hours': project.balanceHours || 0,
       'My Role': getMyRoleFromProject(project, user?._id) || 'Not assigned'
@@ -2296,28 +2245,11 @@ setTimeout(() => {
           <NextMonthPopup />
 
           {/* Success Popup */}
-          {showTaskSuccess && (
-            <div
-              style={{
-                position: "fixed",
-                top: "20%",
-                left: "50%",
-                transform: "translateX(-50%)",
-                zIndex: 10000,
-                backgroundColor: "#52c41a",
-                color: "white",
-                padding: "16px 24px",
-                borderRadius: "8px",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                animation: "slideDown 0.3s ease-out",
-                display: "flex",
-                alignItems: "center",
-                gap: "12px"
-              }}
-            >
-              <FaCheckCircle size={20} />
-              <span>{successMessage}</span>
-            </div>
+          {showSuccessPopup && (
+            <SuccessPopup
+              message={successMessage}
+              onClose={() => setShowSuccessPopup(false)}
+            />
           )}
 
           {/* TIMESHEET TAB */}
@@ -3005,11 +2937,11 @@ setTimeout(() => {
             </main>
           )}
 
-          {/* PROJECTS TAB */}
+          {/* PROJECTS TAB - UPDATED WITH ALL CHANGES */}
           {activeTab === "projects" && (
             <main className="layout single-column">
               <section className="full-width">
-                {/* PROJECT SELECTION SECTION */}
+                {/* MY ASSIGNED PROJECTS - Updated to show role */}
                 <div className="card">
                   <div className="card-header-row">
                     <h2>My Assigned Projects</h2>
@@ -3025,26 +2957,28 @@ setTimeout(() => {
                       <thead>
                         <tr>
                           <th>Project Name</th>
-                          <th>Status</th>
                           <th>Total Estimated Hours</th>
                           <th>Balance Hours</th>
                           <th>My Role</th>
-                          <th>Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {Array.isArray(myProjects) && myProjects.length > 0 ? (
                           myProjects.map((project, index) => (
-                            <tr key={project?._id || `project-${index}`}>
+                            <tr 
+                              key={project?._id || `project-${index}`}
+                              onClick={() => handleProjectSelect(project)}
+                              style={{ 
+                                cursor: 'pointer',
+                                backgroundColor: selectedProject?._id === project?._id ? '#e6f7ff' : 'transparent'
+                              }}
+                            >
                               <td>
                                 <strong>{project?.name}</strong>
                                 {project?.code && ` (${project.code})`}
                                 <div style={{ fontSize: '12px', color: '#666' }}>
                                   {project?.description || 'No description'}
                                 </div>
-                              </td>
-                              <td>
-                                <ProjectStatusBadge status={project?.status} />
                               </td>
                               <td>{project?.totalEstimatedHours || 0} hrs</td>
                               <td>
@@ -3057,22 +2991,17 @@ setTimeout(() => {
                                 </span>
                               </td>
                               <td>
-                                {getMyRoleFromProject(project, user?._id) || "Not assigned"}
-                              </td>
-                              <td>
-                                <button
-                                  onClick={() => handleProjectSelect(project)}
-                                  className="primary-btn small-btn"
-                                  style={{ padding: '4px 8px', fontSize: '12px' }}
-                                >
-                                  View Details
-                                </button>
+                                <strong>
+                                  {getMyRoleFromProject(project, user?._id) || 
+                                   getMyRoleFromProject(project, user?.id) || 
+                                   "Not assigned"}
+                                </strong>
                               </td>
                             </tr>
                           ))
                         ) : (
                           <tr>
-                            <td colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>
+                            <td colSpan="4" style={{ textAlign: 'center', padding: '20px' }}>
                               <p className="empty">No projects assigned to you yet.</p>
                             </td>
                           </tr>
@@ -3082,12 +3011,23 @@ setTimeout(() => {
                   </div>
                 </div>
 
-                {/* SELECTED PROJECT DETAILS */}
+                {/* SELECTED PROJECT DETAILS - Updated to show created by */}
                 {selectedProject && (
                   <div className="card">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                      <h2>Project: {selectedProject?.name} {selectedProject?.code && `(${selectedProject.code})`}</h2>
-                      <ProjectStatusBadge status={selectedProject?.status} />
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      marginBottom: '15px' 
+                    }}>
+                      <h2>Project Details: {selectedProject?.name} {selectedProject?.code && `(${selectedProject.code})`}</h2>
+                      <button
+                        onClick={() => setSelectedProject(null)}
+                        className="outline-btn"
+                        style={{ padding: '4px 12px', fontSize: '12px' }}
+                      >
+                        Clear Selection
+                      </button>
                     </div>
 
                     <BalanceDisplay
@@ -3115,14 +3055,14 @@ setTimeout(() => {
                         </div>
                       </div>
                       <div style={{ padding: '10px', backgroundColor: '#fff7e6', borderRadius: '6px' }}>
-                        <div style={{ fontSize: '12px', color: '#666' }}>My Role</div>
+                        <div style={{ fontSize: '12px', color: '#666' }}>Created By</div>
                         <div style={{ fontWeight: 'bold' }}>
-                          {getMyRoleFromProject(selectedProject, user?._id) || "Not assigned"}
+                          {selectedProject?.createdByUserId?.fullName || selectedProject?.createdBy || 'System'}
                         </div>
                       </div>
                     </div>
 
-                    {/* PROJECT TASKS - UPDATED FIELD NAMES */}
+                    {/* PROJECT TASKS - Updated to show created by and action with edit symbol */}
                     <h3>Tasks in this Project</h3>
                     <div className="table-wrapper small-table">
                       <table>
@@ -3133,35 +3073,80 @@ setTimeout(() => {
                             <th>Est. Hours</th>
                             <th>Priority</th>
                             <th>Created By</th>
+                            <th>Action</th>
                           </tr>
                         </thead>
                         <tbody>
                           {Array.isArray(projectTasks) && projectTasks.length > 0 ? (
-                            projectTasks.map((task, index) => (
-                              <tr key={task?._id || `project-task-${index}`}>
-                                <td style={{ maxWidth: '300px', whiteSpace: 'pre-wrap' }}>
-                                  {task?.requirement || task?.recentRequirement}
-                                </td>
-                                <td>{task?.status}</td>
-                                <td>{task?.estHours || task?.estimateHours || 0} hrs</td>
-                                <td>
-                                  <span style={{
-                                    padding: '2px 8px',
-                                    borderRadius: '12px',
-                                    fontSize: '11px',
-                                    fontWeight: '600',
-                                    backgroundColor: priorityColors[task?.clientPriority]?.color || '#d9d9d9',
-                                    color: '#fff'
-                                  }}>
-                                    {task?.clientPriority}
-                                  </span>
-                                </td>
-                                <td>{task?.createdByUserId?.fullName || 'Unknown'}</td>
-                              </tr>
-                            ))
+                            projectTasks.map((task, index) => {
+                              const canEdit = (() => {
+                                const userRole = user?.role;
+                                const createdByRole = task?.createdByRole;
+                                const createdById = task?.createdByUserId?._id || task?.createdByUserId;
+                                const userId = user?._id || user?.id;
+
+                                if (userRole === "admin") return false;
+                                if (userRole === "employee") {
+                                  return createdByRole === "employee" && createdById === userId;
+                                }
+                                if (userRole === "manager" && createdByRole === "employee") {
+                                  return true;
+                                }
+                                if (userRole === "manager" && createdByRole === "manager") {
+                                  return createdById === userId;
+                                }
+                                return false;
+                              })();
+
+                              return (
+                                <tr key={task?._id || `project-task-${index}`}>
+                                  <td style={{ maxWidth: '300px', whiteSpace: 'pre-wrap' }}>
+                                    {task?.requirement || task?.recentRequirement}
+                                  </td>
+                                  <td>{task?.status}</td>
+                                  <td>{task?.estHours || task?.estimateHours || 0} hrs</td>
+                                  <td>
+                                    <span style={{
+                                      padding: '2px 8px',
+                                      borderRadius: '12px',
+                                      fontSize: '11px',
+                                      fontWeight: '600',
+                                      backgroundColor: priorityColors[task?.clientPriority]?.color || '#d9d9d9',
+                                      color: '#fff'
+                                    }}>
+                                      {task?.clientPriority}
+                                    </span>
+                                  </td>
+                                  <td>{task?.createdByUserId?.fullName || 'Unknown'}</td>
+                                  <td style={{ textAlign: "center" }}>
+                                    {canEdit && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          startEditTask(task);
+                                          // Scroll to form
+                                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                                        }}
+                                        title="Edit Task"
+                                        style={{
+                                          background: "none",
+                                          border: "none",
+                                          cursor: "pointer",
+                                          color: "#1890ff",
+                                          fontSize: "16px",
+                                          padding: "5px 10px"
+                                        }}
+                                      >
+                                        <FaEdit />
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })
                           ) : (
                             <tr>
-                              <td colSpan="5" style={{ textAlign: 'center', padding: '20px' }}>
+                              <td colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>
                                 <p className="empty">No tasks created for this project yet.</p>
                               </td>
                             </tr>
@@ -3189,7 +3174,7 @@ setTimeout(() => {
                   </div>
                 )}
 
-                {/* TASK CREATION FORM - UPDATED WITH CORRECT FIELD NAMES */}
+                {/* TASK CREATION FORM */}
                 <div className="card">
                   <h2>
                     {editingTaskId
@@ -3248,7 +3233,7 @@ setTimeout(() => {
                         {Array.isArray(projects) && projects
                           .map((p, index) => (
                             <option key={p?._id || `project-option-${index}`} value={p?._id}>
-                              {p?.name} ({p?.status})
+                              {p?.name} ({p?.code})
                             </option>
                           ))}
                       </select>
@@ -3259,43 +3244,15 @@ setTimeout(() => {
                       )}
                     </label>
 
-                    {/* Check if user has role in selected project */}
-                    {/* {taskForm.projectId && (
-                      (() => {
-                        const selectedProj = Array.isArray(projects) ? projects.find(p => p?._id === taskForm.projectId) : null;
-                        const myRole = selectedProj ? getMyRoleFromProject(selectedProj, user?._id) : null;
-
-                        if (selectedProj && !myRole) {
-                          return (
-                            <div className="full-row" style={{
-                              padding: '10px',
-                              backgroundColor: '#fff7e6',
-                              border: '1px solid #ffe58f',
-                              borderRadius: '6px',
-                              marginBottom: '15px',
-                              color: '#d48806'
-                            }}>
-                              ⚠️ <strong>No Role Assigned</strong>
-                              <p style={{ margin: '5px 0 0 0', fontSize: '13px' }}>
-                                You are not assigned any role in project "{selectedProj.name}".
-                                Please contact your manager to get assigned a role before creating tasks.
-                              </p>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()
-                    )} */}
-
                     <label className="full-row">
                       Requirement
                       <textarea
                         rows={3}
-                        value={taskForm.requirement} // UPDATED: was recentRequirement
+                        value={taskForm.requirement}
                         onChange={(e) =>
                           setTaskForm({
                             ...taskForm,
-                            requirement: e.target.value // UPDATED: was recentRequirement
+                            requirement: e.target.value
                           })
                         }
                         placeholder="Enter requirement details (supports long text)..."
@@ -3306,11 +3263,11 @@ setTimeout(() => {
                     <label>
                       Requirement Type
                       <select
-                        value={taskForm.type} // UPDATED: was requirementType
+                        value={taskForm.type}
                         onChange={(e) =>
                           setTaskForm({
                             ...taskForm,
-                            type: e.target.value // UPDATED: was requirementType
+                            type: e.target.value
                           })
                         }
                       >
@@ -3402,19 +3359,19 @@ setTimeout(() => {
                       Start Date
                       <input
                         type="date"
-                        value={toInputDate(taskForm.startDate)} // UPDATED: was originalClosureDate
+                        value={toInputDate(taskForm.startDate)}
                         onChange={(e) => {
                           const value = fromInputDate(e.target.value);
                           setTaskForm((prev) => {
                             const workingDays =
                               computeWorkingDaysExcludingHolidays(
                                 value,
-                                prev.closeDate // UPDATED: was estimatedDate
+                                prev.closeDate
                               );
                             return {
                               ...prev,
-                              startDate: value, // UPDATED: was originalClosureDate
-                              workingDays: workingDays // UPDATED: was noOfDays
+                              startDate: value,
+                              workingDays: workingDays
                             };
                           });
                         }}
@@ -3425,19 +3382,19 @@ setTimeout(() => {
                       Close Date
                       <input
                         type="date"
-                        value={toInputDate(taskForm.closeDate)} // UPDATED: was estimatedDate
+                        value={toInputDate(taskForm.closeDate)}
                         onChange={(e) => {
                           const value = fromInputDate(e.target.value);
                           setTaskForm((prev) => {
                             const workingDays =
                               computeWorkingDaysExcludingHolidays(
-                                prev.startDate, // UPDATED: was originalClosureDate
+                                prev.startDate,
                                 value
                               );
                             return {
                               ...prev,
-                              closeDate: value, // UPDATED: was estimatedDate
-                              workingDays: workingDays // UPDATED: was noOfDays
+                              closeDate: value,
+                              workingDays: workingDays
                             };
                           });
                         }}
@@ -3448,11 +3405,11 @@ setTimeout(() => {
                       Working Days
                       <input
                         type="number"
-                        value={taskForm.workingDays} // UPDATED: was noOfDays
+                        value={taskForm.workingDays}
                         onChange={(e) =>
                           setTaskForm({
                             ...taskForm,
-                            workingDays: Number(e.target.value) // UPDATED: was noOfDays
+                            workingDays: Number(e.target.value)
                           })
                         }
                         min="0"
@@ -3468,7 +3425,7 @@ setTimeout(() => {
                           setTaskForm((prev) => ({
                             ...prev,
                             clientPriority: value,
-                            estHours: // UPDATED: was hoursAllocated
+                            estHours:
                               PRIORITY_DEFAULT_HOURS[value] ??
                               prev.estHours
                           }));
@@ -3504,11 +3461,11 @@ setTimeout(() => {
                       Estimated Hours (for this task)
                       <input
                         type="number"
-                        value={taskForm.estHours} // UPDATED: was hoursAllocated
+                        value={taskForm.estHours}
                         onChange={(e) =>
                           setTaskForm({
                             ...taskForm,
-                            estHours: Number(e.target.value) // UPDATED: was hoursAllocated
+                            estHours: Number(e.target.value)
                           })
                         }
                         min="0"
@@ -3568,7 +3525,7 @@ setTimeout(() => {
                   </form>
                 </div>
 
-                {/* ALL MY TASKS - UPDATED FIELD NAMES */}
+                {/* ALL MY TASKS - Updated with project, created by, and edit symbol */}
                 <div className="card">
                   <div className="card-header-row">
                     <h2>All My Tasks ({Array.isArray(filteredTasks) ? filteredTasks.length : 0} of {Array.isArray(tasks) ? tasks.length : 0})</h2>
@@ -3623,63 +3580,12 @@ setTimeout(() => {
                     />
                   </div>
 
-                  <div style={{
-                    marginBottom: '15px',
-                    display: 'flex',
-                    gap: '10px',
-                    alignItems: 'center'
-                  }}>
-                    <div style={{ position: 'relative', flex: 1 }}>
-                      <input
-                        type="text"
-                        placeholder="Search tasks by requirement, project, status..."
-                        style={{
-                          width: '100%',
-                          padding: '8px 12px 8px 35px',
-                          borderRadius: '4px',
-                          border: '1px solid #d9d9d9',
-                          fontSize: '14px'
-                        }}
-                        value={searchTerm}
-                        onChange={(e) => handleSearch(e.target.value)}
-                      />
-                      <div style={{
-                        position: 'absolute',
-                        left: '10px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        color: '#999'
-                      }}>
-                        🔍
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        setSearchTerm('');
-                        setFilteredTasks(Array.isArray(tasks) ? tasks : []);
-                      }}
-                      style={{
-                        padding: '8px 16px',
-                        backgroundColor: searchTerm ? '#ff4d4f' : '#d9d9d9',
-                        color: searchTerm ? 'white' : '#666',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '14px'
-                      }}
-                    >
-                      {searchTerm ? 'Clear Search' : 'Reset'}
-                    </button>
-                  </div>
-
                   <div className="table-wrapper small-table">
                     <table>
                       <thead>
                         <tr>
                           <th>S.No</th>
                           <th>Project</th>
-                          
                           <th>Requirement</th>
                           <th>Type</th>
                           <th>Status</th>
@@ -3693,98 +3599,128 @@ setTimeout(() => {
                         </tr>
                       </thead>
                       <tbody>
-                        {Array.isArray(filteredTasks) &&
-                          filteredTasks.map((t, index) => {
-                            if (!t) return null;
+  {Array.isArray(filteredTasks) &&
+    filteredTasks.map((t, index) => {
+      if (!t) return null;
 
-                            const meta = priorityColors[t?.clientPriority] || null;
-                            const givenBy =
-                              (t?.givenBy || t?.prioritySource || "")
-                                .replace(/_/g, " ")
-                                .toLowerCase()
-                                .replace(/\b\w/g, (c) => c.toUpperCase()) || "-";
+      const meta = priorityColors[t?.clientPriority] || null;
+      const givenBy =
+        (t?.givenBy || t?.prioritySource || "")
+          .replace(/_/g, " ")
+          .toLowerCase()
+          .replace(/\b\w/g, (c) => c.toUpperCase()) || "-";
 
-                            const canEdit = (() => {
-                              const userRole = user?.role;
-                              const createdByRole = t?.createdByRole;
-                              const createdById = t?.createdByUserId?._id || t?.createdByUserId;
-                              const userId = user?._id || user?.id;
+      const canEdit = (() => {
+        const userRole = user?.role;
+        const createdByRole = t?.createdByRole;
+        const createdById = t?.createdByUserId?._id || t?.createdByUserId;
+        const userId = user?._id || user?.id;
 
-                              if (userRole === "admin") return false;
-                              if (userRole === "employee") {
-                                return createdByRole === "employee" && createdById === userId;
-                              }
-                              if (userRole === "manager" && createdByRole === "employee") {
-                                return true;
-                              }
-                              if (userRole === "manager" && createdByRole === "manager") {
-                                return createdById === userId;
-                              }
-                              return false;
-                            })();
+        if (userRole === "admin") return false;
+        if (userRole === "employee") {
+          return createdByRole === "employee" && createdById === userId;
+        }
+        if (userRole === "manager" && createdByRole === "employee") {
+          return true;
+        }
+        if (userRole === "manager" && createdByRole === "manager") {
+          return createdById === userId;
+        }
+        return false;
+      })();
 
-                            return (
-                              <tr key={t?._id || `task-${index}`}>
-                                <td>{index + 1}</td>
-                                <td>{t?.projectId?.name || "-"}</td>
-                                {/* <td>
-                                  {t?.projectId?.status && (
-                                    <ProjectStatusBadge status={t.projectId.status} />
-                                  )}
-                                </td> */}
-                                <td style={{ maxWidth: 260, whiteSpace: "pre-wrap" }}>
-                                  {t?.requirement || t?.recentRequirement || t?.title} {/* UPDATED: handle both old and new */}
-                                </td>
-                                <td>{t?.type || t?.requirementType || "NEW"}</td> {/* UPDATED: handle both old and new */}
-                                <td>{t?.status}</td>
-                                <td>{t?.scope || "-"}</td>
-                                <td>{t?.discussedDate || "-"}</td>
-                                <td>{Number(t?.estHours || t?.estimateHours || 0)}</td> {/* UPDATED: handle both old and new */}
-                                <td>
-                                  {meta ? (
-                                    <span
-                                      style={{
-                                        display: "inline-block",
-                                        padding: "2px 8px",
-                                        borderRadius: 999,
-                                        fontSize: 11,
-                                        fontWeight: 600,
-                                        backgroundColor: meta.color,
-                                        color: "#fff"
-                                      }}
-                                    >
-                                      {meta.label}
-                                    </span>
-                                  ) : (
-                                    t?.clientPriority || "-"
-                                  )}
-                                </td>
-                                <td>{givenBy}</td>
-                                <td>{t?.createdByUserId?.fullName || "-"}</td>
-                                
-  <td style={{ textAlign: "center" }}>
-  {canEdit && (
-    <button
-      type="button"
-      onClick={() => startEditTask(t)}
-      title="Edit Task"
-      style={{
-        background: "none",
-        border: "none",
-        cursor: "pointer",
-        color: "#1890ff",
-        fontSize: "16px",
-        padding: 0
-      }}
-    >
-      <FaEdit />
-    </button>
-  )}
-</td>
-                              </tr>
-                            );
-                          })}
-                      </tbody>
+      // Get project name safely
+      let projectName = '-';
+      if (t?.projectId) {
+        if (typeof t.projectId === 'object') {
+          projectName = t.projectId.name || '-';
+        } else if (typeof t.projectId === 'string') {
+          projectName = t.projectId; // This will show ID, but better than empty
+        }
+      } else if (t?.projectName) {
+        projectName = t.projectName;
+      }
+
+      // Get created by name safely
+      let createdByName = 'System';
+      if (t?.createdByUserId) {
+        if (typeof t.createdByUserId === 'object') {
+          createdByName = t.createdByUserId.fullName || 'Unknown';
+        }
+      } else if (t?.createdBy) {
+        createdByName = t.createdBy;
+      } else if (t?.createdByName) {
+        createdByName = t.createdByName;
+      }
+
+      return (
+        <tr key={t?._id || `task-${index}`}>
+          <td>{index + 1}</td>
+          <td>
+            <strong>{projectName}</strong>
+          </td>
+          <td style={{ maxWidth: 260, whiteSpace: "pre-wrap" }}>
+            {t?.requirement || t?.recentRequirement || t?.title || '-'}
+          </td>
+          <td>{t?.type || t?.requirementType || "NEW"}</td>
+          <td>{t?.status || '-'}</td>
+          <td>{t?.scope || "-"}</td>
+          <td>{t?.discussedDate || "-"}</td>
+          <td>{Number(t?.estHours || t?.estimateHours || 0)}</td>
+          <td>
+            {meta ? (
+              <span
+                style={{
+                  display: "inline-block",
+                  padding: "2px 8px",
+                  borderRadius: 999,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  backgroundColor: meta.color,
+                  color: "#fff"
+                }}
+              >
+                {meta.label}
+              </span>
+            ) : (
+              t?.clientPriority || "-"
+            )}
+          </td>
+          <td>{givenBy}</td>
+          <td>{createdByName}</td>
+          <td style={{ textAlign: "center" }}>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => startEditTask(t)}
+                title="Edit Task"
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "#1890ff",
+                  fontSize: "16px",
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  transition: "all 0.2s"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "#e6f7ff";
+                  e.currentTarget.style.color = "#096dd9";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                  e.currentTarget.style.color = "#1890ff";
+                }}
+              >
+                <FaEdit size={16} />
+              </button>
+            )}
+          </td>
+        </tr>
+      );
+    })}
+</tbody>
                     </table>
                     {filteredTasks.length === 0 && (
                       <p className="empty">
@@ -3882,7 +3818,7 @@ setTimeout(() => {
             </main>
           )}
 
-          {/* DASHBOARD TAB */}
+          {/* DASHBOARD TAB - Updated to show role in projects */}
           {activeTab === "dashboard" && (
             <main className="layout single-column">
               <section className="full-width">
@@ -4027,7 +3963,7 @@ setTimeout(() => {
                   </p>
                 </div>
 
-                {/* PROJECT SUMMARY IN DASHBOARD */}
+                {/* PROJECT SUMMARY IN DASHBOARD - Updated to show role */}
                 <div className="card table-shadow-card">
                   <div className="card-header-row">
                     <h2>My Projects Summary</h2>
@@ -4043,42 +3979,78 @@ setTimeout(() => {
                       <thead>
                         <tr>
                           <th>Project</th>
-                          <th>Status</th>
                           <th>Estimated Hours</th>
                           <th>Balance Hours</th>
                           <th>My Role</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {Array.isArray(myProjects) && myProjects.length > 0 ? (
-                          myProjects.slice(0, 5).map((project, index) => (
-                            <tr key={project?._id || `dashboard-project-${index}`}>
-                              <td>{project?.name}</td>
-                              <td>
-                                <ProjectStatusBadge status={project?.status} />
-                              </td>
-                              <td>{project?.totalEstimatedHours || 0} hrs</td>
-                              <td>
-                                <span style={{
-                                  color: project?.balanceHours < 0 ? '#ff4d4f' :
-                                    project?.balanceHours < (project?.totalEstimatedHours * 0.1) ? '#fa8c16' : '#52c41a',
-                                  fontWeight: 'bold'
-                                }}>
-                                  {project?.balanceHours || 0} hrs
-                                </span>
-                              </td>
-                              <td>{getMyRoleFromProject(project, user?._id) || "Not assigned"}
-                              </td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan="5" style={{ textAlign: 'center', padding: '20px' }}>
-                              <p className="empty">No projects assigned to you yet.</p>
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
+  {Array.isArray(myProjects) && myProjects.length > 0 ? (
+    myProjects.map((project, index) => (
+      <tr 
+        key={project?._id || `project-${index}`}
+        onClick={() => {
+          setSelectedProject(project);
+          // Load tasks for this project
+          if (project?._id) {
+            api.get(`/tasks/project/${project._id}`)
+              .then(res => {
+                const tasks = Array.isArray(res.data?.tasks) ? res.data.tasks : [];
+                setProjectTasks(tasks);
+              })
+              .catch(err => console.error("Error loading project tasks:", err));
+          }
+        }}
+        style={{ 
+          cursor: 'pointer',
+          backgroundColor: selectedProject?._id === project?._id ? '#e6f7ff' : 'transparent',
+          transition: 'background-color 0.2s'
+        }}
+        onMouseEnter={(e) => {
+          if (selectedProject?._id !== project?._id) {
+            e.currentTarget.style.backgroundColor = '#f5f5f5';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (selectedProject?._id !== project?._id) {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }
+        }}
+      >
+        <td>
+          <strong>{project?.name}</strong>
+          {project?.code && ` (${project.code})`}
+          <div style={{ fontSize: '12px', color: '#666' }}>
+            {project?.description || 'No description'}
+          </div>
+        </td>
+        <td>{project?.totalEstimatedHours || 0} hrs</td>
+        <td>
+          <span style={{
+            color: project?.balanceHours < 0 ? '#ff4d4f' :
+              project?.balanceHours < (project?.totalEstimatedHours * 0.1) ? '#fa8c16' : '#52c41a',
+            fontWeight: 'bold'
+          }}>
+            {project?.balanceHours || 0} hrs
+          </span>
+        </td>
+        <td>
+          <strong>
+            {getMyRoleFromProject(project, user?._id) || 
+             getMyRoleFromProject(project, user?.id) || 
+             "Not assigned"}
+          </strong>
+        </td>
+      </tr>
+    ))
+  ) : (
+    <tr>
+      <td colSpan="4" style={{ textAlign: 'center', padding: '20px' }}>
+        <p className="empty">No projects assigned to you yet.</p>
+      </td>
+    </tr>
+  )}
+</tbody>
                     </table>
                   </div>
                   {Array.isArray(myProjects) && myProjects.length > 5 && (
