@@ -5,16 +5,24 @@ import ChangePasswordCard from "../components/ChangePasswordCard";
 import logo from "../assets/Company Logo.png";
 import { buildHolidayCalendar } from "../utils/holidays";
 import "../../styles/employeeDashboard.css";
-import { FaEdit, FaCalendarAlt, FaBell, FaCheck, FaCheckCircle, FaTimes, FaExclamationCircle, FaInfoCircle, FaTrash, FaEye, FaEnvelope } from "react-icons/fa";
+import {
+  FaEdit, FaCalendarAlt, FaBell, FaCheck, FaCheckCircle,
+  FaTimes, FaExclamationCircle, FaInfoCircle, FaTrash,
+  FaEye, FaEnvelope, FaFileExcel, FaDownload, FaClock,
+} from "react-icons/fa";
 import { io } from "socket.io-client";
+import * as XLSX from 'xlsx';
 
-// ADD HELPER FUNCTION FOR RULE 7 FIX
+// FIXED HELPER FUNCTION FOR PROJECT ROLE
 const getMyRoleFromProject = (project, userId) => {
   if (!project?.assignments || !Array.isArray(project.assignments)) return null;
 
   const assignment = project.assignments.find(a => {
     const assignedUserId =
-      typeof a.user === "object" ? a.user._id : a.user;
+      a.user?._id ||
+      a.userId ||
+      a.user;
+
     return String(assignedUserId) === String(userId);
   });
 
@@ -42,15 +50,8 @@ const HALF_DAY_STATUSES = [
 
 const normalizeAttendanceStatus = (a) => {
   if (!a) return "-";
-
-  if (a.status === "Half Day - Fun Thursday") {
-    return "Half Day (Fun Activity)";
-  }
-
-  if (a.status === "Half Day - Development") {
-    return "Half Day (Development)";
-  }
-
+  if (a.status === "Half Day - Fun Thursday") return "Half Day (Fun Activity)";
+  if (a.status === "Half Day - Development") return "Half Day (Development)";
   return a.status;
 };
 
@@ -79,18 +80,8 @@ const PRIORITY_DEFAULT_HOURS = {
 };
 
 const monthNames = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December"
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
 ];
 
 const diffDays = (start, end) => {
@@ -125,10 +116,8 @@ const buildMonthMatrix = (month, year) => {
   const first = new Date(y, m - 1, 1);
   const firstWeekday = first.getDay();
   const daysInMonth = new Date(y, m, 0).getDate();
-
   const weeks = [];
   let dayCounter = 1 - firstWeekday;
-
   while (dayCounter <= daysInMonth) {
     const week = [];
     for (let i = 0; i < 7; i += 1, dayCounter += 1) {
@@ -145,22 +134,18 @@ const buildMonthMatrix = (month, year) => {
     }
     weeks.push(week);
   }
-
   return weeks;
 };
 
 const computeWorkingDaysExcludingHolidays = (startStr, endStr) => {
   if (!startStr || !endStr) return 0;
   if (diffDays(startStr, endStr) <= 0) return 0;
-
   const [sd, sm, sy] = startStr.split("-").map(Number);
   const [ed, em, ey] = endStr.split("-").map(Number);
   if ([sd, sm, sy, ed, em, ey].some((n) => Number.isNaN(n))) return 0;
-
   const start = new Date(sy, sm - 1, sd);
   const end = new Date(ey, em - 1, ed);
   if (end < start) return 0;
-
   const calendarCache = {};
 
   const isSystemHolidayDate = (date) => {
@@ -215,14 +200,12 @@ const computeWorkingDaysExcludingHolidays = (startStr, endStr) => {
 
   let count = 0;
   const cursor = new Date(start);
-
   while (cursor <= end) {
     if (!isSystemHolidayDate(cursor)) {
       count += 1;
     }
     cursor.setDate(cursor.getDate() + 1);
   }
-
   return count;
 };
 
@@ -283,12 +266,13 @@ const getTeamBirthdayWish = () => {
   return wishes[wishIndex];
 };
 
-// Notification Component
+// Notification Component with UI Fixes
 const NotificationCenter = ({ notifications, onClose, onMarkAsRead, onMarkAllAsRead, onDelete, onDeleteAll, onViewDetails }) => {
-  const unreadCount = notifications.filter(n => !n.read).length;
-  
+  const safeNotifications = Array.isArray(notifications) ? notifications : [];
+  const unreadCount = safeNotifications.filter(n => !n?.read).length;
+
   const getNotificationIcon = (type) => {
-    switch(type) {
+    switch (type) {
       case 'success': return <FaCheckCircle style={{ color: '#52c41a' }} />;
       case 'warning': return <FaExclamationCircle style={{ color: '#faad14' }} />;
       case 'error': return <FaTimes style={{ color: '#ff4d4f' }} />;
@@ -298,7 +282,7 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead, onMarkAllAsR
   };
 
   const getNotificationColor = (type) => {
-    switch(type) {
+    switch (type) {
       case 'success': return '#f6ffed';
       case 'warning': return '#fff7e6';
       case 'error': return '#fff2f0';
@@ -308,6 +292,7 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead, onMarkAllAsR
   };
 
   const formatTimeAgo = (dateString) => {
+    if (!dateString) return 'Recently';
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now - date;
@@ -322,6 +307,11 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead, onMarkAllAsR
     return date.toLocaleDateString();
   };
 
+  // Generate a stable key for notification items
+  const getNotificationKey = (notification, index) => {
+    return notification?._id || `notification-${index}`;
+  };
+
   return (
     <div className="notification-center">
       <div className="notification-header">
@@ -334,7 +324,7 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead, onMarkAllAsR
         </div>
         <div className="notification-actions">
           {unreadCount > 0 && (
-            <button 
+            <button
               className="notification-action-btn"
               onClick={onMarkAllAsRead}
               title="Mark all as read"
@@ -342,8 +332,8 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead, onMarkAllAsR
               <FaCheck /> Mark all read
             </button>
           )}
-          {notifications.length > 0 && (
-            <button 
+          {safeNotifications.length > 0 && (
+            <button
               className="notification-action-btn delete"
               onClick={onDeleteAll}
               title="Clear all notifications"
@@ -351,7 +341,7 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead, onMarkAllAsR
               <FaTrash /> Clear all
             </button>
           )}
-          <button 
+          <button
             className="notification-close-btn"
             onClick={onClose}
             title="Close notifications"
@@ -362,31 +352,31 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead, onMarkAllAsR
       </div>
 
       <div className="notification-list">
-        {notifications.length === 0 ? (
+        {safeNotifications.length === 0 ? (
           <div className="no-notifications">
             <FaBell size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
             <p>No notifications</p>
             <p style={{ fontSize: '12px', opacity: 0.7 }}>You're all caught up!</p>
           </div>
         ) : (
-          notifications.map((notification) => (
-            <div 
-              key={notification._id} 
-              className={`notification-item ${!notification.read ? 'unread' : ''}`}
-              style={{ backgroundColor: getNotificationColor(notification.type) }}
+          safeNotifications.map((notification, index) => (
+            <div
+              key={getNotificationKey(notification, index)}
+              className={`notification-item ${!notification?.read ? 'unread' : ''}`}
+              style={{ backgroundColor: getNotificationColor(notification?.type) }}
             >
               <div className="notification-icon">
-                {getNotificationIcon(notification.type)}
+                {getNotificationIcon(notification?.type)}
               </div>
               <div className="notification-content">
                 <div className="notification-message">
-                  {notification.message}
+                  {notification?.message || 'No message'}
                 </div>
                 <div className="notification-meta">
                   <span className="notification-time">
-                    {formatTimeAgo(notification.createdAt || notification.timestamp)}
+                    {formatTimeAgo(notification?.createdAt || notification?.timestamp)}
                   </span>
-                  {notification.category && (
+                  {notification?.category && (
                     <span className="notification-category">
                       {notification.category}
                     </span>
@@ -394,8 +384,8 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead, onMarkAllAsR
                 </div>
               </div>
               <div className="notification-item-actions">
-                {!notification.read && (
-                  <button 
+                {!notification?.read && (
+                  <button
                     className="notification-item-btn"
                     onClick={() => onMarkAsRead(notification._id)}
                     title="Mark as read"
@@ -403,14 +393,14 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead, onMarkAllAsR
                     <FaCheck size={12} />
                   </button>
                 )}
-                <button 
+                <button
                   className="notification-item-btn view"
                   onClick={() => onViewDetails(notification)}
                   title="View details"
                 >
                   <FaEye size={12} />
                 </button>
-                <button 
+                <button
                   className="notification-item-btn delete"
                   onClick={() => onDelete(notification._id)}
                   title="Delete notification"
@@ -423,12 +413,11 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead, onMarkAllAsR
         )}
       </div>
 
-      {notifications.length > 0 && (
+      {safeNotifications.length > 0 && (
         <div className="notification-footer">
-          <button 
+          <button
             className="notification-view-all-btn"
             onClick={() => {
-              // Open modal or navigate to all notifications page
               alert('View all notifications feature would open detailed view');
             }}
           >
@@ -441,9 +430,49 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead, onMarkAllAsR
   );
 };
 
+// Excel Export Component
+const ExportToExcel = ({ data, filename, sheetName, buttonText }) => {
+  const handleExport = () => {
+    if (!data || data.length === 0) {
+      alert('No data to export');
+      return;
+    }
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName || 'Sheet1');
+    XLSX.writeFile(wb, filename || 'export.xlsx');
+  };
+
+  return (
+    <button
+      onClick={handleExport}
+      className="export-btn"
+      title="Export to Excel"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '6px 12px',
+        backgroundColor: '#217346',
+        color: 'white',
+        border: 'none',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '13px',
+        fontWeight: '500',
+        transition: 'all 0.2s'
+      }}
+      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1a5e38'}
+      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#217346'}
+    >
+      <FaFileExcel /> {buttonText || 'Export to Excel'} <FaDownload size={12} />
+    </button>
+  );
+};
+
 export default function EmployeeDashboard() {
   const { user, logout } = useAuth();
-  
 
   const TAGLINES = useMemo(
     () => [
@@ -505,7 +534,6 @@ export default function EmployeeDashboard() {
 
   const [activeTab, setActiveTab] = useState("timesheet");
 
-  
   const [{ month, year }, setMonthYear] = useState(getCurrentMonth());
 
   const [date, setDate] = useState(formatToday());
@@ -528,7 +556,7 @@ export default function EmployeeDashboard() {
   const [summary, setSummary] = useState(null);
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const [filteredTasks, setFilteredTasks] = useState(() => []);
+  const [filteredTasks, setFilteredTasks] = useState([]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [payslips, setPayslips] = useState([]);
@@ -536,21 +564,25 @@ export default function EmployeeDashboard() {
   const [lastAlertAttendanceId, setLastAlertAttendanceId] = useState(null);
   const [taskError, setTaskError] = useState("");
 
+  const [showTaskSuccess, setShowTaskSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+
+  // UPDATED TASK FORM WITH CORRECT FIELD NAMES
   const [taskForm, setTaskForm] = useState({
     projectId: "",
-    recentRequirement: "",
-    requirementType: "NEW",
+    requirement: "", // was recentRequirement
+    type: "NEW", // was requirementType
     requirementRole: "DEVELOPER",
     status: "OPEN",
     scope: "AGREED",
     notes: "",
     discussedDate: formatToday(),
-    originalClosureDate: "",
-    estimatedDate: "",
-    noOfDays: 0,
+    startDate: "", // was originalClosureDate
+    closeDate: "", // was estimatedDate
+    workingDays: 0, // was noOfDays
     clientPriority: "P3",
     prioritySource: "CLIENT",
-    hoursAllocated: PRIORITY_DEFAULT_HOURS.P3
+    estHours: PRIORITY_DEFAULT_HOURS.P3 // was hoursAllocated
   });
   const [editingTaskId, setEditingTaskId] = useState(null);
 
@@ -576,40 +608,35 @@ export default function EmployeeDashboard() {
     try {
       setLoadingNotifications(true);
       const res = await api.get("/notifications/my");
-      
-      if (res.data && Array.isArray(res.data)) {
-        // Filter notifications for the current employee only
-        const employeeNotifications = res.data.filter(notification => 
-          notification.userId === user._id || 
-          notification.userId === user.id ||
-          notification.recipientId === user._id ||
-          notification.recipientId === user.id ||
-          (notification.recipientType === 'employee' && (!notification.recipientId || notification.recipientId === user._id))
-        );
-        
-        setNotifications(employeeNotifications);
-        const unread = employeeNotifications.filter(n => !n.read).length;
-        setUnreadNotificationCount(unread);
-      } else {
-        setNotifications([]);
-        setUnreadNotificationCount(0);
-      }
+
+      const notificationsData = Array.isArray(res.data) ? res.data : [];
+
+      const employeeNotifications = notificationsData.filter(notification =>
+        notification?.userId === user?._id ||
+        notification?.userId === user?.id ||
+        notification?.recipientId === user?._id ||
+        notification?.recipientId === user?.id ||
+        (notification?.recipientType === 'employee' && (!notification?.recipientId || notification?.recipientId === user?._id))
+      );
+
+      setNotifications(employeeNotifications);
+      const unread = employeeNotifications.filter(n => !n?.read).length;
+      setUnreadNotificationCount(unread);
     } catch (error) {
       console.error("Error loading notifications", error);
-      // If API fails, show empty notifications
       setNotifications([]);
       setUnreadNotificationCount(0);
     } finally {
       setLoadingNotifications(false);
     }
-  }, [user._id, user.id]);
+  }, [user?._id, user?.id]);
 
   const loadAttendance = useCallback(async (selectedMonth = month, selectedYear = year) => {
     try {
       const res = await api.get("/attendance/my", {
         params: { month: selectedMonth, year: selectedYear }
       });
-      setAttendance([...(res.data || [])]);
+      setAttendance(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
       console.error("Error loading attendance", error);
       setAttendance([]);
@@ -631,16 +658,16 @@ export default function EmployeeDashboard() {
       const res = await api.get("/utils/dashboard");
 
       setSharedMetrics({
-        presentDays: res.data.attendance.presentDays,
-        halfDays: res.data.attendance.halfDays,
-        leavesTaken: res.data.attendance.leaveDays,
-        hoursWorked: res.data.timesheet.totalHoursWorked,
+        presentDays: res.data?.attendance?.presentDays || 0,
+        halfDays: res.data?.attendance?.halfDays || 0,
+        leavesTaken: res.data?.attendance?.leaveDays || 0,
+        hoursWorked: res.data?.timesheet?.totalHoursWorked || 0,
         pendingRequests: 0,
-        extraHours: res.data.timesheet.totalExtraHours,
+        extraHours: res.data?.timesheet?.totalExtraHours || 0,
         compOffRequests: 0
       });
 
-      setCompOffBalance(res.data.leaveBalance.compOff || 0);
+      setCompOffBalance(res.data?.leaveBalance?.compOff || 0);
     } catch (error) {
       console.error("Error loading dashboard", error);
     }
@@ -650,9 +677,8 @@ export default function EmployeeDashboard() {
     try {
       const res = await api.get("/projects/my");
       console.log("Employee projects loaded:", res.data);
-      const projectsData = res.data || [];
+      const projectsData = Array.isArray(res.data) ? res.data : [];
 
-      // Use the same data for both states
       setProjects(projectsData);
       setMyProjects(projectsData);
     } catch (error) {
@@ -671,10 +697,9 @@ export default function EmployeeDashboard() {
       setFilteredTasks(tasksData);
       setSearchTerm("");
 
-      // Load project-specific tasks
-      if (selectedProject) {
+      if (selectedProject?._id) {
         const projectTasksRes = await api.get(`/projects/${selectedProject._id}/tasks`);
-        setProjectTasks(projectTasksRes.data || []);
+        setProjectTasks(Array.isArray(projectTasksRes.data) ? projectTasksRes.data : []);
       }
     } catch (error) {
       console.error("Error loading my tasks", error?.response || error);
@@ -682,12 +707,12 @@ export default function EmployeeDashboard() {
       setFilteredTasks([]);
       setProjectTasks([]);
     }
-  }, [selectedProject]);
+  }, [selectedProject?._id]);
 
   const loadPayslips = useCallback(async () => {
     try {
       const res = await api.get("/payslips/my");
-      setPayslips(res.data || []);
+      setPayslips(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
       console.error("Failed to load payslips", error);
       setPayslips([]);
@@ -711,20 +736,26 @@ export default function EmployeeDashboard() {
   }, [loadAttendance, loadSummary, loadDashboard]);
 
   // ============================================
-  // ✅ SOCKET CONNECTION useEffect - AFTER all useCallbacks
+  // ✅ SOCKET CONNECTION useEffect
   // ============================================
-  
+
   useEffect(() => {
-    const socket = io(
-      import.meta.env.VITE_API_URL || "http://localhost:5000",
-      {
-        withCredentials: true,
-        transports: ["websocket"] // Important for CORS
-      }
-    );
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+    const socket = io(API_URL, {
+      withCredentials: true,
+      transports: ["websocket", "polling"],
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 10000
+    });
 
     socket.on("connect", () => {
       console.log("✅ Employee socket connected:", socket.id);
+    });
+
+    socket.on("connect_error", (error) => {
+      console.log("⚠️ Socket connection error:", error.message);
     });
 
     socket.on("dashboard:update", async (data) => {
@@ -746,8 +777,10 @@ export default function EmployeeDashboard() {
     });
 
     return () => {
-      socket.disconnect();
-      console.log("❌ Employee socket disconnected");
+      if (socket) {
+        socket.disconnect();
+        console.log("❌ Employee socket disconnected");
+      }
     };
   }, [
     loadAttendance,
@@ -762,7 +795,7 @@ export default function EmployeeDashboard() {
   // ============================================
   // ✅ INITIAL DATA LOAD useEffect
   // ============================================
-  
+
   useEffect(() => {
     const loadInitialData = async () => {
       await Promise.all([
@@ -775,7 +808,7 @@ export default function EmployeeDashboard() {
         loadPayslips()
       ]);
     };
-    
+
     loadInitialData();
   }, [
     loadAttendance,
@@ -824,7 +857,7 @@ export default function EmployeeDashboard() {
         if (isTestMode) {
           setShowBirthdayBanner(true);
           setBirthdayManagerMessage(
-            getManagementBirthdayMessage(user.fullName || "Team Member")
+            getManagementBirthdayMessage(user?.fullName || "Team Member")
           );
           return;
         }
@@ -837,7 +870,7 @@ export default function EmployeeDashboard() {
         if (res.data?.isBirthday) {
           setShowBirthdayBanner(true);
           setBirthdayManagerMessage(
-            getManagementBirthdayMessage(user.fullName || "Team Member")
+            getManagementBirthdayMessage(user?.fullName || "Team Member")
           );
         }
       } catch (err) {
@@ -846,7 +879,7 @@ export default function EmployeeDashboard() {
     };
 
     checkBirthday();
-  }, [user.fullName]);
+  }, [user?.fullName]);
 
   useEffect(() => {
     if (activeTab === "payslips") {
@@ -855,7 +888,7 @@ export default function EmployeeDashboard() {
   }, [activeTab, loadPayslips]);
 
   useEffect(() => {
-    if (attendance.length === 0) {
+    if (!Array.isArray(attendance) || attendance.length === 0) {
       setSharedMetrics({
         presentDays: 0,
         halfDays: 0,
@@ -877,6 +910,8 @@ export default function EmployeeDashboard() {
     let compOffRequests = 0;
 
     attendance.forEach((a) => {
+      if (!a) return;
+
       if (a.managerDecision?.status === "REJECTED") {
         return;
       }
@@ -915,31 +950,32 @@ export default function EmployeeDashboard() {
   }, [attendance]);
 
   useEffect(() => {
-    if (!attendance || attendance.length === 0) return;
+    if (!Array.isArray(attendance) || attendance.length === 0) return;
 
     const decided = attendance
       .filter(
         (a) =>
+          a &&
           a.managerDecision &&
           (a.managerDecision.status === "APPROVED" ||
             a.managerDecision.status === "REJECTED")
       )
       .sort((a, b) => {
         const ta =
-          a.managerDecision.decidedAt ||
+          a.managerDecision?.decidedAt ||
           a.updatedAt ||
-          `${a.date.split("-").reverse().join("-")}T00:00:00Z`;
+          `${a.date?.split("-").reverse().join("-")}T00:00:00Z`;
         const tb =
-          b.managerDecision.decidedAt ||
+          b.managerDecision?.decidedAt ||
           b.updatedAt ||
-          `${b.date.split("-").reverse().join("-")}T00:00:00Z`;
+          `${b.date?.split("-").reverse().join("-")}T00:00:00Z`;
         return new Date(tb) - new Date(ta);
       });
 
     if (decided.length === 0) return;
 
     const latest = decided[0];
-    if (!latest._id || latest._id === lastAlertAttendanceId) return;
+    if (!latest?._id || latest._id === lastAlertAttendanceId) return;
 
     const decision = latest.managerDecision.status;
     const label =
@@ -952,13 +988,12 @@ export default function EmployeeDashboard() {
         ? `Your ${label} for ${latest.date} was APPROVED by Manager.`
         : `Your ${label} for ${latest.date} was REJECTED by Manager.`;
 
-    const [_, mm, yyyy] = latest.date.split("-");
+    const [_, mm, yyyy] = (latest.date || "").split("-");
     if (`${mm}-${yyyy}` === `${month}-${year}`) {
       setTimeout(() => {
         alert(message);
       }, 100);
-      
-      // Also create a notification for this approval
+
       const newNotification = {
         _id: `attendance-${latest._id}-${Date.now()}`,
         type: decision === "APPROVED" ? 'success' : 'error',
@@ -966,57 +1001,60 @@ export default function EmployeeDashboard() {
         category: 'Attendance',
         read: false,
         createdAt: new Date().toISOString(),
-        userId: user._id
+        userId: user?._id
       };
-      
-      setNotifications(prev => [newNotification, ...prev]);
-      setUnreadNotificationCount(prev => prev + 1);
+
+      setNotifications(prev => Array.isArray(prev) ? [newNotification, ...prev] : [newNotification]);
+      setUnreadNotificationCount(prev => (prev || 0) + 1);
     }
 
     setLastAlertAttendanceId(latest._id);
-  }, [attendance, lastAlertAttendanceId, month, year, user._id]);
+  }, [attendance, lastAlertAttendanceId, month, year, user?._id]);
 
   // ============================================
   // ✅ Holiday calculations
   // ============================================
 
-  const holidays = buildHolidayCalendar(month, year);
+  const holidays = buildHolidayCalendar(month, year) || [];
   const calendarWeeks = buildMonthMatrix(month, year);
 
   const holidayByDateKey = holidays.reduce((acc, h) => {
-    if (h.dateKey) acc[h.dateKey] = h;
+    if (h?.dateKey) acc[h.dateKey] = h;
     return acc;
   }, {});
 
   const publicHolidays = holidays.filter(
     (h) =>
-      h.type === "MANDATORY_PUBLIC" ||
-      h.type === "OPTIONAL_PUBLIC" ||
-      h.isMandatory ||
-      h.isOptional ||
-      h.kind === "MANDATORY" ||
-      h.kind === "OPTIONAL"
+      h &&
+      (h.type === "MANDATORY_PUBLIC" ||
+        h.type === "OPTIONAL_PUBLIC" ||
+        h.isMandatory ||
+        h.isOptional ||
+        h.kind === "MANDATORY" ||
+        h.kind === "OPTIONAL")
   );
 
   const mandatoryPublicCount = publicHolidays.filter(
     (h) =>
-      h.type === "MANDATORY_PUBLIC" ||
-      h.isMandatory ||
-      h.kind === "MANDATORY"
+      h &&
+      (h.type === "MANDATORY_PUBLIC" ||
+        h.isMandatory ||
+        h.kind === "MANDATORY")
   ).length;
 
   const optionalPublic = publicHolidays.filter(
     (h) =>
-      h.type === "OPTIONAL_PUBLIC" ||
-      h.isOptional ||
-      h.kind === "OPTIONAL"
+      h &&
+      (h.type === "OPTIONAL_PUBLIC" ||
+        h.isOptional ||
+        h.kind === "OPTIONAL")
   );
 
   const optionalTakenCount = optionalPublic.reduce((sum, h) => {
     const taken =
-      h.taken === "TAKEN" ||
-        h.takenStatus === "TAKEN" ||
-        h.defaultTaken
+      h?.taken === "TAKEN" ||
+        h?.takenStatus === "TAKEN" ||
+        h?.defaultTaken
         ? "TAKEN"
         : "NOT_TAKEN";
     return sum + (taken === "TAKEN" ? 1 : 0);
@@ -1190,41 +1228,41 @@ export default function EmployeeDashboard() {
   const markNotificationAsRead = async (notificationId) => {
     try {
       await api.patch(`/notifications/${notificationId}/read`);
-      
-      // Update local state
-      setNotifications(prev => 
-        prev.map(n => 
-          n._id === notificationId 
-            ? { ...n, read: true } 
+
+      setNotifications(prev =>
+        Array.isArray(prev) ? prev.map(n =>
+          n?._id === notificationId
+            ? { ...n, read: true }
             : n
-        )
+        ) : []
       );
-      setUnreadNotificationCount(prev => Math.max(0, prev - 1));
+      setUnreadNotificationCount(prev => Math.max(0, (prev || 0) - 1));
     } catch (error) {
       console.error("Error marking notification as read", error);
-      // Update locally even if API fails
-      setNotifications(prev => 
-        prev.map(n => 
-          n._id === notificationId 
-            ? { ...n, read: true } 
+      setNotifications(prev =>
+        Array.isArray(prev) ? prev.map(n =>
+          n?._id === notificationId
+            ? { ...n, read: true }
             : n
-        )
+        ) : []
       );
-      setUnreadNotificationCount(prev => Math.max(0, prev - 1));
+      setUnreadNotificationCount(prev => Math.max(0, (prev || 0) - 1));
     }
   };
 
   const markAllNotificationsAsRead = async () => {
     try {
       await api.patch("/notifications/mark-all-read");
-      
-      // Update local state
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+
+      setNotifications(prev =>
+        Array.isArray(prev) ? prev.map(n => ({ ...n, read: true })) : []
+      );
       setUnreadNotificationCount(0);
     } catch (error) {
       console.error("Error marking all notifications as read", error);
-      // Update locally even if API fails
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setNotifications(prev =>
+        Array.isArray(prev) ? prev.map(n => ({ ...n, read: true })) : []
+      );
       setUnreadNotificationCount(0);
     }
   };
@@ -1232,22 +1270,20 @@ export default function EmployeeDashboard() {
   const deleteNotification = async (notificationId) => {
     try {
       await api.delete(`/notifications/${notificationId}`);
-      
-      // Update local state
-      const notification = notifications.find(n => n._id === notificationId);
-      setNotifications(prev => prev.filter(n => n._id !== notificationId));
-      
+
+      const notification = Array.isArray(notifications) ? notifications.find(n => n?._id === notificationId) : null;
+      setNotifications(prev => Array.isArray(prev) ? prev.filter(n => n?._id !== notificationId) : []);
+
       if (notification && !notification.read) {
-        setUnreadNotificationCount(prev => Math.max(0, prev - 1));
+        setUnreadNotificationCount(prev => Math.max(0, (prev || 0) - 1));
       }
     } catch (error) {
       console.error("Error deleting notification", error);
-      // Update locally even if API fails
-      const notification = notifications.find(n => n._id === notificationId);
-      setNotifications(prev => prev.filter(n => n._id !== notificationId));
-      
+      const notification = Array.isArray(notifications) ? notifications.find(n => n?._id === notificationId) : null;
+      setNotifications(prev => Array.isArray(prev) ? prev.filter(n => n?._id !== notificationId) : []);
+
       if (notification && !notification.read) {
-        setUnreadNotificationCount(prev => Math.max(0, prev - 1));
+        setUnreadNotificationCount(prev => Math.max(0, (prev || 0) - 1));
       }
     }
   };
@@ -1255,31 +1291,27 @@ export default function EmployeeDashboard() {
   const deleteAllNotifications = async () => {
     try {
       await api.delete("/notifications/clear-all");
-      
-      // Update local state
+
       setNotifications([]);
       setUnreadNotificationCount(0);
     } catch (error) {
       console.error("Error deleting all notifications", error);
-      // Update locally even if API fails
       setNotifications([]);
       setUnreadNotificationCount(0);
     }
   };
 
   const handleViewNotificationDetails = (notification) => {
-    // Show notification details
     const details = `
 Notification Details:
 ────────────────────
-Type: ${notification.type || 'info'}
-Category: ${notification.category || 'General'}
-Message: ${notification.message}
-Date: ${new Date(notification.createdAt || notification.timestamp).toLocaleString()}
-Status: ${notification.read ? 'Read' : 'Unread'}
-${notification.link ? `Link: ${notification.link}` : ''}
+Type: ${notification?.type || 'info'}
+Category: ${notification?.category || 'General'}
+Message: ${notification?.message || 'No message'}
+Date: ${notification?.createdAt || notification?.timestamp ? new Date(notification.createdAt || notification.timestamp).toLocaleString() : 'Unknown'}
+Status: ${notification?.read ? 'Read' : 'Unread'}
     `;
-    
+
     alert(details);
   };
 
@@ -1347,21 +1379,15 @@ ${notification.link ? `Link: ${notification.link}` : ''}
 
       }
 
-     
-      
       await api.post("/attendance", payload);
-      
-      // 🔥 FORCE IMMEDIATE DASHBOARD REFRESH
-      await forceRefreshAll();
 
-      // Refresh notifications after attendance action
+      await forceRefreshAll();
       await refreshNotificationsAfterAction();
 
       if (APPROVAL_STATUSES.includes(status)) {
         const message = `Attendance / leave change for ${date} sent to Manager for approval. It will reflect in your dashboard and project views after Manager approval.`;
         alert(message);
-        
-        // Add a notification for the user
+
         const newNotification = {
           _id: `attendance-${Date.now()}`,
           type: 'info',
@@ -1369,16 +1395,15 @@ ${notification.link ? `Link: ${notification.link}` : ''}
           category: 'Attendance',
           read: false,
           createdAt: new Date().toISOString(),
-          userId: user._id
+          userId: user?._id
         };
-        
-        setNotifications(prev => [newNotification, ...prev]);
-        setUnreadNotificationCount(prev => prev + 1);
+
+        setNotifications(prev => Array.isArray(prev) ? [newNotification, ...prev] : [newNotification]);
+        setUnreadNotificationCount(prev => (prev || 0) + 1);
       } else {
         const message = `Attendance for ${date} saved successfully!`;
         alert(message);
-        
-        // Add a notification for the user
+
         const newNotification = {
           _id: `attendance-${Date.now()}`,
           type: 'success',
@@ -1386,11 +1411,11 @@ ${notification.link ? `Link: ${notification.link}` : ''}
           category: 'Attendance',
           read: false,
           createdAt: new Date().toISOString(),
-          userId: user._id
+          userId: user?._id
         };
-        
-        setNotifications(prev => [newNotification, ...prev]);
-        setUnreadNotificationCount(prev => prev + 1);
+
+        setNotifications(prev => Array.isArray(prev) ? [newNotification, ...prev] : [newNotification]);
+        setUnreadNotificationCount(prev => (prev || 0) + 1);
       }
 
       setDate(formatToday());
@@ -1438,43 +1463,58 @@ ${notification.link ? `Link: ${notification.link}` : ''}
 
   const monthLabel = `${monthNames[Number(month) - 1]}, ${year}`;
 
-  const timesheetRows = attendance.map((a) => {
-    const workedHours = a.hoursWorked || 0;
-    const extraHours = a.extraHoursWorked || 0;
+  const timesheetRows = useMemo(() => {
+    return Array.isArray(attendance) ? attendance.map((a) => {
+      const workedHours = a?.hoursWorked || 0;
+      const extraHours = a?.extraHoursWorked || 0;
 
-    return {
-      ...a,
-      workedHours,
-      extraHours
-    };
-  });
+      return {
+        ...a,
+        workedHours,
+        extraHours
+      };
+    }) : [];
+  }, [attendance]);
 
   const totalTimesheetHours = timesheetRows.reduce(
-    (sum, r) => sum + r.workedHours,
+    (sum, r) => sum + (r?.workedHours || 0),
     0
   );
 
+  // UPDATED RESET FUNCTION WITH CORRECT FIELD NAMES
   const resetTaskForm = (keepProjectId = false) => {
     setEditingTaskId(null);
     setTaskForm((prev) => ({
       projectId: keepProjectId ? prev.projectId : "",
-      recentRequirement: "",
-      requirementType: "NEW",
+      requirement: "", // was recentRequirement
+      type: "NEW", // was requirementType
       requirementRole: "DEVELOPER",
       status: "OPEN",
       scope: "AGREED",
       notes: "",
       discussedDate: formatToday(),
-      originalClosureDate: "",
-      estimatedDate: "",
-      noOfDays: 0,
+      startDate: "", // was originalClosureDate
+      closeDate: "", // was estimatedDate
+      workingDays: 0, // was noOfDays
       clientPriority: "P3",
       prioritySource: "CLIENT",
-      hoursAllocated: PRIORITY_DEFAULT_HOURS.P3
+      estHours: PRIORITY_DEFAULT_HOURS.P3 // was hoursAllocated
     }));
     setTaskError("");
+    setShowTaskSuccess(false);
+    setSuccessMessage("");
   };
 
+  const showSuccessPopup = (message) => {
+    setSuccessMessage(message);
+    setShowTaskSuccess(true);
+    setTimeout(() => {
+      setShowTaskSuccess(false);
+      setSuccessMessage("");
+    }, 3000);
+  };
+
+  // UPDATED CREATE/UPDATE TASK FUNCTION WITH CORRECT PAYLOAD
   const handleCreateOrUpdateTask = async (e) => {
     e.preventDefault();
     setTaskError("");
@@ -1484,102 +1524,94 @@ ${notification.link ? `Link: ${notification.link}` : ''}
       return;
     }
 
-    // Check if project is approved
-    const selectedProject = projects.find(p => p._id === taskForm.projectId);
-    if (selectedProject && selectedProject.status !== "APPROVED") {
-      setTaskError(`Cannot create task for project "${selectedProject.name}". Project status: ${selectedProject.status}. Only APPROVED projects allow task creation.`);
-      return;
-    }
-
-    if (!taskForm.recentRequirement || taskForm.recentRequirement.trim().length === 0) {
+    if (!taskForm.requirement || taskForm.requirement.trim().length === 0) {
       setTaskError("Please enter a requirement description");
       return;
     }
 
-    if (!taskForm.hoursAllocated || taskForm.hoursAllocated <= 0) {
+    if (!taskForm.estHours || taskForm.estHours <= 0) {
       setTaskError("Please enter estimated hours greater than 0");
       return;
     }
 
-    const finalDays = taskForm.noOfDays || 0;
+    const finalDays = taskForm.workingDays || 0;
 
     try {
-      // EXPLICITLY include requirementRole in payload
       const now = new Date();
+      // UPDATED PAYLOAD WITH CORRECT FIELD NAMES
       const payload = {
-        // ✅ REQUIRED — DO NOT MISS
         projectId: taskForm.projectId,
-        title: taskForm.recentRequirement?.trim(),
-        estimateHours:
-          Number(taskForm.hoursAllocated) > 0
-            ? Number(taskForm.hoursAllocated)
-            : PRIORITY_DEFAULT_HOURS[taskForm.clientPriority] || 8,
-        month: now.getMonth() + 1,
-        year: now.getFullYear(),
-
-        // ✅ VALID OPTIONAL FIELDS
-        recentRequirement: taskForm.recentRequirement,
-        requirementType: taskForm.requirementType,
+        requirement: taskForm.requirement?.trim(), // was recentRequirement
+        type: taskForm.type, // was requirementType
         status: taskForm.status,
         scope: taskForm.scope,
         notes: taskForm.notes,
         discussedDate: taskForm.discussedDate,
-        originalClosureDate: taskForm.originalClosureDate,
-        estimatedDate: taskForm.estimatedDate,
-        noOfDays: finalDays,
+        startDate: taskForm.startDate, // was originalClosureDate
+        closeDate: taskForm.closeDate, // was estimatedDate
+        workingDays: finalDays, // was noOfDays
         clientPriority: taskForm.clientPriority,
-        prioritySource: taskForm.prioritySource,
-
-        // ✅ EMPLOYEE RULES
-        assignedUserId: user._id || user.id,
-        createdByUserId: user._id || user.id
+        givenBy: taskForm.prioritySource, // was prioritySource
+        estHours: Number(taskForm.estHours) > 0 ? Number(taskForm.estHours) : PRIORITY_DEFAULT_HOURS[taskForm.clientPriority] || 8, // was estimateHours/hoursAllocated
+        month: now.getMonth() + 1,
+        year: now.getFullYear(),
+        assignedUserId: user?._id || user?.id,
+        createdByUserId: user?._id || user?.id
       };
 
       console.log("DEBUG - Creating task with payload:", payload);
 
       if (!editingTaskId) {
         await api.post("/tasks", payload);
+        setSuccessMessage("Task created successfully");
+setShowTaskSuccess(true);
+
+setTimeout(() => {
+  setShowTaskSuccess(false);
+}, 3000);
         const message = "Task / requirement added successfully";
-        alert(message);
-        
-        // Add notification
+        showSuccessPopup(message);
+
         const newNotification = {
           _id: `task-${Date.now()}`,
           type: 'success',
-          message: `Task created: "${taskForm.recentRequirement.substring(0, 50)}..."`,
+          message: `Task created: "${taskForm.requirement.substring(0, 50)}..."`,
           category: 'Tasks',
           read: false,
           createdAt: new Date().toISOString(),
-          userId: user._id
+          userId: user?._id
         };
-        
-        setNotifications(prev => [newNotification, ...prev]);
-        setUnreadNotificationCount(prev => prev + 1);
+
+        setNotifications(prev => Array.isArray(prev) ? [newNotification, ...prev] : [newNotification]);
+        setUnreadNotificationCount(prev => (prev || 0) + 1);
       } else {
         console.log("UPDATE PAYLOAD →", payload);
         await api.patch(`/tasks/${editingTaskId}`, payload);
         const message = "Task updated successfully";
-        alert(message);
-        
-        // Add notification
+        showSuccessPopup(message);
+
         const newNotification = {
           _id: `task-${Date.now()}`,
           type: 'info',
-          message: `Task updated: "${taskForm.recentRequirement.substring(0, 50)}..."`,
+          message: `Task updated: "${taskForm.requirement.substring(0, 50)}..."`,
           category: 'Tasks',
           read: false,
           createdAt: new Date().toISOString(),
-          userId: user._id
+          userId: user?._id
         };
-        
-        setNotifications(prev => [newNotification, ...prev]);
-        setUnreadNotificationCount(prev => prev + 1);
+
+        setNotifications(prev => Array.isArray(prev) ? [newNotification, ...prev] : [newNotification]);
+        setUnreadNotificationCount(prev => (prev || 0) + 1);
       }
 
       resetTaskForm(true);
+      setSuccessMessage("Task created successfully");
+
+
+      setTimeout(() => {
+
+      }, 3000);
       await loadTasks();
-      
-      // Refresh notifications
       await refreshNotificationsAfterAction();
 
     } catch (error) {
@@ -1588,12 +1620,15 @@ ${notification.link ? `Link: ${notification.link}` : ''}
     }
   };
 
+  // UPDATED EDIT TASK FUNCTION WITH CORRECT FIELD MAPPING
   const startEditTask = (t) => {
+    if (!t) return;
+
     const canEdit = (() => {
-      const userRole = user.role;
-      const createdByRole = t.createdByRole;
-      const createdById = t.createdByUserId?._id || t.createdByUserId;
-      const userId = user._id || user.id;
+      const userRole = user?.role;
+      const createdByRole = t?.createdByRole;
+      const createdById = t?.createdByUserId?._id || t?.createdByUserId;
+      const userId = user?._id || user?.id;
 
       if (userRole === "admin") return false;
       if (userRole === "employee") {
@@ -1616,22 +1651,19 @@ ${notification.link ? `Link: ${notification.link}` : ''}
     setEditingTaskId(t._id);
     setTaskForm({
       projectId: t.projectId?._id || t.projectId || "",
-      recentRequirement: t.recentRequirement || "",
-      requirementType: t.requirementType || "NEW",
+      requirement: t.requirement || t.recentRequirement || "", // handle both old and new
+      type: t.type || t.requirementType || "NEW", // handle both old and new
       requirementRole: t.requirementRole || "DEVELOPER",
       status: t.status || "OPEN",
       scope: t.scope || "AGREED",
       notes: t.notes || "",
       discussedDate: t.discussedDate || formatToday(),
-      originalClosureDate: t.originalClosureDate || "",
-      estimatedDate: t.estimatedDate || "",
-      noOfDays: t.noOfDays || 0,
+      startDate: t.startDate || t.originalClosureDate || "", // handle both old and new
+      closeDate: t.closeDate || t.estimatedDate || "", // handle both old and new
+      workingDays: t.workingDays || t.noOfDays || 0, // handle both old and new
       clientPriority: t.clientPriority || "P3",
-      prioritySource: t.prioritySource || "CLIENT",
-      hoursAllocated:
-        t.estimateHours ||
-        PRIORITY_DEFAULT_HOURS[t.clientPriority || "P3"] ||
-        8
+      prioritySource: t.givenBy || t.prioritySource || "CLIENT", // handle both old and new
+      estHours: t.estHours || t.estimateHours || PRIORITY_DEFAULT_HOURS[t.clientPriority || "P3"] || 8 // handle both old and new
     });
   };
 
@@ -1667,7 +1699,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
 
-      const employeeName = (user.fullName || "Employee").replace(/\s+/g, "_");
+      const employeeName = (user?.fullName || "Employee").replace(/\s+/g, "_");
       const monthName = monthNames[month - 1];
 
       const link = document.createElement("a");
@@ -1679,8 +1711,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
       document.body.removeChild(link);
 
       window.URL.revokeObjectURL(url);
-      
-      // Add notification for payslip download
+
       const newNotification = {
         _id: `payslip-${Date.now()}`,
         type: 'info',
@@ -1688,11 +1719,11 @@ ${notification.link ? `Link: ${notification.link}` : ''}
         category: 'Payslip',
         read: false,
         createdAt: new Date().toISOString(),
-        userId: user._id
+        userId: user?._id
       };
-      
-      setNotifications(prev => [newNotification, ...prev]);
-      setUnreadNotificationCount(prev => prev + 1);
+
+      setNotifications(prev => Array.isArray(prev) ? [newNotification, ...prev] : [newNotification]);
+      setUnreadNotificationCount(prev => (prev || 0) + 1);
     } catch (error) {
       console.error("Error downloading payslip:", error);
       alert("Failed to download payslip.");
@@ -1801,7 +1832,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
   // Balance Display Component
   const BalanceDisplay = ({ balance, estimated, consumed }) => {
     const isNegative = balance < 0;
-    const isLow = balance < (estimated * 0.1); // Less than 10% remaining
+    const isLow = balance < (estimated * 0.1);
 
     return (
       <div style={{
@@ -1820,12 +1851,12 @@ ${notification.link ? `Link: ${notification.link}` : ''}
             fontSize: "16px",
             color: isNegative ? "#ff4d4f" : isLow ? "#fa8c16" : "#52c41a"
           }}>
-            {balance.toFixed(1)} hrs
+            {balance?.toFixed(1) || 0} hrs
           </span>
         </div>
         <div style={{ fontSize: "12px", color: "#666" }}>
-          <div>Estimated: {estimated} hrs</div>
-          <div>Consumed: {consumed} hrs</div>
+          <div>Estimated: {estimated || 0} hrs</div>
+          <div>Consumed: {consumed || 0} hrs</div>
           {isNegative && (
             <div style={{ color: "#ff4d4f", fontWeight: "bold", marginTop: "5px" }}>
               ⚠️ Project has exceeded estimated hours
@@ -1842,7 +1873,99 @@ ${notification.link ? `Link: ${notification.link}` : ''}
   };
 
   // ============================================
-  // ✅ RETURN JSX - EXACTLY AS YOU HAD IT
+  // ✅ SEARCH FUNCTIONALITY
+  // ============================================
+
+  const handleSearch = (term) => {
+    setSearchTerm(term);
+
+    const safeTasks = Array.isArray(tasks) ? tasks : [];
+
+    if (!term || term.trim() === "") {
+      setFilteredTasks(safeTasks);
+    } else {
+      const searchLower = term.toLowerCase().trim();
+
+      const filtered = safeTasks.filter((task) => {
+        if (!task) return false;
+
+        const requirement = (task.requirement || task.recentRequirement || task.title || "").toLowerCase(); // handle both old and new
+        const project = (task.projectId?.name || task.project || "").toLowerCase();
+        const status = (task.status || "").toLowerCase();
+        const createdBy = (task.createdByUserId?.fullName || "").toLowerCase();
+        const role = (task.requirementRole || "").toLowerCase();
+        const priority = (task.clientPriority || "").toLowerCase();
+
+        return (
+          requirement.includes(searchLower) ||
+          project.includes(searchLower) ||
+          status.includes(searchLower) ||
+          createdBy.includes(searchLower) ||
+          role.includes(searchLower) ||
+          priority.includes(searchLower)
+        );
+      });
+
+      setFilteredTasks(filtered);
+    }
+  };
+
+  // ============================================
+  // ✅ EXPORT FUNCTIONS
+  // ============================================
+
+  const getAttendanceExportData = useCallback(() => {
+    return timesheetRows.map(row => ({
+      Date: row.date,
+      Status: normalizeAttendanceStatus(row),
+      'In Time': row.workInTime,
+      'Out Time': row.workOutTime,
+      'Hours Worked': row.workedHours?.toFixed(1) || 0,
+      'Extra Hours': row.extraHours?.toFixed(1) || 0,
+      'Manager Decision': row.managerDecision?.status || '-',
+      Notes: row.note || '-'
+    }));
+  }, [timesheetRows]);
+
+  // UPDATED EXPORT FUNCTION WITH CORRECT FIELD NAMES
+  const getTasksExportData = useCallback(() => {
+    return filteredTasks.map((task, index) => ({
+      'S.No': index + 1,
+      Project: task.projectId?.name || '-',
+      Requirement: task.requirement || task.recentRequirement || task.title, // handle both old and new
+      Type: task.type || task.requirementType || 'NEW', // handle both old and new
+      Status: task.status,
+      Scope: task.scope || '-',
+      'Discussed Date': task.discussedDate || '-',
+      'Est. Hours': task.estHours || task.estimateHours || 0, // handle both old and new
+      Priority: task.clientPriority || '-',
+      'Given By': task.givenBy || task.prioritySource || '-', // handle both old and new
+      'Created By': task.createdByUserId?.fullName || '-'
+    }));
+  }, [filteredTasks]);
+
+  const getProjectsExportData = useCallback(() => {
+    return myProjects.map(project => ({
+      'Project Name': project.name,
+      Code: project.code || '-',
+      Status: project.status,
+      'Total Estimated Hours': project.totalEstimatedHours || 0,
+      'Balance Hours': project.balanceHours || 0,
+      'My Role': getMyRoleFromProject(project, user?._id) || 'Not assigned'
+    }));
+  }, [myProjects, user?._id]);
+
+  const getHolidaysExportData = useCallback(() => {
+    return publicHolidays.map(h => ({
+      Date: h.dateLabel || h.dateKey,
+      Occasion: h.name,
+      Type: h.type === "MANDATORY_PUBLIC" || h.isMandatory ? "Mandatory" : "Optional",
+      Status: h.taken === "TAKEN" ? "Taken" : "Not Taken"
+    }));
+  }, [publicHolidays]);
+
+  // ============================================
+  // ✅ RETURN JSX
   // ============================================
 
   return (
@@ -1927,7 +2050,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                   }}
                 >
                   <div style={{ textAlign: "center", fontSize: 24, fontWeight: 800, color: "#874d00" }}>
-                    🎉 Happy Birthday, {user.fullName}! 🎂
+                    🎉 Happy Birthday, {user?.fullName}! 🎂
                   </div>
 
                   <div style={{ marginTop: 8, textAlign: "center", fontSize: 14, color: "#5c3a00" }}>
@@ -1948,7 +2071,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                     💼 <strong>Message from Management</strong>
                     <div style={{ marginTop: 6, fontStyle: "italic" }}>
                       {birthdayManagerMessage ||
-                        getManagementBirthdayMessage(user.fullName)}
+                        getManagementBirthdayMessage(user?.fullName)}
                     </div>
                   </div>
 
@@ -1982,8 +2105,8 @@ ${notification.link ? `Link: ${notification.link}` : ''}
             <div
               style={{
                 position: "absolute",
-                right: 400,
-                top: "4.5%",
+                right: 420,
+                top: "50%",
                 transform: "translateY(-50%)",
                 display: "flex",
                 flexDirection: "column",
@@ -1994,7 +2117,8 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                   "linear-gradient(135deg, #e6f7ff 0%, #f0faff 60%, #ffffff 100%)",
                 border: "1px solid #bae7ff",
                 boxShadow: "0 6px 18px rgba(24, 144, 255, 0.15)",
-                animation: "fadeSlideIn 0.6s ease-out"
+                animation: "fadeSlideIn 0.6s ease-out",
+                zIndex: 100
               }}
             >
               <div
@@ -2002,10 +2126,13 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                   fontSize: 13,
                   fontWeight: 700,
                   color: "#0050b3",
-                  letterSpacing: "0.3px"
+                  letterSpacing: "0.3px",
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
                 }}
               >
-                {todayInfo.day}, {todayInfo.date} {todayInfo.month} {todayInfo.year}
+                <FaClock size={12} /> {todayInfo.day}, {todayInfo.date} {todayInfo.month} {todayInfo.year}
               </div>
 
               <div
@@ -2022,10 +2149,13 @@ ${notification.link ? `Link: ${notification.link}` : ''}
               </div>
             </div>
 
-            <div>
-              <strong>{user.fullName}</strong> (Employee) — {user.email}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div>
+                <strong>{user?.fullName}</strong> <span style={{ color: '#666', fontSize: '12px' }}>(Employee)</span>
+              </div>
+              <div style={{ color: '#666', fontSize: '12px' }}>{user?.email}</div>
             </div>
-            
+
             {/* Notification Button */}
             <div style={{ position: "relative", marginLeft: "16px" }}>
               <button
@@ -2113,7 +2243,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                             <FaBell style={{ marginRight: '8px' }} />
                             Loading Notifications...
                           </div>
-                          <button 
+                          <button
                             className="notification-close-btn"
                             onClick={() => setShowNotifications(false)}
                             title="Close notifications"
@@ -2165,6 +2295,31 @@ ${notification.link ? `Link: ${notification.link}` : ''}
 
           <NextMonthPopup />
 
+          {/* Success Popup */}
+          {showTaskSuccess && (
+            <div
+              style={{
+                position: "fixed",
+                top: "20%",
+                left: "50%",
+                transform: "translateX(-50%)",
+                zIndex: 10000,
+                backgroundColor: "#52c41a",
+                color: "white",
+                padding: "16px 24px",
+                borderRadius: "8px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                animation: "slideDown 0.3s ease-out",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px"
+              }}
+            >
+              <FaCheckCircle size={20} />
+              <span>{successMessage}</span>
+            </div>
+          )}
+
           {/* TIMESHEET TAB */}
           {activeTab === "timesheet" && (
             <main className="layout">
@@ -2192,7 +2347,6 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                       </div>
                     </label>
 
-
                     <label>
                       Status
                       <select
@@ -2201,14 +2355,14 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                         disabled={
                           isSystemHoliday ||
                           (HALF_DAY_STATUSES.includes(status) &&
+                            Array.isArray(attendance) &&
                             attendance.some(
                               (a) =>
-                                a.date === date &&
-                                a.managerDecision?.status === "APPROVED"
+                                a?.date === date &&
+                                a?.managerDecision?.status === "APPROVED"
                             ))
                         }
                       >
-
                         {STATUS_OPTIONS.map((s) => (
                           <option key={s} value={s}>
                             {s}
@@ -2442,7 +2596,15 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                 </div>
 
                 <div className="card">
-                  <h2>Public Holidays – {monthLabel}</h2>
+                  <div className="card-header-row">
+                    <h2>Public Holidays – {monthLabel}</h2>
+                    <ExportToExcel
+                      data={getHolidaysExportData()}
+                      filename={`Public_Holidays_${monthLabel.replace(', ', '_')}.xlsx`}
+                      sheetName="Public Holidays"
+                      buttonText="Export"
+                    />
+                  </div>
 
                   <div
                     style={{
@@ -2670,27 +2832,27 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                             </tr>
                           </thead>
                           <tbody>
-                            {publicHolidays.map((h) => {
+                            {publicHolidays.map((h, index) => {
                               const isMandatory =
-                                h.type === "MANDATORY_PUBLIC" ||
-                                h.isMandatory ||
-                                h.kind === "MANDATORY";
+                                h?.type === "MANDATORY_PUBLIC" ||
+                                h?.isMandatory ||
+                                h?.kind === "MANDATORY";
                               const isOptional =
-                                h.type === "OPTIONAL_PUBLIC" ||
-                                h.isOptional ||
-                                h.kind === "OPTIONAL";
+                                h?.type === "OPTIONAL_PUBLIC" ||
+                                h?.isOptional ||
+                                h?.kind === "OPTIONAL";
 
                               const taken =
-                                h.taken === "TAKEN" ||
-                                  h.takenStatus === "TAKEN" ||
-                                  h.defaultTaken
+                                h?.taken === "TAKEN" ||
+                                  h?.takenStatus === "TAKEN" ||
+                                  h?.defaultTaken
                                   ? "TAKEN"
                                   : "NOT_TAKEN";
 
                               return (
-                                <tr key={h.dateKey}>
-                                  <td>{h.dateLabel || h.dateKey}</td>
-                                  <td>{h.name}</td>
+                                <tr key={h?.dateKey || `holiday-${index}`}>
+                                  <td>{h?.dateLabel || h?.dateKey}</td>
+                                  <td>{h?.name}</td>
                                   <td>
                                     {isMandatory
                                       ? "Mandatory"
@@ -2731,7 +2893,15 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                 </div>
 
                 <div className="card table-shadow-card">
-                  <h2>Attendance Report</h2>
+                  <div className="card-header-row">
+                    <h2>Attendance Report</h2>
+                    <ExportToExcel
+                      data={getAttendanceExportData()}
+                      filename={`Attendance_Report_${monthLabel.replace(', ', '_')}.xlsx`}
+                      sheetName="Attendance"
+                      buttonText="Export to Excel"
+                    />
+                  </div>
                   <div className="table-wrapper small-table">
                     <table>
                       <thead>
@@ -2747,23 +2917,22 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                         </tr>
                       </thead>
                       <tbody>
-                        {timesheetRows.map((a) => {
-                          const rowExtraHours = a.extraHours || 0;
+                        {timesheetRows.map((a, index) => {
+                          const rowExtraHours = a?.extraHours || 0;
 
                           return (
-                            <tr key={a._id}>
-                              <td>{a.date}</td>
+                            <tr key={a?._id || `attendance-${index}`}>
+                              <td>{a?.date}</td>
                               <td>{normalizeAttendanceStatus(a)}</td>
-
-                              <td>{a.workInTime}</td>
-                              <td>{a.workOutTime}</td>
-                              <td>{a.workedHours.toFixed(1)}</td>
+                              <td>{a?.workInTime}</td>
+                              <td>{a?.workOutTime}</td>
+                              <td>{a?.workedHours?.toFixed(1) || 0}</td>
                               <td>
                                 {rowExtraHours > 0 ? `${rowExtraHours.toFixed(1)} hrs` : "-"}
                               </td>
-                              <td>{a.managerDecision?.status || "-"}</td>
+                              <td>{a?.managerDecision?.status || "-"}</td>
                               <td>
-                                {a.status === "COMPOFF" && a.extraWork ? (
+                                {a?.status === "COMPOFF" && a?.extraWork ? (
                                   <>
                                     Extra: {a.extraWork.hours} hrs on{" "}
                                     {a.extraWork.workedDate}{" "}
@@ -2772,7 +2941,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                                     {a.extraWork.compOffTime}
                                   </>
                                 ) : (
-                                  a.note || "-"
+                                  a?.note || "-"
                                 )}
                               </td>
                             </tr>
@@ -2805,16 +2974,15 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                         </tr>
                       </thead>
                       <tbody>
-                        {timesheetRows.map((r) => (
-                          <tr key={r._id}>
-                            <td>{r.date}</td>
+                        {timesheetRows.map((r, index) => (
+                          <tr key={r?._id || `timesheet-${index}`}>
+                            <td>{r?.date}</td>
                             <td>{normalizeAttendanceStatus(r)}</td>
-
-                            <td>{r.workInTime}</td>
-                            <td>{r.workOutTime}</td>
-                            <td>{r.workedHours.toFixed(1)}</td>
-                            <td>{r.extraHours > 0 ? `${r.extraHours.toFixed(1)} hrs` : "-"}</td>
-                            <td>{r.managerDecision?.status || "-"}</td>
+                            <td>{r?.workInTime}</td>
+                            <td>{r?.workOutTime}</td>
+                            <td>{r?.workedHours?.toFixed(1) || 0}</td>
+                            <td>{r?.extraHours > 0 ? `${r.extraHours.toFixed(1)} hrs` : "-"}</td>
+                            <td>{r?.managerDecision?.status || "-"}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -2843,7 +3011,15 @@ ${notification.link ? `Link: ${notification.link}` : ''}
               <section className="full-width">
                 {/* PROJECT SELECTION SECTION */}
                 <div className="card">
-                  <h2>My Assigned Projects</h2>
+                  <div className="card-header-row">
+                    <h2>My Assigned Projects</h2>
+                    <ExportToExcel
+                      data={getProjectsExportData()}
+                      filename={`My_Projects_${new Date().toISOString().split('T')[0]}.xlsx`}
+                      sheetName="Projects"
+                      buttonText="Export to Excel"
+                    />
+                  </div>
                   <div className="table-wrapper small-table">
                     <table>
                       <thead>
@@ -2857,32 +3033,31 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                         </tr>
                       </thead>
                       <tbody>
-                        {myProjects.length > 0 ? (
-                          myProjects.map((project) => (
-                            <tr key={project._id}>
+                        {Array.isArray(myProjects) && myProjects.length > 0 ? (
+                          myProjects.map((project, index) => (
+                            <tr key={project?._id || `project-${index}`}>
                               <td>
-                                <strong>{project.name}</strong>
-                                {project.code && ` (${project.code})`}
+                                <strong>{project?.name}</strong>
+                                {project?.code && ` (${project.code})`}
                                 <div style={{ fontSize: '12px', color: '#666' }}>
-                                  {project.description || 'No description'}
+                                  {project?.description || 'No description'}
                                 </div>
                               </td>
                               <td>
-                                <ProjectStatusBadge status={project.status} />
+                                <ProjectStatusBadge status={project?.status} />
                               </td>
-                              <td>{project.totalEstimatedHours || 0} hrs</td>
+                              <td>{project?.totalEstimatedHours || 0} hrs</td>
                               <td>
                                 <span style={{
-                                  color: project.balanceHours < 0 ? '#ff4d4f' :
-                                    project.balanceHours < (project.totalEstimatedHours * 0.1) ? '#fa8c16' : '#52c41a',
+                                  color: project?.balanceHours < 0 ? '#ff4d4f' :
+                                    project?.balanceHours < (project?.totalEstimatedHours * 0.1) ? '#fa8c16' : '#52c41a',
                                   fontWeight: 'bold'
                                 }}>
-                                  {project.balanceHours || 0} hrs
+                                  {project?.balanceHours || 0} hrs
                                 </span>
                               </td>
                               <td>
-                                {getMyRoleFromProject(project, user._id) || "Not assigned"}
-
+                                {getMyRoleFromProject(project, user?._id) || "Not assigned"}
                               </td>
                               <td>
                                 <button
@@ -2911,14 +3086,14 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                 {selectedProject && (
                   <div className="card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                      <h2>Project: {selectedProject.name} {selectedProject.code && `(${selectedProject.code})`}</h2>
-                      <ProjectStatusBadge status={selectedProject.status} />
+                      <h2>Project: {selectedProject?.name} {selectedProject?.code && `(${selectedProject.code})`}</h2>
+                      <ProjectStatusBadge status={selectedProject?.status} />
                     </div>
 
                     <BalanceDisplay
-                      balance={selectedProject.balanceHours || 0}
-                      estimated={selectedProject.totalEstimatedHours || 0}
-                      consumed={selectedProject.consumedHours || 0}
+                      balance={selectedProject?.balanceHours || 0}
+                      estimated={selectedProject?.totalEstimatedHours || 0}
+                      consumed={selectedProject?.consumedHours || 0}
                     />
 
                     <div style={{
@@ -2930,24 +3105,24 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                       <div style={{ padding: '10px', backgroundColor: '#f0f5ff', borderRadius: '6px' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>Start Date</div>
                         <div style={{ fontWeight: 'bold' }}>
-                          {selectedProject.startDate ? new Date(selectedProject.startDate).toLocaleDateString() : 'Not set'}
+                          {selectedProject?.startDate ? new Date(selectedProject.startDate).toLocaleDateString() : 'Not set'}
                         </div>
                       </div>
                       <div style={{ padding: '10px', backgroundColor: '#f6ffed', borderRadius: '6px' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>End Date</div>
                         <div style={{ fontWeight: 'bold' }}>
-                          {selectedProject.endDate ? new Date(selectedProject.endDate).toLocaleDateString() : 'Not set'}
+                          {selectedProject?.endDate ? new Date(selectedProject.endDate).toLocaleDateString() : 'Not set'}
                         </div>
                       </div>
                       <div style={{ padding: '10px', backgroundColor: '#fff7e6', borderRadius: '6px' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>My Role</div>
                         <div style={{ fontWeight: 'bold' }}>
-                          {getMyRoleFromProject(selectedProject, user._id) || "Not assigned"}
+                          {getMyRoleFromProject(selectedProject, user?._id) || "Not assigned"}
                         </div>
                       </div>
                     </div>
 
-                    {/* PROJECT TASKS */}
+                    {/* PROJECT TASKS - UPDATED FIELD NAMES */}
                     <h3>Tasks in this Project</h3>
                     <div className="table-wrapper small-table">
                       <table>
@@ -2961,27 +3136,27 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                           </tr>
                         </thead>
                         <tbody>
-                          {projectTasks.length > 0 ? (
-                            projectTasks.map((task) => (
-                              <tr key={task._id}>
+                          {Array.isArray(projectTasks) && projectTasks.length > 0 ? (
+                            projectTasks.map((task, index) => (
+                              <tr key={task?._id || `project-task-${index}`}>
                                 <td style={{ maxWidth: '300px', whiteSpace: 'pre-wrap' }}>
-                                  {task.recentRequirement}
+                                  {task?.requirement || task?.recentRequirement}
                                 </td>
-                                <td>{task.status}</td>
-                                <td>{task.estimateHours || 0} hrs</td>
+                                <td>{task?.status}</td>
+                                <td>{task?.estHours || task?.estimateHours || 0} hrs</td>
                                 <td>
                                   <span style={{
                                     padding: '2px 8px',
                                     borderRadius: '12px',
                                     fontSize: '11px',
                                     fontWeight: '600',
-                                    backgroundColor: priorityColors[task.clientPriority]?.color || '#d9d9d9',
+                                    backgroundColor: priorityColors[task?.clientPriority]?.color || '#d9d9d9',
                                     color: '#fff'
                                   }}>
-                                    {task.clientPriority}
+                                    {task?.clientPriority}
                                   </span>
                                 </td>
-                                <td>{task.createdByUserId?.fullName || 'Unknown'}</td>
+                                <td>{task?.createdByUserId?.fullName || 'Unknown'}</td>
                               </tr>
                             ))
                           ) : (
@@ -2995,25 +3170,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                       </table>
                     </div>
 
-                    {/* WARNING MESSAGES */}
-                    {selectedProject.status !== "APPROVED" && (
-                      <div style={{
-                        marginTop: '15px',
-                        padding: '10px',
-                        backgroundColor: '#fff7e6',
-                        border: '1px solid #ffe58f',
-                        borderRadius: '6px',
-                        color: '#d48806'
-                      }}>
-                        ⚠️ <strong>Project Not Approved</strong>
-                        <p style={{ margin: '5px 0 0 0', fontSize: '13px' }}>
-                          This project is in <strong>{selectedProject.status}</strong> status.
-                          Only APPROVED projects allow task creation. Please contact your manager.
-                        </p>
-                      </div>
-                    )}
-
-                    {selectedProject.balanceHours < 0 && (
+                    {selectedProject?.balanceHours < 0 && (
                       <div style={{
                         marginTop: '15px',
                         padding: '10px',
@@ -3032,7 +3189,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                   </div>
                 )}
 
-                {/* TASK CREATION FORM */}
+                {/* TASK CREATION FORM - UPDATED WITH CORRECT FIELD NAMES */}
                 <div className="card">
                   <h2>
                     {editingTaskId
@@ -3053,7 +3210,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                   )}
 
                   {/* PROJECT SELECTION WARNING */}
-                  {projects.filter(p => p.status === "APPROVED").length === 0 && (
+                  {Array.isArray(projects) && projects.length === 0 && (
                     <div style={{
                       padding: '10px',
                       backgroundColor: '#fff7e6',
@@ -3085,29 +3242,28 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                           })
                         }
                         required
-                        disabled={projects.filter(p => p.status === "APPROVED").length === 0}
+                        disabled={Array.isArray(projects) && projects.length === 0}
                       >
                         <option value="">-- Select project --</option>
-                        {projects
-                          .filter(p => p.status === "APPROVED")
-                          .map((p) => (
-                            <option key={p._id} value={p._id}>
-                              {p.name} ({p.status})
+                        {Array.isArray(projects) && projects
+                          .map((p, index) => (
+                            <option key={p?._id || `project-option-${index}`} value={p?._id}>
+                              {p?.name} ({p?.status})
                             </option>
                           ))}
                       </select>
-                      {projects.filter(p => p.status === "APPROVED").length === 0 && (
+                      {Array.isArray(projects) && projects.length === 0 && (
                         <div style={{ fontSize: '12px', color: '#fa8c16', marginTop: '5px' }}>
                           No approved projects available for task creation
                         </div>
                       )}
                     </label>
 
-                    {/* OPTIONAL UX IMPROVEMENT: Check if user has role in selected project */}
-                    {taskForm.projectId && (
+                    {/* Check if user has role in selected project */}
+                    {/* {taskForm.projectId && (
                       (() => {
-                        const selectedProj = projects.find(p => p._id === taskForm.projectId);
-                        const myRole = selectedProj ? getMyRoleFromProject(selectedProj, user._id) : null;
+                        const selectedProj = Array.isArray(projects) ? projects.find(p => p?._id === taskForm.projectId) : null;
+                        const myRole = selectedProj ? getMyRoleFromProject(selectedProj, user?._id) : null;
 
                         if (selectedProj && !myRole) {
                           return (
@@ -3129,17 +3285,17 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                         }
                         return null;
                       })()
-                    )}
+                    )} */}
 
                     <label className="full-row">
                       Requirement
                       <textarea
                         rows={3}
-                        value={taskForm.recentRequirement}
+                        value={taskForm.requirement} // UPDATED: was recentRequirement
                         onChange={(e) =>
                           setTaskForm({
                             ...taskForm,
-                            recentRequirement: e.target.value
+                            requirement: e.target.value // UPDATED: was recentRequirement
                           })
                         }
                         placeholder="Enter requirement details (supports long text)..."
@@ -3150,11 +3306,11 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                     <label>
                       Requirement Type
                       <select
-                        value={taskForm.requirementType}
+                        value={taskForm.type} // UPDATED: was requirementType
                         onChange={(e) =>
                           setTaskForm({
                             ...taskForm,
-                            requirementType: e.target.value
+                            type: e.target.value // UPDATED: was requirementType
                           })
                         }
                       >
@@ -3246,19 +3402,19 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                       Start Date
                       <input
                         type="date"
-                        value={toInputDate(taskForm.originalClosureDate)}
+                        value={toInputDate(taskForm.startDate)} // UPDATED: was originalClosureDate
                         onChange={(e) => {
                           const value = fromInputDate(e.target.value);
                           setTaskForm((prev) => {
                             const workingDays =
                               computeWorkingDaysExcludingHolidays(
                                 value,
-                                prev.estimatedDate
+                                prev.closeDate // UPDATED: was estimatedDate
                               );
                             return {
                               ...prev,
-                              originalClosureDate: value,
-                              noOfDays: workingDays
+                              startDate: value, // UPDATED: was originalClosureDate
+                              workingDays: workingDays // UPDATED: was noOfDays
                             };
                           });
                         }}
@@ -3269,19 +3425,19 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                       Close Date
                       <input
                         type="date"
-                        value={toInputDate(taskForm.estimatedDate)}
+                        value={toInputDate(taskForm.closeDate)} // UPDATED: was estimatedDate
                         onChange={(e) => {
                           const value = fromInputDate(e.target.value);
                           setTaskForm((prev) => {
                             const workingDays =
                               computeWorkingDaysExcludingHolidays(
-                                prev.originalClosureDate,
+                                prev.startDate, // UPDATED: was originalClosureDate
                                 value
                               );
                             return {
                               ...prev,
-                              estimatedDate: value,
-                              noOfDays: workingDays
+                              closeDate: value, // UPDATED: was estimatedDate
+                              workingDays: workingDays // UPDATED: was noOfDays
                             };
                           });
                         }}
@@ -3292,11 +3448,11 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                       Working Days
                       <input
                         type="number"
-                        value={taskForm.noOfDays}
+                        value={taskForm.workingDays} // UPDATED: was noOfDays
                         onChange={(e) =>
                           setTaskForm({
                             ...taskForm,
-                            noOfDays: Number(e.target.value)
+                            workingDays: Number(e.target.value) // UPDATED: was noOfDays
                           })
                         }
                         min="0"
@@ -3312,9 +3468,9 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                           setTaskForm((prev) => ({
                             ...prev,
                             clientPriority: value,
-                            hoursAllocated:
+                            estHours: // UPDATED: was hoursAllocated
                               PRIORITY_DEFAULT_HOURS[value] ??
-                              prev.hoursAllocated
+                              prev.estHours
                           }));
                         }}
                       >
@@ -3348,11 +3504,11 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                       Estimated Hours (for this task)
                       <input
                         type="number"
-                        value={taskForm.hoursAllocated}
+                        value={taskForm.estHours} // UPDATED: was hoursAllocated
                         onChange={(e) =>
                           setTaskForm({
                             ...taskForm,
-                            hoursAllocated: Number(e.target.value)
+                            estHours: Number(e.target.value) // UPDATED: was hoursAllocated
                           })
                         }
                         min="0"
@@ -3368,7 +3524,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                       Created By
                       <input
                         type="text"
-                        value={user.fullName || user.email}
+                        value={user?.fullName || user?.email || ''}
                         readOnly
                       />
                     </label>
@@ -3392,7 +3548,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                       <button
                         type="submit"
                         className="primary-btn"
-                        disabled={projects.filter(p => p.status === "APPROVED").length === 0}
+                        disabled={Array.isArray(projects) && projects.length === 0}
                       >
                         {editingTaskId
                           ? "Update Task / Requirement"
@@ -3412,9 +3568,60 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                   </form>
                 </div>
 
-                {/* ALL MY TASKS */}
+                {/* ALL MY TASKS - UPDATED FIELD NAMES */}
                 <div className="card">
-                  <h2>All My Tasks ({filteredTasks.length} of {tasks.length})</h2>
+                  <div className="card-header-row">
+                    <h2>All My Tasks ({Array.isArray(filteredTasks) ? filteredTasks.length : 0} of {Array.isArray(tasks) ? tasks.length : 0})</h2>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 12,
+                        marginBottom: 12,
+                        padding: "10px 12px",
+                        background: "#f8fafc",
+                        borderRadius: 10,
+                        border: "1px solid #e5e7eb"
+                      }}
+                    >
+                      <input
+                        type="text"
+                        placeholder="Search by project, requirement, employee, status..."
+                        value={searchTerm}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        style={{
+                          flex: 1,
+                          padding: "8px 12px",
+                          borderRadius: 8,
+                          border: "1px solid #d1d5db",
+                          fontSize: 14
+                        }}
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchTerm("");
+                          setFilteredTasks(tasks);
+                        }}
+                        style={{
+                          padding: "8px 16px",
+                          borderRadius: 8,
+                          border: "none",
+                          background: "#e5e7eb",
+                          cursor: "pointer",
+                          fontWeight: 600
+                        }}
+                      >
+                        Reset
+                      </button>
+                    </div>
+                    <ExportToExcel
+                      data={getTasksExportData()}
+                      filename={`My_Tasks_${new Date().toISOString().split('T')[0]}.xlsx`}
+                      sheetName="Tasks"
+                      buttonText="Export to Excel"
+                    />
+                  </div>
 
                   <div style={{
                     marginBottom: '15px',
@@ -3434,42 +3641,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                           fontSize: '14px'
                         }}
                         value={searchTerm}
-                        onChange={(e) => {
-                          const term = e.target.value;
-                          setSearchTerm(term);
-
-
-                          const safeTasks = Array.isArray(tasks) ? tasks : [];
-
-                          if (term.trim() === "") {
-
-                            setFilteredTasks(safeTasks);
-                          } else {
-                            const searchLower = term.toLowerCase();
-
-
-                            const filtered = safeTasks.filter((task) => {
-                              const requirement = (task?.recentRequirement || task?.title || "").toLowerCase();
-                              const project = (task?.projectId?.name || "").toLowerCase();
-                              const status = (task?.status || "").toLowerCase();
-                              const createdBy = (task?.createdByUserId?.fullName || "").toLowerCase();
-                              const role = (task?.role || "").toLowerCase();
-                              const priority = (task?.clientPriority || "").toLowerCase();
-
-                              return (
-                                requirement.includes(searchLower) ||
-                                project.includes(searchLower) ||
-                                status.includes(searchLower) ||
-                                createdBy.includes(searchLower) ||
-                                role.includes(searchLower) ||
-                                priority.includes(searchLower)
-                              );
-                            });
-
-                            setFilteredTasks(filtered);
-                          }
-
-                        }}
+                        onChange={(e) => handleSearch(e.target.value)}
                       />
                       <div style={{
                         position: 'absolute',
@@ -3485,7 +3657,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                     <button
                       onClick={() => {
                         setSearchTerm('');
-                        setFilteredTasks(tasks);
+                        setFilteredTasks(Array.isArray(tasks) ? tasks : []);
                       }}
                       style={{
                         padding: '8px 16px',
@@ -3507,7 +3679,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                         <tr>
                           <th>S.No</th>
                           <th>Project</th>
-                          <th>Project Status</th>
+                          
                           <th>Requirement</th>
                           <th>Type</th>
                           <th>Status</th>
@@ -3523,18 +3695,20 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                       <tbody>
                         {Array.isArray(filteredTasks) &&
                           filteredTasks.map((t, index) => {
-                            const meta = priorityColors[t.clientPriority] || null;
+                            if (!t) return null;
+
+                            const meta = priorityColors[t?.clientPriority] || null;
                             const givenBy =
-                              (t.prioritySource || "")
+                              (t?.givenBy || t?.prioritySource || "")
                                 .replace(/_/g, " ")
                                 .toLowerCase()
                                 .replace(/\b\w/g, (c) => c.toUpperCase()) || "-";
 
                             const canEdit = (() => {
-                              const userRole = user.role;
-                              const createdByRole = t.createdByRole;
-                              const createdById = t.createdByUserId?._id || t.createdByUserId;
-                              const userId = user._id || user.id;
+                              const userRole = user?.role;
+                              const createdByRole = t?.createdByRole;
+                              const createdById = t?.createdByUserId?._id || t?.createdByUserId;
+                              const userId = user?._id || user?.id;
 
                               if (userRole === "admin") return false;
                               if (userRole === "employee") {
@@ -3550,22 +3724,22 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                             })();
 
                             return (
-                              <tr key={t._id}>
+                              <tr key={t?._id || `task-${index}`}>
                                 <td>{index + 1}</td>
-                                <td>{t.projectId?.name || "-"}</td>
-                                <td>
-                                  {t.projectId?.status && (
+                                <td>{t?.projectId?.name || "-"}</td>
+                                {/* <td>
+                                  {t?.projectId?.status && (
                                     <ProjectStatusBadge status={t.projectId.status} />
                                   )}
-                                </td>
+                                </td> */}
                                 <td style={{ maxWidth: 260, whiteSpace: "pre-wrap" }}>
-                                  {t.recentRequirement}
+                                  {t?.requirement || t?.recentRequirement || t?.title} {/* UPDATED: handle both old and new */}
                                 </td>
-                                <td>{t.requirementType || "NEW"}</td>
-                                <td>{t.status}</td>
-                                <td>{t.scope || "-"}</td>
-                                <td>{t.discussedDate || "-"}</td>
-                                <td>{Number(t.estimateHours || 0)}</td>
+                                <td>{t?.type || t?.requirementType || "NEW"}</td> {/* UPDATED: handle both old and new */}
+                                <td>{t?.status}</td>
+                                <td>{t?.scope || "-"}</td>
+                                <td>{t?.discussedDate || "-"}</td>
+                                <td>{Number(t?.estHours || t?.estimateHours || 0)}</td> {/* UPDATED: handle both old and new */}
                                 <td>
                                   {meta ? (
                                     <span
@@ -3582,32 +3756,31 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                                       {meta.label}
                                     </span>
                                   ) : (
-                                    t.clientPriority || "-"
+                                    t?.clientPriority || "-"
                                   )}
                                 </td>
                                 <td>{givenBy}</td>
-                                <td>{t.createdByUserId?.fullName || "-"}</td>
-                                <td style={{ textAlign: "center" }}>
-                                  {canEdit ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => startEditTask(t)}
-                                      title="Edit Task"
-                                      style={{
-                                        background: "none",
-                                        border: "none",
-                                        cursor: "pointer",
-                                        color: "#1890ff",
-                                        fontSize: "16px",
-                                        padding: 0
-                                      }}
-                                    >
-                                      <FaEdit />
-                                    </button>
-                                  ) : (
-                                    "-"
-                                  )}
-                                </td>
+                                <td>{t?.createdByUserId?.fullName || "-"}</td>
+                                
+  <td style={{ textAlign: "center" }}>
+  {canEdit && (
+    <button
+      type="button"
+      onClick={() => startEditTask(t)}
+      title="Edit Task"
+      style={{
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        color: "#1890ff",
+        fontSize: "16px",
+        padding: 0
+      }}
+    >
+      <FaEdit />
+    </button>
+  )}
+</td>
                               </tr>
                             );
                           })}
@@ -3662,12 +3835,12 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                           </tr>
                         </thead>
                         <tbody>
-                          {payslips.map((p) => (
-                            <tr key={p._id}>
-                              <td>{monthNames[p.month - 1]}</td>
-                              <td>{p.year}</td>
-                              <td>{p.employeeId || user.employeeId || "N/A"}</td>
-                              <td>{user.fullName}</td>
+                          {payslips.map((p, index) => (
+                            <tr key={p?._id || `payslip-${index}`}>
+                              <td>{monthNames[p?.month - 1]}</td>
+                              <td>{p?.year}</td>
+                              <td>{p?.employeeId || user?.employeeId || "N/A"}</td>
+                              <td>{user?.fullName}</td>
                               <td>
                                 <span className="status-badge active">
                                   GENERATED
@@ -3677,9 +3850,15 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                                 <button
                                   className="primary-btn small-btn"
                                   onClick={() => handleDownloadPayslip(p._id, p.month, p.year)}
-                                  style={{ padding: '6px 12px', fontSize: '12px' }}
+                                  style={{
+                                    padding: '6px 12px',
+                                    fontSize: '12px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
                                 >
-                                  Download
+                                  <FaDownload /> Download
                                 </button>
                               </td>
                             </tr>
@@ -3755,7 +3934,15 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                 </div>
 
                 <div className="card table-shadow-card">
-                  <h2>Attendance Report</h2>
+                  <div className="card-header-row">
+                    <h2>Attendance Report</h2>
+                    <ExportToExcel
+                      data={getAttendanceExportData()}
+                      filename={`Dashboard_Attendance_${monthLabel.replace(', ', '_')}.xlsx`}
+                      sheetName="Attendance"
+                      buttonText="Export to Excel"
+                    />
+                  </div>
                   <div className="table-wrapper small-table">
                     <table>
                       <thead>
@@ -3770,15 +3957,15 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                         </tr>
                       </thead>
                       <tbody>
-                        {timesheetRows.map((r) => (
-                          <tr key={r._id}>
-                            <td>{r.date}</td>
-                            <td>{r.status}</td>
-                            <td>{r.workInTime}</td>
-                            <td>{r.workOutTime}</td>
-                            <td>{r.workedHours.toFixed(1)}</td>
-                            <td>{r.extraHours > 0 ? `${r.extraHours.toFixed(1)} hrs` : "-"}</td>
-                            <td>{r.managerDecision?.status || "-"}</td>
+                        {timesheetRows.map((r, index) => (
+                          <tr key={r?._id || `dashboard-attendance-${index}`}>
+                            <td>{r?.date}</td>
+                            <td>{r?.status}</td>
+                            <td>{r?.workInTime}</td>
+                            <td>{r?.workOutTime}</td>
+                            <td>{r?.workedHours?.toFixed(1) || 0}</td>
+                            <td>{r?.extraHours > 0 ? `${r.extraHours.toFixed(1)} hrs` : "-"}</td>
+                            <td>{r?.managerDecision?.status || "-"}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -3842,7 +4029,15 @@ ${notification.link ? `Link: ${notification.link}` : ''}
 
                 {/* PROJECT SUMMARY IN DASHBOARD */}
                 <div className="card table-shadow-card">
-                  <h2>My Projects Summary</h2>
+                  <div className="card-header-row">
+                    <h2>My Projects Summary</h2>
+                    <ExportToExcel
+                      data={getProjectsExportData().slice(0, 5)}
+                      filename={`Dashboard_Projects_${new Date().toISOString().split('T')[0]}.xlsx`}
+                      sheetName="Projects"
+                      buttonText="Export to Excel"
+                    />
+                  </div>
                   <div className="table-wrapper small-table">
                     <table>
                       <thead>
@@ -3855,25 +4050,24 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                         </tr>
                       </thead>
                       <tbody>
-                        {myProjects.length > 0 ? (
-                          myProjects.slice(0, 5).map((project) => (
-                            <tr key={project._id}>
-                              <td>{project.name}</td>
+                        {Array.isArray(myProjects) && myProjects.length > 0 ? (
+                          myProjects.slice(0, 5).map((project, index) => (
+                            <tr key={project?._id || `dashboard-project-${index}`}>
+                              <td>{project?.name}</td>
                               <td>
-                                <ProjectStatusBadge status={project.status} />
+                                <ProjectStatusBadge status={project?.status} />
                               </td>
-                              <td>{project.totalEstimatedHours || 0} hrs</td>
+                              <td>{project?.totalEstimatedHours || 0} hrs</td>
                               <td>
                                 <span style={{
-                                  color: project.balanceHours < 0 ? '#ff4d4f' :
-                                    project.balanceHours < (project.totalEstimatedHours * 0.1) ? '#fa8c16' : '#52c41a',
+                                  color: project?.balanceHours < 0 ? '#ff4d4f' :
+                                    project?.balanceHours < (project?.totalEstimatedHours * 0.1) ? '#fa8c16' : '#52c41a',
                                   fontWeight: 'bold'
                                 }}>
-                                  {project.balanceHours || 0} hrs
+                                  {project?.balanceHours || 0} hrs
                                 </span>
                               </td>
-                              <td>{getMyRoleFromProject(project, user._id) || "Not assigned"}
-
+                              <td>{getMyRoleFromProject(project, user?._id) || "Not assigned"}
                               </td>
                             </tr>
                           ))
@@ -3887,7 +4081,7 @@ ${notification.link ? `Link: ${notification.link}` : ''}
                       </tbody>
                     </table>
                   </div>
-                  {myProjects.length > 5 && (
+                  {Array.isArray(myProjects) && myProjects.length > 5 && (
                     <p className="note" style={{ marginTop: 10 }}>
                       Showing 5 of {myProjects.length} projects. Go to "Project Management" tab for complete view.
                     </p>
@@ -3898,8 +4092,8 @@ ${notification.link ? `Link: ${notification.link}` : ''}
           )}
         </div>
       </div>
-      
-      {/* Add CSS for notifications */}
+
+      {/* Add CSS for notifications and UI fixes */}
       <style>
         {`
           @keyframes pulse {
@@ -4137,6 +4331,272 @@ ${notification.link ? `Link: ${notification.link}` : ''}
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin: 0 auto;
+          }
+          
+          /* Card Header Row with Export Button */
+          .card-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+          }
+          
+          .card-header-row h2 {
+            margin: 0;
+          }
+          
+          /* Export Button Styles */
+          .export-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background-color: #217346;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+          }
+          
+          .export-btn:hover {
+            background-color: #1a5e38;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(33, 115, 70, 0.3);
+          }
+          
+          /* Topbar Date/Time Display Fix */
+          .topbar {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            height: 60px;
+            background: white;
+            border-bottom: 1px solid #e8e8e8;
+            z-index: 100;
+          }
+          
+          /* Table Responsive Fixes */
+          .table-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+          
+          .table-wrapper.small-table {
+            max-height: 400px;
+            overflow-y: auto;
+          }
+          
+          table {
+            min-width: 100%;
+            border-collapse: collapse;
+          }
+          
+          th {
+            position: sticky;
+            top: 0;
+            background: #fafafa;
+            z-index: 10;
+          }
+          
+          /* Mini KPI Cards */
+          .mini-kpi {
+            background: #f5f5f5;
+            border: 1px solid #e8e8e8;
+            border-radius: 8px;
+            padding: 12px 8px;
+            text-align: center;
+            transition: all 0.2s;
+          }
+          
+          .mini-kpi:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+          }
+          
+          .mini-kpi strong {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+          }
+          
+          .mini-kpi div {
+            font-size: 18px;
+            font-weight: 600;
+            color: #262626;
+          }
+          
+          /* Form Grid Improvements */
+          .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+          }
+          
+          .full-row {
+            grid-column: 1 / -1;
+          }
+          
+          /* Badge Row */
+          .badge-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 8px;
+          }
+          
+          .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            background: #e6f7ff;
+            color: #1890ff;
+            font-size: 12px;
+            font-weight: 500;
+          }
+          
+          /* Date Input Wrapper */
+          .date-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+          }
+          
+          .date-icon {
+            position: absolute;
+            left: 10px;
+            color: #999;
+          }
+          
+          .date-input-wrapper input {
+            padding-left: 35px;
+          }
+          
+          /* Comp-off Box */
+          .compoff-box {
+            background: #fff7e6;
+            border: 1px solid #ffe58f;
+            border-radius: 8px;
+            padding: 16px;
+          }
+          
+          .compoff-hint {
+            font-size: 13px;
+            font-weight: 600;
+            color: #d48806;
+            margin-bottom: 12px;
+          }
+          
+          .compoff-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+          }
+          
+          /* Popup Overlay */
+          .popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+          }
+          
+          .popup-content {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+          }
+          
+          /* Leave Summary Table */
+          .leave-summary-table-compact {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          
+          .leave-summary-table-compact td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #f0f0f0;
+          }
+          
+          .leave-summary-table-compact tr.highlight {
+            background: #f6ffed;
+            font-weight: 600;
+          }
+          
+          /* Holiday Calendar */
+          .holiday-calendar {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          
+          .holiday-calendar th {
+            background: #fafafa;
+            padding: 8px;
+            text-align: center;
+            font-size: 12px;
+          }
+          
+          .holiday-cell {
+            padding: 8px;
+            text-align: center;
+            font-size: 13px;
+            transition: all 0.2s;
+          }
+          
+          .holiday-cell:hover {
+            transform: scale(1.05);
+            z-index: 5;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+          }
+          
+          .holiday-cell.empty {
+            background: #fafafa;
+          }
+          
+          /* Responsive Fixes */
+          @media (max-width: 1200px) {
+            .layout {
+              flex-direction: column;
+            }
+            
+            .left-column,
+            .right-column {
+              width: 100%;
+            }
+          }
+          
+          @media (max-width: 768px) {
+            .topbar {
+              flex-wrap: wrap;
+              height: auto;
+              padding: 10px;
+            }
+            
+            .form-grid {
+              grid-template-columns: 1fr;
+            }
+            
+            .card-header-row {
+              flex-direction: column;
+              align-items: flex-start;
+            }
           }
         `}
       </style>

@@ -9,9 +9,9 @@ import { buildHolidayCalendar } from "../utils/holidays";
 import logo from "../assets/Company Logo.png";
 import { io } from "socket.io-client";
 
-// Add these imports after existing imports
-import ProjectStatusBadge from "../components/projects/ProjectStatusBadge";
-import ProjectActions from "../components/projects/ProjectActions";
+// REMOVED: ProjectStatusBadge and ProjectActions imports
+// import ProjectStatusBadge from "../components/projects/ProjectStatusBadge";
+// import ProjectActions from "../components/projects/ProjectActions";
 //import TaskApproval from "../components/projects/TaskApproval";
 import BalanceDisplay from "../components/projects/BalanceDisplay";
 
@@ -1753,7 +1753,8 @@ export default function ManagerDashboard() {
         <div className="main-area">
           <header className="topbar">
             <div>
-              <strong>{user.fullName}</strong> (HR) — {user.email}
+              {/* CHANGED: HR → Manager */}
+              <strong>{user.fullName}</strong> (Manager) — {user.email}
 
             </div>
 
@@ -2981,7 +2982,7 @@ holidays marked as Taken will also be visible in Employee and Admin views.
                           <th>Code</th>
                           <th>Start Date</th>
                           <th>End Date</th>
-                          <th>Status</th> {/* ADD THIS */}
+                          {/* REMOVED: Status Column */}
                           <th>Duration</th>
                           <th>Total Hours</th>
                           <th>Employees</th>
@@ -3020,10 +3021,7 @@ holidays marked as Taken will also be visible in Employee and Admin views.
                               <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{p.startDate || "-"}</td>
                               <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{p.endDate || "-"}</td>
                               
-                              {/* ADD STATUS BADGE */}
-                              <td style={{ padding: '8px' }}>
-                                <ProjectStatusBadge status={p.status} />
-                              </td>
+                              {/* REMOVED: Status Badge */}
                               
                               <td style={{ padding: '8px', textAlign: 'center' }}>{p.durationMonths || 0} mo</td>
                               <td style={{ padding: '8px', textAlign: 'right' }}>
@@ -3067,21 +3065,7 @@ holidays marked as Taken will also be visible in Employee and Admin views.
                         <strong> Balance:</strong> {selectedProject.balanceHours ?? 0} hrs
                       </p>
                       
-                      {/* ADD PROJECT ACTIONS */}
-                      <ProjectActions 
-                        projectId={selectedProject._id}
-                        currentStatus={selectedProject.status}
-                        balanceHours={selectedProject.balanceHours}
-                        onStatusChange={(newStatus) => {
-                          // Update the project in the list
-                          setProjects(prev => prev.map(p => 
-                            p._id === selectedProject._id ? {...p, status: newStatus} : p
-                          ));
-                          // Update the selected project
-                          setSelectedProject(prev => ({...prev, status: newStatus}));
-                          alert(`Project status updated to ${newStatus}`);
-                        }}
-                      />
+                      {/* REMOVED: Project Actions */}
 
                       {/* ADD BALANCE DISPLAY */}
                       <BalanceDisplay 
@@ -3234,11 +3218,11 @@ holidays marked as Taken will also be visible in Employee and Admin views.
                           Requirement
                           <textarea
                             rows={4}
-                            value={taskForm.recentRequirement}
+                            value={taskForm.requirement}
                             onChange={(e) =>
                               setTaskForm({
                                 ...taskForm,
-                                recentRequirement: e.target.value
+                                requirement: e.target.value
                               })
                             }
                             placeholder="Enter requirement details (supports long text)..."
@@ -3247,11 +3231,11 @@ holidays marked as Taken will also be visible in Employee and Admin views.
                         <label>
                           Requirement Type
                           <select
-                            value={taskForm.requirementType}
+                            value={taskForm.type}
                             onChange={(e) =>
                               setTaskForm({
                                 ...taskForm,
-                                requirementType: e.target.value
+                                type: e.target.value
                               })
                             }
                           >
@@ -3342,12 +3326,12 @@ holidays marked as Taken will also be visible in Employee and Admin views.
                           Start Date
                           <input
                             type="date"
-                            value={toInputDate(taskForm.originalClosureDate)}
+                            value={toInputDate(taskForm.startDate)}
                             onChange={(e) => {
                               const value = fromInputDate(e.target.value);
                               setTaskForm((prev) => ({
                                 ...prev,
-                                originalClosureDate: value,
+                                startDate: value,
                                 noOfDays: diffDays(value, prev.estimatedDate)
                               }));
                             }}
@@ -3357,12 +3341,12 @@ holidays marked as Taken will also be visible in Employee and Admin views.
                           Close Date
                           <input
                             type="date"
-                            value={toInputDate(taskForm.estimatedDate)}
+                            value={toInputDate(taskForm.closeDate)}
                             onChange={(e) => {
                               const value = fromInputDate(e.target.value);
                               setTaskForm((prev) => ({
                                 ...prev,
-                                estimatedDate: value,
+                                closeDate: value,
                                 noOfDays: diffDays(
                                   prev.originalClosureDate,
                                   value
@@ -3375,11 +3359,11 @@ holidays marked as Taken will also be visible in Employee and Admin views.
                           Working Days
                           <input
                             type="number"
-                            value={taskForm.noOfDays}
+                            value={taskForm.workingDays}
                             onChange={(e) =>
                               setTaskForm({
                                 ...taskForm,
-                                noOfDays: Number(e.target.value)
+                                workingDays: Number(e.target.value)
                               })
                             }
                           />
@@ -3500,9 +3484,9 @@ holidays marked as Taken will also be visible in Employee and Admin views.
                                       whiteSpace: "pre-wrap"
                                     }}
                                   >
-                                    {t.recentRequirement}
+                                    {t.requirement}
                                   </td>
-                                  <td>{t.requirementType || "NEW"}</td>
+                                  <td>{t.type || "NEW"}</td>
                                   <td>{emp}</td>
                                   <td>
                                     <select
@@ -3546,10 +3530,10 @@ holidays marked as Taken will also be visible in Employee and Admin views.
                                     {t.notes}
                                   </td>
                                   <td>{t.discussedDate}</td>
-                                  <td>{t.originalClosureDate}</td>
-                                  <td>{t.estimatedDate}</td>
+                                  <td>{t.startDate}</td>
+                                  <td>{t.closeDate}</td>
                                   <td>{t.noOfDays}</td>
-                                  <td>
+                                  <td>{t.workingDays}
                                     <span
                                       style={{
                                         display: "inline-block",
@@ -3942,7 +3926,7 @@ Employees / Admin.
                           <th>Code</th>
                           <th>Start Date</th>
                           <th>End Date</th>
-                          <th>Status</th> {/* ADD THIS */}
+                          {/* REMOVED: Status Column */}
                           <th>Duration</th>
                           <th>Total Hours</th>
                           <th>Employees</th>
@@ -3962,7 +3946,7 @@ Employees / Admin.
                               <td>{p.code || "-"}</td>
                               <td>{p.startDate || "-"}</td>
                               <td>{p.endDate || "-"}</td>
-                              <td><ProjectStatusBadge status={p.status} /></td>
+                              {/* REMOVED: Status Badge */}
                               <td>{p.durationMonths || 0} mo</td>
                               <td>{p.totalEstimatedHours || 0}</td>
                               <td>{p.assignments?.length || 0}</td>

@@ -1739,45 +1739,61 @@ export default function AdminDashboard() {
                 <div className="card">
                   <h2>All Project Tasks (View Only)</h2>
                   <div
-                    style={{
-                      display: "flex",
-                      gap: 12,
-                      marginBottom: 12,
-                      padding: "10px 12px",
-                      background: "#f8fafc",
-                      borderRadius: 10,
-                      border: "1px solid #e5e7eb"
-                    }}
-                  >
-                    <input
-                      type="text"
-                      placeholder="Search by project, requirement, employee, status..."
-                      value={taskSearch}
-                      onChange={(e) => setTaskSearch(e.target.value)}
-                      style={{
-                        flex: 1,
-                        padding: "8px 12px",
-                        borderRadius: 8,
-                        border: "1px solid #d1d5db",
-                        fontSize: 14
-                      }}
-                    />
+  style={{
+    display: "flex",
+    gap: 12,
+    marginBottom: 12,
+    padding: "10px 12px",
+    background: "#f8fafc",
+    borderRadius: 10,
+    border: "1px solid #e5e7eb"
+  }}
+>
+  <input
+    type="text"
+    placeholder="Search by project, requirement, employee, status..."
+    value={taskSearch}
+    onChange={(e) => setTaskSearch(e.target.value)}
+    style={{
+      flex: 1,
+      padding: "8px 12px",
+      borderRadius: 8,
+      border: "1px solid #d1d5db",
+      fontSize: 14
+    }}
+  />
 
-                    <button
-                      type="button"
-                      onClick={() => setTaskSearch("")}
-                      style={{
-                        padding: "8px 16px",
-                        borderRadius: 8,
-                        border: "none",
-                        background: "#e5e7eb",
-                        cursor: "pointer",
-                        fontWeight: 600
-                      }}
-                    >
-                      Reset
-                    </button>
-                  </div>
+  <button
+    type="button"
+    onClick={() => setTaskSearch("")}
+    style={{
+      padding: "8px 16px",
+      borderRadius: 8,
+      border: "none",
+      background: "#e5e7eb",
+      cursor: "pointer",
+      fontWeight: 600
+    }}
+  >
+    Reset
+  </button>
+
+  {/* ✅ TASK DOWNLOAD BUTTON */}
+  <button
+    onClick={handleDownloadTasksCsv}
+    style={{
+      padding: "8px 16px",
+      borderRadius: 8,
+      border: "none",
+      background: "#10b981",
+      color: "white",
+      cursor: "pointer",
+      fontWeight: 600
+    }}
+  >
+    ⬇ Export
+  </button>
+</div>
 
                   <p style={{ fontSize: 12, marginBottom: 6 }}>
                     Tasks created by Manager or Employees. Admin can review but
