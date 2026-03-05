@@ -1698,19 +1698,24 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
 
   // FIXED CREATE/UPDATE TASK FUNCTION WITH PROPER ATTACHMENT HANDLING
   const handleCreateOrUpdateTask = async (e) => {
-    e.preventDefault();
-    setTaskError("");
+  e.preventDefault();
 
-    // Validate required fields
-    if (!taskForm.projectId) {
-      setTaskError("Please select a project");
-      return;
-    }
+  setTaskError("");
 
-    if (!taskForm.requirement || taskForm.requirement.trim().length === 0) {
-      setTaskError("Please enter a requirement description");
-      return;
-    }
+  if (!Number(taskForm.estHours) || Number(taskForm.estHours) <= 0) {
+    setTaskError("Estimated hours is required and must be a valid positive number");
+    return;
+  }
+
+  if (!taskForm.projectId) {
+    setTaskError("Please select a project");
+    return;
+  }
+
+  if (!taskForm.requirement || taskForm.requirement.trim().length === 0) {
+    setTaskError("Please enter a requirement description");
+    return;
+  }
 
     // CRITICAL FIX: Ensure estHours is a valid number and not empty string
     const estHoursValue = parseFloat(taskForm.estHours);
@@ -1810,9 +1815,22 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
       }
 
       // Reset form and refresh data
-      resetTaskForm(true);
-      await loadTasks();
-      await refreshNotificationsAfterAction();
+     resetTaskForm(true);
+
+// update task directly in state
+setTasks((prev) =>
+  prev.map((task) =>
+    task._id === editingTaskId ? { ...task, ...taskForm } : task
+  )
+);
+
+setFilteredTasks((prev) =>
+  prev.map((task) =>
+    task._id === editingTaskId ? { ...task, ...taskForm } : task
+  )
+);
+
+await refreshNotificationsAfterAction();
 
     } catch (error) {
       console.error("Employee create/update task error", error?.response || error);
@@ -1834,59 +1852,44 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
 
   // UPDATED EDIT TASK FUNCTION WITH ATTACHMENT HANDLING
   const startEditTask = (t) => {
-    if (!t) return;
+  if (!t) return;
 
-    const canEdit = (() => {
-      const userRole = user?.role;
-      const createdByRole = t?.createdByRole;
-      const createdById = t?.createdByUserId?._id || t?.createdByUserId;
-      const userId = user?._id || user?.id;
+  const canEdit = t?.canEdit;
 
-      if (userRole === "admin") return false;
-      if (userRole === "employee") {
-        return createdByRole === "employee" && createdById === userId;
-      }
-      if (userRole === "manager" && createdByRole === "employee") {
-        return true;
-      }
-      if (userRole === "manager" && createdByRole === "manager") {
-        return createdById === userId;
-      }
-      return false;
-    })();
+  if (!canEdit) {
+    alert("You don't have permission to edit this task");
+    return;
+  }
 
-    if (!canEdit) {
-      alert("You don't have permission to edit this task");
-      return;
-    }
+  const estHours =
+    t.estHours ||
+    t.estimateHours ||
+    PRIORITY_DEFAULT_HOURS[t.clientPriority || "P3"] ||
+    8;
 
-    // Ensure estHours is a valid number
-    const estHours = t.estHours || t.estimateHours || PRIORITY_DEFAULT_HOURS[t.clientPriority || "P3"] || 8;
+  setEditingTaskId(t._id);
 
-    setEditingTaskId(t._id);
-    setTaskForm({
-      projectId: t.projectId?._id || t.projectId || "",
-      requirement: t.requirement || t.recentRequirement || "",
-      type: t.type || t.requirementType || "NEW",
-      requirementRole: t.requirementRole || "DEVELOPER",
-      status: t.status || "OPEN",
-      scope: t.scope || "AGREED",
-      notes: t.notes || "",
-      discussedDate: t.discussedDate || formatToday(),
-      startDate: t.startDate || "",
-      closeDate: t.closeDate || "",
-      workingDays: t.workingDays || 0,
-      clientPriority: t.clientPriority || "P3",
-      estHours: estHours,
-      attachment: t.attachment // Keep existing attachment reference
-    });
+  setTaskForm({
+    projectId: t.projectId?._id || t.projectId || "",
+    requirement: t.requirement || "",
+    type: t.type || "NEW",
+    requirementRole: t.requirementRole || "DEVELOPER",
+    status: t.status || "OPEN",
+    scope: t.scope || "AGREED",
+    notes: t.notes || "",
+    discussedDate: t.discussedDate || formatToday(),
+    startDate: t.startDate || "",
+    closeDate: t.closeDate || "",
+    workingDays: t.workingDays || 0,
+    clientPriority: t.clientPriority || "P3",
+    estHours: estHours,
+    attachment: t.attachment || null
+  });
 
-    // Show success popup for edit
-    showSuccess("Task loaded for editing");
+  showSuccess("Task loaded for editing");
 
-    // Scroll to form
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
 
   const monthYearSelect = (
     <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -3287,30 +3290,13 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
                         <tbody>
                           {Array.isArray(projectTasks) && projectTasks.length > 0 ? (
                             projectTasks.map((task, index) => {
-                              const canEdit = (() => {
-                                const userRole = user?.role;
-                                const createdByRole = task?.createdByRole;
-                                const createdById = task?.createdByUserId?._id || task?.createdByUserId;
-                                const userId = user?._id || user?.id;
-
-                                if (userRole === "admin") return false;
-                                if (userRole === "employee") {
-                                  return createdByRole === "employee" && createdById === userId;
-                                }
-                                if (userRole === "manager" && createdByRole === "employee") {
-                                  return true;
-                                }
-                                if (userRole === "manager" && createdByRole === "manager") {
-                                  return createdById === userId;
-                                }
-                                return false;
-                              })();
+                            const canEdit = task?.canEdit;
 
                               return (
                                 <tr key={task?._id || `project-task-${index}`}>
                                   <td style={{ maxWidth: '300px', whiteSpace: 'pre-wrap' }}>
                                     <span
-                                      onClick={() => canEdit && startEditTask(task)}
+                                      onClick={() => task?.canEdit && startEditTask(task)}
                                       style={{
                                         cursor: canEdit ? 'pointer' : 'default',
                                         color: canEdit ? '#1890ff' : 'inherit',
@@ -3360,29 +3346,35 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
                                       '-'
                                     )}
                                   </td>
-                                  <td style={{ textAlign: "center" }}>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        startEditTask(task);
-                                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                                      }}
-                                      title="Edit Task"
-                                      style={{
-                                        background: "none",
-                                        border: "none",
-                                        cursor: "pointer",
-                                        color: "#1890ff",
-                                        fontSize: "16px",
-                                        padding: "5px 10px",
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                      }}
-                                    >
-                                      <FaEdit size={16} />
-                                    </button>
-                                  </td>
+                                 <td style={{ textAlign: "center" }}>
+  <button
+    type="button"
+    onClick={() => {
+  if (!canEdit) {
+    alert("You don't have permission to edit this task");
+    return;
+  }
+
+  startEditTask(task);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}}
+    title="Edit Task"
+    style={{
+      background: "none",
+      border: "none",
+      cursor: canEdit ? "pointer" : "not-allowed",
+      color: canEdit ? "#1890ff" : "#bfbfbf",
+      fontSize: "16px",
+      padding: "8px 12px",
+      borderRadius: "4px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }}
+  >
+    <FaEdit size={16} />
+  </button>
+</td>
                                 </tr>
                               );
                             })
@@ -3683,18 +3675,19 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
 
                     <label>
                       Estimated Hours (for this task)
-                      <input
-                        type="number"
-                        value={taskForm.estHours}
-                       onChange={(e) => {
-  setTaskForm({
-    ...taskForm,
-    estHours: Number(e.target.value)
-  });
-}}                    min="0.5"
-                        step="0.5"
-                        required
-                      />
+                     <input
+  type="number"
+  value={taskForm.estHours}
+  onChange={(e) =>
+    setTaskForm({
+      ...taskForm,
+      estHours: Number(e.target.value)
+    })
+  }
+  min="0.5"
+  step="0.5"
+  required
+/>
                       <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
                         Note: These hours will reduce the project balance when task is approved
                       </div>
@@ -3844,25 +3837,7 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
 
                             const meta = priorityColors[t?.clientPriority] || null;
 
-                            const canEdit = (() => {
-                              const userRole = user?.role;
-                              const createdByRole = t?.createdByRole;
-                              const createdById = t?.createdByUserId?._id || t?.createdByUserId;
-                              const userId = user?._id || user?.id;
-
-                              if (userRole === "admin") return false;
-                              if (userRole === "employee") {
-                                return createdByRole === "employee" && createdById === userId;
-                              }
-                              if (userRole === "manager" && createdByRole === "employee") {
-                                return true;
-                              }
-                              if (userRole === "manager" && createdByRole === "manager") {
-                                return createdById === userId;
-                              }
-                              return false;
-                            })();
-
+                         const canEdit = t?.canEdit;
                             // Get project name safely
                             let projectName = t.project || "-";
 
@@ -3978,10 +3953,18 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
                                   )}
                                 </td>
                                 <td style={{ textAlign: "center" }}>
-                                  <button
-                                    type="button"
-                                    onClick={() => startEditTask(t)}
-                                    title="Edit Task"
+  <button
+    type="button"
+    onClick={() => {
+  if (!canEdit) {
+    alert("You don't have permission to edit this task");
+    return;
+  }
+
+  startEditTask(t);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}}
+    title="Edit Task"
                                     style={{
                                       background: "none",
                                       border: "none",
