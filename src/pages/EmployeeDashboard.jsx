@@ -9,6 +9,8 @@ import {
   FaEdit, FaCalendarAlt, FaBell, FaCheck, FaCheckCircle,
   FaTimes, FaExclamationCircle, FaInfoCircle, FaTrash,
   FaEye, FaEnvelope, FaFileExcel, FaDownload, FaClock,
+  FaPaperclip, FaFile, FaFilePdf, FaFileImage, FaFileWord,
+  FaFileArchive, FaFileCode
 } from "react-icons/fa";
 import { io } from "socket.io-client";
 import * as XLSX from 'xlsx';
@@ -504,6 +506,100 @@ const SuccessPopup = ({ message, onClose }) => {
   );
 };
 
+// Attachment Preview Component
+const AttachmentPreview = ({ attachment, onRemove, onDownload, readonly = false }) => {
+  if (!attachment) return null;
+
+  const getFileIcon = () => {
+    const ext = attachment.name?.split('.').pop()?.toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg'].includes(ext)) {
+      return <FaFileImage size={20} color="#52c41a" />;
+    } else if (['pdf'].includes(ext)) {
+      return <FaFilePdf size={20} color="#ff4d4f" />;
+    } else if (['doc', 'docx'].includes(ext)) {
+      return <FaFileWord size={20} color="#1890ff" />;
+    } else if (['zip', 'rar', '7z'].includes(ext)) {
+      return <FaFileArchive size={20} color="#fa8c16" />;
+    } else if (['js', 'jsx', 'ts', 'tsx', 'html', 'css', 'json'].includes(ext)) {
+      return <FaFileCode size={20} color="#722ed1" />;
+    } else {
+      return <FaFile size={20} color="#8c8c8c" />;
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      padding: '10px',
+      backgroundColor: '#f5f5f5',
+      borderRadius: '6px',
+      border: '1px solid #e8e8e8',
+      marginTop: '8px'
+    }}>
+      {getFileIcon()}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontWeight: '500',
+          fontSize: '13px',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis'
+        }}>
+          {attachment.name || attachment.originalName || 'Attachment'}
+        </div>
+        {attachment.size && (
+          <div style={{ fontSize: '11px', color: '#8c8c8c' }}>
+            {formatFileSize(attachment.size)}
+          </div>
+        )}
+      </div>
+      {!readonly && onRemove && (
+        <button
+          onClick={onRemove}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#ff4d4f',
+            fontSize: '16px',
+            padding: '4px 8px',
+            borderRadius: '4px'
+          }}
+          title="Remove attachment"
+        >
+          <FaTrash size={14} />
+        </button>
+      )}
+      {onDownload && (
+        <button
+          onClick={() => onDownload(attachment)}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#1890ff',
+            fontSize: '16px',
+            padding: '4px 8px',
+            borderRadius: '4px'
+          }}
+          title="Download attachment"
+        >
+          <FaDownload size={14} />
+        </button>
+      )}
+    </div>
+  );
+};
+
 export default function EmployeeDashboard() {
   const { user, logout } = useAuth();
 
@@ -614,10 +710,11 @@ export default function EmployeeDashboard() {
     closeDate: "",
     workingDays: 0,
     clientPriority: "P3",
-    prioritySource: "CLIENT",
-    estHours: PRIORITY_DEFAULT_HOURS.P3
+    estHours: PRIORITY_DEFAULT_HOURS.P3,
+    attachment: null
   });
   const [editingTaskId, setEditingTaskId] = useState(null);
+  const fileInputRef = useRef(null);
 
   // Project State for Employee
   const [myProjects, setMyProjects] = useState([]);
@@ -726,6 +823,7 @@ export default function EmployeeDashboard() {
       const res = await api.get("/tasks/my");
       console.log("Employee /tasks/my result:", res.data);
       const tasksData = Array.isArray(res.data?.tasks) ? res.data.tasks : [];
+      console.log("Tasks API:", tasksData);
       setTasks(tasksData);
       setFilteredTasks(tasksData);
       setSearchTerm("");
@@ -1529,10 +1627,13 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
       closeDate: "",
       workingDays: 0,
       clientPriority: "P3",
-      prioritySource: "CLIENT",
-      estHours: PRIORITY_DEFAULT_HOURS.P3
+      estHours: PRIORITY_DEFAULT_HOURS.P3,
+      attachment: null
     }));
     setTaskError("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const showSuccess = (message) => {
@@ -1540,11 +1641,67 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
     setShowSuccessPopup(true);
   };
 
-  // UPDATED CREATE/UPDATE TASK FUNCTION WITH CORRECT PAYLOAD
+  // Handle file attachment
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Check file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size should be less than 5MB');
+        e.target.value = '';
+        return;
+      }
+      setTaskForm({
+        ...taskForm,
+        attachment: file
+      });
+    }
+  };
+
+  const removeAttachment = () => {
+    setTaskForm({
+      ...taskForm,
+      attachment: null
+    });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const downloadAttachment = async (attachment) => {
+    try {
+      if (attachment.url) {
+        window.open(attachment.url, '_blank');
+      } else if (attachment._id) {
+        const response = await api.get(`/tasks/attachment/${attachment._id}`, {
+          responseType: 'blob'
+        });
+
+        const blob = new Blob([response.data], { type: attachment.mimetype || 'application/octet-stream' });
+        const url = window.URL.createObjectURL(blob);
+
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = attachment.name || attachment.originalName || 'attachment';
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        window.URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error('Error downloading attachment:', error);
+      alert('Failed to download attachment');
+    }
+  };
+
+  // FIXED CREATE/UPDATE TASK FUNCTION WITH PROPER ATTACHMENT HANDLING
   const handleCreateOrUpdateTask = async (e) => {
     e.preventDefault();
     setTaskError("");
 
+    // Validate required fields
     if (!taskForm.projectId) {
       setTaskError("Please select a project");
       return;
@@ -1555,8 +1712,10 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
       return;
     }
 
-    if (!taskForm.estHours || taskForm.estHours <= 0) {
-      setTaskError("Please enter estimated hours greater than 0");
+    // CRITICAL FIX: Ensure estHours is a valid number and not empty string
+    const estHoursValue = parseFloat(taskForm.estHours);
+    if (isNaN(estHoursValue) || estHoursValue <= 0) {
+      setTaskError("Estimated hours is required and must be a valid positive number");
       return;
     }
 
@@ -1564,32 +1723,52 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
 
     try {
       const now = new Date();
-      const payload = {
-        projectId: taskForm.projectId,
-        requirement: taskForm.requirement?.trim(),
-        type: taskForm.type,
-        status: taskForm.status,
-        scope: taskForm.scope,
-        notes: taskForm.notes,
-        discussedDate: taskForm.discussedDate,
-        startDate: taskForm.startDate,
-        closeDate: taskForm.closeDate,
-        workingDays: finalDays,
-        clientPriority: taskForm.clientPriority,
-        givenBy: taskForm.prioritySource,
-        estHours: Number(taskForm.estHours) > 0 ? Number(taskForm.estHours) : PRIORITY_DEFAULT_HOURS[taskForm.clientPriority] || 8,
-        month: now.getMonth() + 1,
-        year: now.getFullYear(),
-        assignedUserId: user?._id || user?.id,
-        createdByUserId: user?._id || user?.id
-      };
 
-      console.log("DEBUG - Creating task with payload:", payload);
+      // Create FormData for file upload
+      const formData = new FormData();
+
+      // Add all task fields with proper validation
+      formData.append('projectId', taskForm.projectId);
+      formData.append('requirement', taskForm.requirement?.trim() || "");
+      formData.append('type', taskForm.type);
+      formData.append('requirementRole', taskForm.requirementRole);
+      formData.append('status', taskForm.status);
+      formData.append('scope', taskForm.scope);
+      formData.append('notes', taskForm.notes || '');
+      formData.append('discussedDate', taskForm.discussedDate);
+      formData.append('startDate', taskForm.startDate || '');
+      formData.append('closeDate', taskForm.closeDate || '');
+      formData.append('workingDays', Number(finalDays || 0));
+      formData.append('clientPriority', taskForm.clientPriority);
+
+      // CRITICAL FIX: Ensure estHours is properly formatted as number
+      formData.append('estHours', estHoursValue);
+
+      formData.append('month', String(now.getMonth() + 1));
+      formData.append('year', String(now.getFullYear()));
+      formData.append('assignedUserId', user?._id || user?.id);
+      formData.append('createdByUserId', user?._id || user?.id);
+
+      // Add attachment if present - FIXED: Check if it's a File object
+      if (taskForm.attachment && taskForm.attachment instanceof File) {
+        formData.append("attachment", taskForm.attachment);
+        console.log("DEBUG - Attachment added:", taskForm.attachment.name);
+      }
+
+      console.log("DEBUG - Creating task with estHours:", estHoursValue);
 
       if (!editingTaskId) {
-        await api.post("/tasks", payload);
+        // Create new task
+        await api.post("/tasks", formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+
+        // Show success popup
         showSuccess("Task created successfully");
 
+        // Add notification
         const newNotification = {
           _id: `task-${Date.now()}`,
           type: 'success',
@@ -1603,10 +1782,19 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
         setNotifications(prev => Array.isArray(prev) ? [newNotification, ...prev] : [newNotification]);
         setUnreadNotificationCount(prev => (prev || 0) + 1);
       } else {
-        console.log("UPDATE PAYLOAD →", payload);
-        await api.patch(`/tasks/${editingTaskId}`, payload);
+        // Update existing task
+        console.log("UPDATE PAYLOAD for task ID:", editingTaskId);
+
+        await api.patch(`/tasks/${editingTaskId}`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+
+        // Show success popup
         showSuccess("Task updated successfully");
 
+        // Add notification
         const newNotification = {
           _id: `task-${Date.now()}`,
           type: 'info',
@@ -1621,17 +1809,30 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
         setUnreadNotificationCount(prev => (prev || 0) + 1);
       }
 
+      // Reset form and refresh data
       resetTaskForm(true);
       await loadTasks();
       await refreshNotificationsAfterAction();
 
     } catch (error) {
       console.error("Employee create/update task error", error?.response || error);
-      setTaskError(error.response?.data?.message || "Error saving task. Please check your input.");
+
+      // Show specific error message from server
+      const errorMessage = error.response?.data?.message ||
+        error.response?.data?.error ||
+        "Error saving task. Please check your input.";
+
+      setTaskError(errorMessage);
+
+      // If it's a validation error about estHours, show specific message
+      if (errorMessage.toLowerCase().includes('esthours') ||
+        errorMessage.toLowerCase().includes('estimated hours')) {
+        setTaskError("Estimated hours is required and must be a valid positive number");
+      }
     }
   };
 
-  // UPDATED EDIT TASK FUNCTION WITH CORRECT FIELD MAPPING
+  // UPDATED EDIT TASK FUNCTION WITH ATTACHMENT HANDLING
   const startEditTask = (t) => {
     if (!t) return;
 
@@ -1659,6 +1860,9 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
       return;
     }
 
+    // Ensure estHours is a valid number
+    const estHours = t.estHours || t.estimateHours || PRIORITY_DEFAULT_HOURS[t.clientPriority || "P3"] || 8;
+
     setEditingTaskId(t._id);
     setTaskForm({
       projectId: t.projectId?._id || t.projectId || "",
@@ -1673,9 +1877,12 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
       closeDate: t.closeDate || "",
       workingDays: t.workingDays || 0,
       clientPriority: t.clientPriority || "P3",
-      prioritySource: t.givenBy || t.prioritySource || "CLIENT",
-      estHours: t.estHours || t.estimateHours || PRIORITY_DEFAULT_HOURS[t.clientPriority || "P3"] || 8
+      estHours: estHours,
+      attachment: t.attachment // Keep existing attachment reference
     });
+
+    // Show success popup for edit
+    showSuccess("Task loaded for editing");
 
     // Scroll to form
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1840,10 +2047,10 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
       const filtered = safeTasks.filter((task) => {
         if (!task) return false;
 
-        const requirement = (task.requirement || task.recentRequirement || task.title || "").toLowerCase();
-        const project = (task.projectId?.name || task.project || "").toLowerCase();
+        const requirement = (task.requirement || "").toLowerCase();
+        const project = (task.project || "").toLowerCase();   // ✅ FIXED
         const status = (task.status || "").toLowerCase();
-        const createdBy = (task.createdByUserId?.fullName || "").toLowerCase();
+        const createdBy = (task.createdBy || "").toLowerCase();
         const role = (task.requirementRole || "").toLowerCase();
         const priority = (task.clientPriority || "").toLowerCase();
 
@@ -1862,7 +2069,7 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
   };
 
   // ============================================
-  // ✅ EXPORT FUNCTIONS
+  // ✅ EXPORT FUNCTIONS (Updated with attachment field)
   // ============================================
 
   const getAttendanceExportData = useCallback(() => {
@@ -1881,7 +2088,7 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
   const getTasksExportData = useCallback(() => {
     return filteredTasks.map((task, index) => ({
       'S.No': index + 1,
-      Project: task.projectId?.name || '-',
+      Project: task.project || '-',   // ✅ FIXED
       Requirement: task.requirement || task.recentRequirement || task.title,
       Type: task.type || task.requirementType || 'NEW',
       Status: task.status,
@@ -1889,8 +2096,8 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
       'Discussed Date': task.discussedDate || '-',
       'Est. Hours': task.estHours || task.estimateHours || 0,
       Priority: task.clientPriority || '-',
-      'Given By': task.givenBy || task.prioritySource || '-',
-      'Created By': task.createdByUserId?.fullName || '-'
+      'Created By': task.createdBy || '-',
+      Attachment: task.attachment ? 'Yes' : 'No'
     }));
   }, [filteredTasks]);
 
@@ -2965,10 +3172,10 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
                       <tbody>
                         {Array.isArray(myProjects) && myProjects.length > 0 ? (
                           myProjects.map((project, index) => (
-                            <tr 
+                            <tr
                               key={project?._id || `project-${index}`}
                               onClick={() => handleProjectSelect(project)}
-                              style={{ 
+                              style={{
                                 cursor: 'pointer',
                                 backgroundColor: selectedProject?._id === project?._id ? '#e6f7ff' : 'transparent'
                               }}
@@ -2992,9 +3199,9 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
                               </td>
                               <td>
                                 <strong>
-                                  {getMyRoleFromProject(project, user?._id) || 
-                                   getMyRoleFromProject(project, user?.id) || 
-                                   "Not assigned"}
+                                  {getMyRoleFromProject(project, user?._id) ||
+                                    getMyRoleFromProject(project, user?.id) ||
+                                    "Not assigned"}
                                 </strong>
                               </td>
                             </tr>
@@ -3014,11 +3221,11 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
                 {/* SELECTED PROJECT DETAILS - Updated to show created by */}
                 {selectedProject && (
                   <div className="card">
-                    <div style={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center', 
-                      marginBottom: '15px' 
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: '15px'
                     }}>
                       <h2>Project Details: {selectedProject?.name} {selectedProject?.code && `(${selectedProject.code})`}</h2>
                       <button
@@ -3062,7 +3269,7 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
                       </div>
                     </div>
 
-                    {/* PROJECT TASKS - Updated to show created by and action with edit symbol */}
+                    {/* PROJECT TASKS - Updated to show created by, attachment, and clickable requirement */}
                     <h3>Tasks in this Project</h3>
                     <div className="table-wrapper small-table">
                       <table>
@@ -3073,6 +3280,7 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
                             <th>Est. Hours</th>
                             <th>Priority</th>
                             <th>Created By</th>
+                            <th>Attachment</th>
                             <th>Action</th>
                           </tr>
                         </thead>
@@ -3101,7 +3309,18 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
                               return (
                                 <tr key={task?._id || `project-task-${index}`}>
                                   <td style={{ maxWidth: '300px', whiteSpace: 'pre-wrap' }}>
-                                    {task?.requirement || task?.recentRequirement}
+                                    <span
+                                      onClick={() => canEdit && startEditTask(task)}
+                                      style={{
+                                        cursor: canEdit ? 'pointer' : 'default',
+                                        color: canEdit ? '#1890ff' : 'inherit',
+                                        textDecoration: canEdit ? 'underline' : 'none',
+                                        display: 'inline-block'
+                                      }}
+                                      title={canEdit ? 'Click to edit this task' : ''}
+                                    >
+                                      {task?.requirement || task?.recentRequirement}
+                                    </span>
                                   </td>
                                   <td>{task?.status}</td>
                                   <td>{task?.estHours || task?.estimateHours || 0} hrs</td>
@@ -3118,35 +3337,58 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
                                     </span>
                                   </td>
                                   <td>{task?.createdByUserId?.fullName || 'Unknown'}</td>
-                                  <td style={{ textAlign: "center" }}>
-                                    {canEdit && (
+                                  <td>
+                                    {task?.attachment ? (
                                       <button
-                                        type="button"
-                                        onClick={() => {
-                                          startEditTask(task);
-                                          // Scroll to form
-                                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                                        }}
-                                        title="Edit Task"
+                                        onClick={() => downloadAttachment(task.attachment)}
                                         style={{
-                                          background: "none",
-                                          border: "none",
-                                          cursor: "pointer",
-                                          color: "#1890ff",
-                                          fontSize: "16px",
-                                          padding: "5px 10px"
+                                          background: 'none',
+                                          border: 'none',
+                                          cursor: 'pointer',
+                                          color: '#52c41a',
+                                          fontSize: '16px',
+                                          padding: '5px 10px',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center'
                                         }}
+                                        title="Download attachment"
                                       >
-                                        <FaEdit />
+                                        <FaPaperclip size={16} />
                                       </button>
+                                    ) : (
+                                      '-'
                                     )}
+                                  </td>
+                                  <td style={{ textAlign: "center" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        startEditTask(task);
+                                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                                      }}
+                                      title="Edit Task"
+                                      style={{
+                                        background: "none",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        color: "#1890ff",
+                                        fontSize: "16px",
+                                        padding: "5px 10px",
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                      }}
+                                    >
+                                      <FaEdit size={16} />
+                                    </button>
                                   </td>
                                 </tr>
                               );
                             })
                           ) : (
                             <tr>
-                              <td colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>
+                              <td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>
                                 <p className="empty">No tasks created for this project yet.</p>
                               </td>
                             </tr>
@@ -3215,6 +3457,7 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
                   <form
                     className="form-grid"
                     onSubmit={handleCreateOrUpdateTask}
+                    encType="multipart/form-data"
                   >
                     <label>
                       Project
@@ -3417,7 +3660,7 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
                     </label>
 
                     <label>
-                      Client Priority
+                      Priority
                       <select
                         value={taskForm.clientPriority}
                         onChange={(e) => {
@@ -3439,42 +3682,38 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
                     </label>
 
                     <label>
-                      Given By
-                      <select
-                        value={taskForm.prioritySource}
-                        onChange={(e) =>
-                          setTaskForm({
-                            ...taskForm,
-                            prioritySource: e.target.value
-                          })
-                        }
-                      >
-                        <option value="CLIENT">Client</option>
-                        <option value="SERVICE_PROVIDER">
-                          Service Provider
-                        </option>
-                        <option value="THIRD_PARTY">Third Party</option>
-                      </select>
-                    </label>
-
-                    <label>
                       Estimated Hours (for this task)
                       <input
                         type="number"
                         value={taskForm.estHours}
-                        onChange={(e) =>
-                          setTaskForm({
-                            ...taskForm,
-                            estHours: Number(e.target.value)
-                          })
-                        }
-                        min="0"
+                       onChange={(e) => {
+  setTaskForm({
+    ...taskForm,
+    estHours: Number(e.target.value)
+  });
+}}                    min="0.5"
                         step="0.5"
                         required
                       />
                       <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
                         Note: These hours will reduce the project balance when task is approved
                       </div>
+                    </label>
+
+                    <label className="full-row">
+                      Attachment (Max 5MB)
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileChange}
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.zip"
+                      />
+                      {taskForm.attachment && (
+                        <AttachmentPreview
+                          attachment={taskForm.attachment}
+                          onRemove={removeAttachment}
+                        />
+                      )}
                     </label>
 
                     <label>
@@ -3525,7 +3764,7 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
                   </form>
                 </div>
 
-                {/* ALL MY TASKS - Updated with project, created by, and edit symbol */}
+                {/* ALL MY TASKS - Updated with project, created by, attachment, and clickable requirement */}
                 <div className="card">
                   <div className="card-header-row">
                     <h2>All My Tasks ({Array.isArray(filteredTasks) ? filteredTasks.length : 0} of {Array.isArray(tasks) ? tasks.length : 0})</h2>
@@ -3558,7 +3797,7 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
                         type="button"
                         onClick={() => {
                           setSearchTerm("");
-                          setFilteredTasks(tasks);
+                          setFilteredTasks(Array.isArray(tasks) ? tasks : []);
                         }}
                         style={{
                           padding: "8px 16px",
@@ -3592,135 +3831,178 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
                           <th>Scope</th>
                           <th>Discussed</th>
                           <th>Est. Hrs</th>
-                          <th>Client Priority</th>
-                          <th>Given By</th>
+                          <th>Priority</th>
                           <th>Created By</th>
+                          <th>Attachment</th>
                           <th>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-  {Array.isArray(filteredTasks) &&
-    filteredTasks.map((t, index) => {
-      if (!t) return null;
+                        {Array.isArray(filteredTasks) &&
+                          filteredTasks.map((t, index) => {
+                            if (!t) return null;
 
-      const meta = priorityColors[t?.clientPriority] || null;
-      const givenBy =
-        (t?.givenBy || t?.prioritySource || "")
-          .replace(/_/g, " ")
-          .toLowerCase()
-          .replace(/\b\w/g, (c) => c.toUpperCase()) || "-";
+                            const meta = priorityColors[t?.clientPriority] || null;
 
-      const canEdit = (() => {
-        const userRole = user?.role;
-        const createdByRole = t?.createdByRole;
-        const createdById = t?.createdByUserId?._id || t?.createdByUserId;
-        const userId = user?._id || user?.id;
+                            const canEdit = (() => {
+                              const userRole = user?.role;
+                              const createdByRole = t?.createdByRole;
+                              const createdById = t?.createdByUserId?._id || t?.createdByUserId;
+                              const userId = user?._id || user?.id;
 
-        if (userRole === "admin") return false;
-        if (userRole === "employee") {
-          return createdByRole === "employee" && createdById === userId;
-        }
-        if (userRole === "manager" && createdByRole === "employee") {
-          return true;
-        }
-        if (userRole === "manager" && createdByRole === "manager") {
-          return createdById === userId;
-        }
-        return false;
-      })();
+                              if (userRole === "admin") return false;
+                              if (userRole === "employee") {
+                                return createdByRole === "employee" && createdById === userId;
+                              }
+                              if (userRole === "manager" && createdByRole === "employee") {
+                                return true;
+                              }
+                              if (userRole === "manager" && createdByRole === "manager") {
+                                return createdById === userId;
+                              }
+                              return false;
+                            })();
 
-      // Get project name safely
-      let projectName = '-';
-      if (t?.projectId) {
-        if (typeof t.projectId === 'object') {
-          projectName = t.projectId.name || '-';
-        } else if (typeof t.projectId === 'string') {
-          projectName = t.projectId; // This will show ID, but better than empty
-        }
-      } else if (t?.projectName) {
-        projectName = t.projectName;
-      }
+                            // Get project name safely
+                            let projectName = t.project || "-";
 
-      // Get created by name safely
-      let createdByName = 'System';
-      if (t?.createdByUserId) {
-        if (typeof t.createdByUserId === 'object') {
-          createdByName = t.createdByUserId.fullName || 'Unknown';
-        }
-      } else if (t?.createdBy) {
-        createdByName = t.createdBy;
-      } else if (t?.createdByName) {
-        createdByName = t.createdByName;
-      }
+                            if (!t.project && t?.projectId) {
+                              if (typeof t.projectId === "object") {
+                                projectName = t.projectId?.name || "-";
+                              } else {
+                                const foundProject =
+                                  myProjects?.find(p => p._id === t.projectId) ||
+                                  projects?.find(p => p._id === t.projectId);
 
-      return (
-        <tr key={t?._id || `task-${index}`}>
-          <td>{index + 1}</td>
-          <td>
-            <strong>{projectName}</strong>
-          </td>
-          <td style={{ maxWidth: 260, whiteSpace: "pre-wrap" }}>
-            {t?.requirement || t?.recentRequirement || t?.title || '-'}
-          </td>
-          <td>{t?.type || t?.requirementType || "NEW"}</td>
-          <td>{t?.status || '-'}</td>
-          <td>{t?.scope || "-"}</td>
-          <td>{t?.discussedDate || "-"}</td>
-          <td>{Number(t?.estHours || t?.estimateHours || 0)}</td>
-          <td>
-            {meta ? (
-              <span
-                style={{
-                  display: "inline-block",
-                  padding: "2px 8px",
-                  borderRadius: 999,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  backgroundColor: meta.color,
-                  color: "#fff"
-                }}
-              >
-                {meta.label}
-              </span>
-            ) : (
-              t?.clientPriority || "-"
-            )}
-          </td>
-          <td>{givenBy}</td>
-          <td>{createdByName}</td>
-          <td style={{ textAlign: "center" }}>
-            {canEdit && (
-              <button
-                type="button"
-                onClick={() => startEditTask(t)}
-                title="Edit Task"
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "#1890ff",
-                  fontSize: "16px",
-                  padding: "8px 12px",
-                  borderRadius: "4px",
-                  transition: "all 0.2s"
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = "#e6f7ff";
-                  e.currentTarget.style.color = "#096dd9";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "transparent";
-                  e.currentTarget.style.color = "#1890ff";
-                }}
-              >
-                <FaEdit size={16} />
-              </button>
-            )}
-          </td>
-        </tr>
-      );
-    })}
-</tbody>
+                                projectName = foundProject?.name || "-";
+                              }
+                            } else if (!t.project && t?.projectName) {
+                              projectName = t.projectName;
+                            }
+
+                            // Get created by name safely
+                            let createdByName = 'System';
+                            if (t?.createdByUserId) {
+                              if (typeof t.createdByUserId === 'object') {
+                                createdByName = t.createdByUserId.fullName || 'Unknown';
+                              }
+                            } else if (t?.createdBy) {
+                              createdByName = t.createdBy;
+                            } else if (t?.createdByName) {
+                              createdByName = t.createdByName;
+                            }
+
+                            return (
+                              <tr key={t?._id || `task-${index}`}>
+                                <td>{index + 1}</td>
+                                <td>
+                                  <strong>{projectName}</strong>
+                                </td>
+                                <td style={{ maxWidth: 260, whiteSpace: "pre-wrap" }}>
+                                  <span
+                                    onClick={() => canEdit && startEditTask(t)}
+                                    style={{
+                                      cursor: canEdit ? 'pointer' : 'default',
+                                      color: canEdit ? '#1890ff' : 'inherit',
+                                      textDecoration: canEdit ? 'underline' : 'none',
+                                      display: 'inline-block'
+                                    }}
+                                    title={canEdit ? 'Click to edit this task' : ''}
+                                  >
+                                    {t?.requirement || t?.recentRequirement || t?.title || '-'}
+                                  </span>
+                                </td>
+                                <td>{t?.type || t?.requirementType || "NEW"}</td>
+                                <td>
+                                  {t?.status === "COMPLETED" ? (
+                                    <span style={{ color: "#52c41a", fontWeight: "bold" }}>
+                                      <FaCheckCircle style={{ marginRight: 4 }} />
+                                      COMPLETED
+                                    </span>
+                                  ) : (
+                                    t?.status || "-"
+                                  )}
+                                </td>
+                                <td>{t?.scope || "-"}</td>
+                                <td>{t?.discussedDate || "-"}</td>
+                                <td>{Number(t?.estHours || t?.estimateHours || 0)}</td>
+                                <td>
+                                  {meta ? (
+                                    <span
+                                      style={{
+                                        display: "inline-block",
+                                        padding: "2px 8px",
+                                        borderRadius: 999,
+                                        fontSize: 11,
+                                        fontWeight: 600,
+                                        backgroundColor: meta.color,
+                                        color: "#fff"
+                                      }}
+                                    >
+                                      {meta.label}
+                                    </span>
+                                  ) : (
+                                    t?.clientPriority || "-"
+                                  )}
+                                </td>
+                                <td>{createdByName}</td>
+                                <td>
+                                  {t?.attachment ? (
+                                    <button
+                                      onClick={() => downloadAttachment(t.attachment)}
+                                      style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        color: '#52c41a',
+                                        fontSize: '16px',
+                                        padding: '8px 12px',
+                                        borderRadius: '4px',
+                                        transition: 'all 0.2s',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = '#f6ffed';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                      }}
+                                      title="Download attachment"
+                                    >
+                                      <FaPaperclip size={16} />
+                                    </button>
+                                  ) : (
+                                    '-'
+                                  )}
+                                </td>
+                                <td style={{ textAlign: "center" }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditTask(t)}
+                                    title="Edit Task"
+                                    style={{
+                                      background: "none",
+                                      border: "none",
+                                      cursor: "pointer",
+                                      color: "#1890ff",
+                                      fontSize: "16px",
+                                      padding: "8px 12px",
+                                      borderRadius: "4px",
+                                      transition: "all 0.2s",
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center'
+                                    }}
+                                  >
+                                    <FaEdit size={16} />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
                     </table>
                     {filteredTasks.length === 0 && (
                       <p className="empty">
@@ -3985,72 +4267,72 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
                         </tr>
                       </thead>
                       <tbody>
-  {Array.isArray(myProjects) && myProjects.length > 0 ? (
-    myProjects.map((project, index) => (
-      <tr 
-        key={project?._id || `project-${index}`}
-        onClick={() => {
-          setSelectedProject(project);
-          // Load tasks for this project
-          if (project?._id) {
-            api.get(`/tasks/project/${project._id}`)
-              .then(res => {
-                const tasks = Array.isArray(res.data?.tasks) ? res.data.tasks : [];
-                setProjectTasks(tasks);
-              })
-              .catch(err => console.error("Error loading project tasks:", err));
-          }
-        }}
-        style={{ 
-          cursor: 'pointer',
-          backgroundColor: selectedProject?._id === project?._id ? '#e6f7ff' : 'transparent',
-          transition: 'background-color 0.2s'
-        }}
-        onMouseEnter={(e) => {
-          if (selectedProject?._id !== project?._id) {
-            e.currentTarget.style.backgroundColor = '#f5f5f5';
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (selectedProject?._id !== project?._id) {
-            e.currentTarget.style.backgroundColor = 'transparent';
-          }
-        }}
-      >
-        <td>
-          <strong>{project?.name}</strong>
-          {project?.code && ` (${project.code})`}
-          <div style={{ fontSize: '12px', color: '#666' }}>
-            {project?.description || 'No description'}
-          </div>
-        </td>
-        <td>{project?.totalEstimatedHours || 0} hrs</td>
-        <td>
-          <span style={{
-            color: project?.balanceHours < 0 ? '#ff4d4f' :
-              project?.balanceHours < (project?.totalEstimatedHours * 0.1) ? '#fa8c16' : '#52c41a',
-            fontWeight: 'bold'
-          }}>
-            {project?.balanceHours || 0} hrs
-          </span>
-        </td>
-        <td>
-          <strong>
-            {getMyRoleFromProject(project, user?._id) || 
-             getMyRoleFromProject(project, user?.id) || 
-             "Not assigned"}
-          </strong>
-        </td>
-      </tr>
-    ))
-  ) : (
-    <tr>
-      <td colSpan="4" style={{ textAlign: 'center', padding: '20px' }}>
-        <p className="empty">No projects assigned to you yet.</p>
-      </td>
-    </tr>
-  )}
-</tbody>
+                        {Array.isArray(myProjects) && myProjects.length > 0 ? (
+                          myProjects.map((project, index) => (
+                            <tr
+                              key={project?._id || `project-${index}`}
+                              onClick={() => {
+                                setSelectedProject(project);
+                                // Load tasks for this project
+                                if (project?._id) {
+                                  api.get(`/tasks/project/${project._id}`)
+                                    .then(res => {
+                                      const tasks = Array.isArray(res.data?.tasks) ? res.data.tasks : [];
+                                      setProjectTasks(tasks);
+                                    })
+                                    .catch(err => console.error("Error loading project tasks:", err));
+                                }
+                              }}
+                              style={{
+                                cursor: 'pointer',
+                                backgroundColor: selectedProject?._id === project?._id ? '#e6f7ff' : 'transparent',
+                                transition: 'background-color 0.2s'
+                              }}
+                              onMouseEnter={(e) => {
+                                if (selectedProject?._id !== project?._id) {
+                                  e.currentTarget.style.backgroundColor = '#f5f5f5';
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (selectedProject?._id !== project?._id) {
+                                  e.currentTarget.style.backgroundColor = 'transparent';
+                                }
+                              }}
+                            >
+                              <td>
+                                <strong>{project?.name}</strong>
+                                {project?.code && ` (${project.code})`}
+                                <div style={{ fontSize: '12px', color: '#666' }}>
+                                  {project?.description || 'No description'}
+                                </div>
+                              </td>
+                              <td>{project?.totalEstimatedHours || 0} hrs</td>
+                              <td>
+                                <span style={{
+                                  color: project?.balanceHours < 0 ? '#ff4d4f' :
+                                    project?.balanceHours < (project?.totalEstimatedHours * 0.1) ? '#fa8c16' : '#52c41a',
+                                  fontWeight: 'bold'
+                                }}>
+                                  {project?.balanceHours || 0} hrs
+                                </span>
+                              </td>
+                              <td>
+                                <strong>
+                                  {getMyRoleFromProject(project, user?._id) ||
+                                    getMyRoleFromProject(project, user?.id) ||
+                                    "Not assigned"}
+                                </strong>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="4" style={{ textAlign: 'center', padding: '20px' }}>
+                              <p className="empty">No projects assigned to you yet.</p>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
                     </table>
                   </div>
                   {Array.isArray(myProjects) && myProjects.length > 5 && (
@@ -4540,6 +4822,81 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
           
           .holiday-cell.empty {
             background: #fafafa;
+          }
+          
+          /* Attachment Styles */
+          .attachment-preview {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 6px;
+            border: 1px solid #e8e8e8;
+            margin-top: 8px;
+          }
+          
+          .attachment-icon {
+            color: #52c41a;
+            font-size: 20px;
+          }
+          
+          .attachment-info {
+            flex: 1;
+            min-width: 0;
+          }
+          
+          .attachment-name {
+            font-weight: 500;
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          
+          .attachment-size {
+            font-size: 11px;
+            color: #8c8c8c;
+          }
+          
+          .attachment-remove-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #ff4d4f;
+            font-size: 16px;
+            padding: 4px 8px;
+            border-radius: 4px;
+          }
+          
+          .attachment-remove-btn:hover {
+            background-color: #fff2f0;
+          }
+          
+          .attachment-download-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #1890ff;
+            font-size: 16px;
+            padding: 4px 8px;
+            border-radius: 4px;
+          }
+          
+          .attachment-download-btn:hover {
+            background-color: #e6f7ff;
+          }
+          
+          /* Clickable Requirement */
+          .clickable-requirement {
+            cursor: pointer;
+            color: #1890ff;
+            text-decoration: underline;
+            display: inline-block;
+          }
+          
+          .clickable-requirement:hover {
+            color: #096dd9;
           }
           
           /* Responsive Fixes */
