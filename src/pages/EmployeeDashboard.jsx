@@ -35,6 +35,7 @@ const STATUS_OPTIONS = [
   "PRESENT FULL DAY",
   "PRESENT HALF DAY",
   "EMERGENCY LEAVE",
+   "WORK FROM HOME",
   "CASUAL LEAVE",
   "PUBLIC HOLIDAY",
   "2ND SATURDAY",
@@ -737,7 +738,7 @@ export default function EmployeeDashboard() {
   const loadNotifications = useCallback(async () => {
     try {
       setLoadingNotifications(true);
-      const res = await api.get("/notifications/my");
+      const res = await api.get("/notifications");
 
       const notificationsData = Array.isArray(res.data) ? res.data : [];
 
@@ -822,7 +823,9 @@ export default function EmployeeDashboard() {
     try {
       const res = await api.get("/tasks/my");
       console.log("Employee /tasks/my result:", res.data);
-      const tasksData = Array.isArray(res.data?.tasks) ? res.data.tasks : [];
+      const tasksData = Array.isArray(res.data)
+  ? res.data
+  : res.data?.tasks || [];
       console.log("Tasks API:", tasksData);
       setTasks(tasksData);
       setFilteredTasks(tasksData);
@@ -1698,15 +1701,17 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
 
   // FIXED CREATE/UPDATE TASK FUNCTION WITH PROPER ATTACHMENT HANDLING
   const handleCreateOrUpdateTask = async (e) => {
+    console.log("TASK FORM DATA:", taskForm);
   e.preventDefault();
 
   setTaskError("");
 
-  if (!Number(taskForm.estHours) || Number(taskForm.estHours) <= 0) {
+  const estHours = Number(taskForm.estHours);
+
+  if (isNaN(estHours) || estHours <= 0) {
     setTaskError("Estimated hours is required and must be a valid positive number");
     return;
   }
-
   if (!taskForm.projectId) {
     setTaskError("Please select a project");
     return;
@@ -1747,7 +1752,7 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
       formData.append('clientPriority', taskForm.clientPriority);
 
       // CRITICAL FIX: Ensure estHours is properly formatted as number
-      formData.append('estHours', estHoursValue);
+      formData.append('estHours', taskForm.estHours);
 
       formData.append('month', String(now.getMonth() + 1));
       formData.append('year', String(now.getFullYear()));
@@ -1854,7 +1859,7 @@ await refreshNotificationsAfterAction();
   const startEditTask = (t) => {
   if (!t) return;
 
-  const canEdit = t?.canEdit;
+  const canEdit = Boolean(t?.canEdit);
 
   if (!canEdit) {
     alert("You don't have permission to edit this task");
@@ -3465,8 +3470,7 @@ await refreshNotificationsAfterAction();
                         disabled={Array.isArray(projects) && projects.length === 0}
                       >
                         <option value="">-- Select project --</option>
-                        {Array.isArray(projects) && projects
-                          .map((p, index) => (
+                        {Array.isArray(projects) && projects?.map((p, index) => (
                             <option key={p?._id || `project-option-${index}`} value={p?._id}>
                               {p?.name} ({p?.code})
                             </option>
@@ -3677,11 +3681,11 @@ await refreshNotificationsAfterAction();
                       Estimated Hours (for this task)
                      <input
   type="number"
-  value={taskForm.estHours}
+  value={taskForm.estHours || ""}
   onChange={(e) =>
     setTaskForm({
       ...taskForm,
-      estHours: Number(e.target.value)
+      estHours: e.target.value === "" ? "" : Number(e.target.value)
     })
   }
   min="0.5"
@@ -3839,21 +3843,20 @@ await refreshNotificationsAfterAction();
 
                          const canEdit = t?.canEdit;
                             // Get project name safely
-                            let projectName = t.project || "-";
+                           let projectName = "-";
 
-                            if (!t.project && t?.projectId) {
-                              if (typeof t.projectId === "object") {
-                                projectName = t.projectId?.name || "-";
-                              } else {
-                                const foundProject =
-                                  myProjects?.find(p => p._id === t.projectId) ||
-                                  projects?.find(p => p._id === t.projectId);
-
-                                projectName = foundProject?.name || "-";
-                              }
-                            } else if (!t.project && t?.projectName) {
-                              projectName = t.projectName;
-                            }
+if (typeof t.project === "string") {
+  projectName = t.project;
+} 
+else if (t.project?.name) {
+  projectName = t.project.name;
+} 
+else if (t.projectId?.name) {
+  projectName = t.projectId.name;
+} 
+else if (t.projectName) {
+  projectName = t.projectName;
+}
 
                             // Get created by name safely
                             let createdByName = 'System';
@@ -3871,8 +3874,8 @@ await refreshNotificationsAfterAction();
                               <tr key={t?._id || `task-${index}`}>
                                 <td>{index + 1}</td>
                                 <td>
-                                  <strong>{projectName}</strong>
-                                </td>
+  <strong>{projectName || "-"}</strong>
+</td>
                                 <td style={{ maxWidth: 260, whiteSpace: "pre-wrap" }}>
                                   <span
                                     onClick={() => canEdit && startEditTask(t)}

@@ -49,7 +49,10 @@ export default function EmployeeTimesheetCard({ records, project, currentMonth, 
     attendanceRecords.forEach(record => {
       let projectHours = 0;
       
-      if (record.status === "PRESENT FULL DAY") {
+      if (record.status === "WORK FROM HOME") {
+        projectHours = 8;
+      }
+      else if (record.status === "PRESENT FULL DAY") {
         // Calculate hours from work times
         if (record.workInTime && record.workOutTime) {
           const [inHour, inMin] = record.workInTime.split(":").map(Number);
@@ -290,7 +293,11 @@ export default function EmployeeTimesheetCard({ records, project, currentMonth, 
                       </td>
                       <td>{day.workInTime}</td>
                       <td>{day.workOutTime}</td>
-                      <td>{day.status.includes("PRESENT") ? "8.0" : "0.0"}</td>
+                      <td>
+                        {day.status.includes("PRESENT") || day.status === "WORK FROM HOME"
+                          ? "8.0"
+                          : "0.0"}
+                      </td>
                       <td>
                         {day.extraHours > 0 ? (
                           <span className={`extra-hours-indicator ${day.extraHoursApproved ? 'approved' : 'pending'}`}>
@@ -327,7 +334,7 @@ export default function EmployeeTimesheetCard({ records, project, currentMonth, 
             <tfoot>
               <tr>
                 <td colSpan="5" className="total-label"><strong>Monthly Totals:</strong></td>
-                <td><strong>{(daily.filter(d => d.status.includes("PRESENT")).length * 8).toFixed(1)} hrs</strong></td>
+                <td><strong>{(daily.filter(d => d.status.includes("PRESENT") || d.status === "WORK FROM HOME").length * 8).toFixed(1)} hrs</strong></td>
                 <td><strong>{daily.reduce((sum, d) => sum + (d.extraHours || 0), 0).toFixed(1)} hrs</strong></td>
                 <td><strong>{totalHours.toFixed(1)} hrs</strong></td>
                 <td></td>

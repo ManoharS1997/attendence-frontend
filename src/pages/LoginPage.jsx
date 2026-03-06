@@ -7,7 +7,7 @@ export default function LoginPage() {
   const { login, loading } = useAuth();
 
   // "admin" | "manager" | "employee"
-  const [mode, setMode] = useState("admin");
+  const [mode, setMode] = useState("employee");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -75,7 +75,7 @@ export default function LoginPage() {
             className={mode === "employee" ? "tab active" : "tab"}
             onClick={() => handleModeChange("employee")}
           >
-            Employee Login
+            Employee
           </button>
         </div>
 

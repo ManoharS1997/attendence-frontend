@@ -1543,18 +1543,14 @@ export default function ManagerDashboard() {
 
   // projectTotals: sum of all assigned employees hours per project
   const projectTotals = projects.reduce((acc, p) => {
-    let used = 0;
-    (p.assignments || []).forEach((a) => {
-      const id = (a.user && a.user._id) || a.user;
-      if (!id) return;
-      used += hoursByEmployee[id] || 0;
-    });
-    acc[p._id] = {
-      used,
-      remaining: Math.max(0, (p.totalEstimatedHours || 0) - used)
-    };
-    return acc;
-  }, {});
+  acc[p._id] = {
+    used: p.consumedHours || 0,
+    remaining:
+      p.balanceHours ??
+      ((p.totalEstimatedHours || 0) - (p.consumedHours || 0))
+  };
+  return acc;
+}, {});
 
   const selectedEmployeeHours =
     (selectedEmployeeId && hoursByEmployee[selectedEmployeeId]) || 0;
@@ -2992,10 +2988,7 @@ holidays marked as Taken will also be visible in Employee and Admin views.
                       </thead>
                       <tbody>
                         {projects.map((p) => {
-                          const totals = projectTotals[p._id] || {
-                            used: 0,
-                            remaining: p.totalEstimatedHours || 0
-                          };
+                         
                           const count = p.assignments?.length || 0;
                           const isSelected = selectedProjectId === p._id;
 
@@ -3009,6 +3002,7 @@ holidays marked as Taken will also be visible in Employee and Admin views.
                               }}
                               onClick={() => {
                                 setSelectedProjectId(p._id);
+                                loadProjectTasks(p._id);
                                 setSelectedEmployeeId(null);
                                 setTaskForm((prev) => ({
                                   ...prev,
@@ -3030,7 +3024,7 @@ holidays marked as Taken will also be visible in Employee and Admin views.
                                 </div>
                               </td>
                               <td style={{ padding: '8px', textAlign: 'center' }}>{count}</td>
-                              <td style={{ padding: '8px', textAlign: 'right' }}>{totals.used} hrs</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>{p.consumedHours || 0} hrs</td>
                               <td style={{ padding: '8px', textAlign: 'right' }}>
                                 <span className={p.balanceHours < 0 ? "text-red-600 font-bold" : ""}>
                                   {p.balanceHours ?? 0} hrs
@@ -3532,7 +3526,7 @@ holidays marked as Taken will also be visible in Employee and Admin views.
                                   <td>{t.discussedDate}</td>
                                   <td>{t.startDate}</td>
                                   <td>{t.closeDate}</td>
-                                  <td>{t.noOfDays}</td>
+                                  <td>{t.workingDays}</td>
                                   <td>{t.workingDays}
                                     <span
                                       style={{
@@ -3936,10 +3930,7 @@ Employees / Admin.
                       </thead>
                       <tbody>
                         {projects.map((p) => {
-                          const totals = projectTotals[p._id] || {
-                            used: 0,
-                            remaining: p.totalEstimatedHours || 0
-                          };
+                          
                           return (
                             <tr key={p._id}>
                               <td>{p.name}</td>
@@ -3950,7 +3941,7 @@ Employees / Admin.
                               <td>{p.durationMonths || 0} mo</td>
                               <td>{p.totalEstimatedHours || 0}</td>
                               <td>{p.assignments?.length || 0}</td>
-                              <td>{totals.used}</td>
+                              <td>{p.consumedHours || 0}</td>
                               <td>{p.balanceHours ?? 0}</td>
                             </tr>
                           );
