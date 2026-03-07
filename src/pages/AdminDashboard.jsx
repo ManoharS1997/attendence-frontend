@@ -153,29 +153,71 @@ export default function AdminDashboard() {
       const tasks = res.data || [];
       
       // Format tasks with all required fields
-      const formattedTasks = tasks.map((task, index) => ({
-        sno: index + 1,
-        _id: task._id,
-        project: task.project || task.projectId || {},
-        requirement: task.requirement || task.title || "",
-        requirementType: task.requirementType || "NEW",
-        assignedTo: task.assignedTo || task.assignedUserId || {},
-        status: task.status || "OPEN",
-        scope: task.scope || "AGREED",
-        notes: task.notes || "",
-        discussedDate: task.discussedDate || task.discussed || "",
-        startDate: task.startDate || task.estimatedDate || "",
-        closeDate: task.closeDate || task.originalClosureDate || "",
-        workingDays: task.workingDays || task.noOfDays || 0,
-        clientPriority: task.clientPriority || "P3",
-        givenBy: task.givenBy || task.prioritySource || "CLIENT",
-        createdBy: task.createdBy || task.createdByUserId || {},
-        createdByRole: task.createdByRole || "employee",
-        estimateHours: task.estimateHours || 0,
-        month: task.month,
-        year: task.year,
-        createdAt: task.createdAt
-      }));
+      const formattedTasks = tasks.map((task, index) => {
+  const projectObj =
+    typeof task.projectId === "object"
+      ? task.projectId
+      : task.project || {};
+
+  return {
+    sno: index + 1,
+    _id: task._id,
+
+    project: projectObj,
+    projectName: projectObj?.name || task.projectName || "-",
+
+    requirement: task.requirement || task.title || "",
+    requirementType: task.requirementType || "NEW",
+
+    assignedTo: task.assignedTo || task.assignedUserId || {},
+
+    status: task.status || "OPEN",
+    scope: task.scope || "AGREED",
+
+    notes: task.notes || "",
+
+    discussedDate: task.discussedDate || task.discussed || "",
+    startDate: task.startDate || task.estimatedDate || "",
+    closeDate: task.closeDate || task.originalClosureDate || "",
+    workingDays: (() => {
+  const start = task.startDate || task.estimatedDate;
+  const end = task.closeDate || task.originalClosureDate;
+
+  if (start && end) {
+    const s = new Date(start);
+    const e = new Date(end);
+
+    const diffTime = e.getTime() - s.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+    return diffDays > 0 ? diffDays : 1;
+  }
+
+  return task.workingDays ??
+         task.noOfDays ??
+         task.estimatedDays ??
+         task.estHours ??
+         1;
+})(),
+
+   
+
+    clientPriority: task.clientPriority || "P3",
+    givenBy: task.givenBy || task.prioritySource || "CLIENT",
+
+    createdBy:
+  typeof task.createdByUserId === "object"
+    ? task.createdByUserId
+    : task.createdBy || {},
+    createdByRole: task.createdByRole || "employee",
+
+    estimateHours: task.estimateHours || task.estHours || 0,
+
+    month: task.month,
+    year: task.year,
+    createdAt: task.createdAt
+  };
+});
       
       setAllTasks(formattedTasks);
     } catch (err) {
@@ -310,21 +352,18 @@ export default function AdminDashboard() {
 
   // ✅ SOCKET INTEGRATION: Listen for real-time updates
   useEffect(() => {
-    // Listen for dashboard updates from server
-    socket.on("dashboard:update", () => {
-      console.log("📡 Received dashboard update via socket");
-      loadAttendance();
-      loadSummaries();
-      loadProjects();
-      loadAllAdminTasks();
-      loadHolidays();
-    });
+  // Listen for dashboard updates from server
+  socket.on("dashboard:update", () => {
+    console.log("📡 Dashboard update received");
 
-    // Cleanup listener on component unmount
-    return () => {
-      socket.off("dashboard:update");
-    };
-  }, [loadAttendance, loadSummaries, loadProjects, loadAllAdminTasks, loadHolidays]);
+    loadAllAdminTasks();   // reload tasks only
+  });
+
+  // Cleanup listener on component unmount
+  return () => {
+    socket.off("dashboard:update");
+  };
+}, [loadAllAdminTasks]);
 
   // Load all data on component mount
   useEffect(() => {
@@ -428,18 +467,12 @@ export default function AdminDashboard() {
   }, [attendance]);
 
   const projectTotals = projects.reduce((acc, p) => {
-    let used = 0;
-    (p.assignments || []).forEach((a) => {
-      const id = (a.user && a.user._id) || a.user;
-      if (!id) return;
-      used += hoursByEmployee[id] || 0;
-    });
-    acc[p._id] = {
-      used,
-      remaining: Math.max(0, (p.totalEstimatedHours || 355) - used),
-    };
-    return acc;
-  }, {});
+  acc[p._id] = {
+    used: p.consumedHours || 0,
+    remaining: p.balanceHours ?? (p.totalEstimatedHours - (p.consumedHours || 0)),
+  };
+  return acc;
+}, {});
 
   const totalEmployees = summaries.length;
   const activeEmployees = summaries.length; // summary doesn't include isActive flag
@@ -1737,7 +1770,12 @@ export default function AdminDashboard() {
 
                 {/* All project tasks (view-only) */}
                 <div className="card">
-                  <h2>All Project Tasks (View Only)</h2>
+                  <h2>
+  All Project Tasks (View Only) 
+  <span style={{ fontSize: 13, color: "#64748b", marginLeft: 8 }}>
+    ({filteredAdminTasks.length} out of {allTasks.length})
+  </span>
+</h2>
                   <div
   style={{
     display: "flex",
@@ -1801,35 +1839,32 @@ export default function AdminDashboard() {
                   </p>
                   <div className="table-wrapper">
                     <table>
-                      <thead>
-                        <tr>
-                          <th>S.No</th>
-                          <th>Project</th>
-                          <th>Requirement</th>
-                          <th>Type</th>
-                          <th>Employee</th>
-                          <th>Status</th>
-                          <th>Scope</th>
-                          <th>Notes</th>
-                          <th>Discussed</th>
-                          <th>Start Date</th>
-                          <th>Close Date</th>
-                          <th>Working Days</th>
-                          <th>Client Priority</th>
-                          <th>Given By</th>
-                          <th>Created By</th>
-                        </tr>
-                      </thead>
+                  <thead>
+<tr>
+  <th>S.No</th>
+  <th>Project</th>
+  <th>Requirement</th>
+  <th>Type</th>
+  <th>Status</th>
+  <th>Scope</th>
+  <th>Notes</th>
+  <th>Discussed</th>
+  <th>Start Date</th>
+  <th>Close Date</th>
+  <th>Working Days</th>
+  <th>Client Priority</th>
+  <th>Given By</th>
+</tr>
+</thead>
                       <tbody>
                         {filteredAdminTasks.map((task) => (
                           <tr key={task._id}>
                             <td>{task.sno}</td>
-                            <td>{task.project?.name || "N/A"}</td>
+                            <td>{task.projectName || "-"}</td>
                             <td style={{ maxWidth: 260, whiteSpace: "pre-wrap" }}>
                               {task.requirement}
                             </td>
                             <td>{task.requirementType}</td>
-                            <td>{task.assignedTo?.fullName || task.assignedTo?.email || "Unassigned"}</td>
                             <td>
                               <span style={{
                                 padding: "4px 8px",
@@ -1851,10 +1886,10 @@ export default function AdminDashboard() {
                             <td>{task.discussedDate || "-"}</td>
                             <td>{task.startDate || "-"}</td>
                             <td>{task.closeDate || "-"}</td>
-                            <td>{task.workingDays || 0}</td>
+                            <td>{task.workingDays ?? "-"}</td>
                             <td>{task.clientPriority}</td>
                             <td>{task.givenBy}</td>
-                            <td>{task.createdBy?.fullName || task.createdBy?.email || "-"}</td>
+                            
                           </tr>
                         ))}
                       </tbody>
