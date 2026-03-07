@@ -1,8 +1,4 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
-const API_BASE_URL =
-  import.meta.env.MODE === "development"
-    ? "http://localhost:5001"
-    : "http://localhost:5000";
 import { useAuth } from "../context/AuthContext";
 import api from "../utils/api";
 import ChangePasswordCard from "../components/ChangePasswordCard";
@@ -619,8 +615,7 @@ export default function EmployeeDashboard() {
     workingDays: 0,
     clientPriority: "P3",
     prioritySource: "CLIENT",
-    estHours: PRIORITY_DEFAULT_HOURS.P3,
-    attachment: null
+    estHours: PRIORITY_DEFAULT_HOURS.P3
   });
   const [editingTaskId, setEditingTaskId] = useState(null);
 
@@ -1592,19 +1587,7 @@ Status: ${notification?.read ? 'Read' : 'Unread'}
       console.log("DEBUG - Creating task with payload:", payload);
 
       if (!editingTaskId) {
-        const formData = new FormData();
-
-Object.keys(payload).forEach((key) => {
-  formData.append(key, payload[key]);
-});
-
-if (taskForm.attachment) {
-  formData.append("attachment", taskForm.attachment);
-}
-
-await api.post("/tasks", formData, {
-  headers: { "Content-Type": "multipart/form-data" }
-});
+        await api.post("/tasks", payload);
         showSuccess("Task created successfully");
 
         const newNotification = {
@@ -1652,33 +1635,33 @@ await api.post("/tasks", formData, {
   const startEditTask = (t) => {
     if (!t) return;
 
-//     const canEdit = (() => {
-//   const userRole = user?.role;
-//   const createdByRole = t?.createdByRole;
-//   const createdById = String(t?.createdByUserId?._id || t?.createdByUserId);
-//   const userId = String(user?._id || user?.id);
+    const canEdit = (() => {
+      const userRole = user?.role;
+      const createdByRole = t?.createdByRole;
+      const createdById = t?.createdByUserId?._id || t?.createdByUserId;
+      const userId = user?._id || user?.id;
 
-//   if (userRole === "admin") return false;
-//   if (userRole === "employee") {
-//     return createdByRole === "employee" && createdById === userId;
-//   }
-//   if (userRole === "manager" && createdByRole === "employee") {
-//     return true;
-//   }
-//   if (userRole === "manager" && createdByRole === "manager") {
-//     return createdById === userId;
-//   }
-//   return false;
-// })();
+      if (userRole === "admin") return false;
+      if (userRole === "employee") {
+        return createdByRole === "employee" && createdById === userId;
+      }
+      if (userRole === "manager" && createdByRole === "employee") {
+        return true;
+      }
+      if (userRole === "manager" && createdByRole === "manager") {
+        return createdById === userId;
+      }
+      return false;
+    })();
 
-    // if (!canEdit) {
-    //   alert("You don't have permission to edit this task");
-    //   return;
-    // }
+    if (!canEdit) {
+      alert("You don't have permission to edit this task");
+      return;
+    }
 
     setEditingTaskId(t._id);
     setTaskForm({
-      projectId: t.project?._id || t.projectId?._id || t.projectId || "",
+      projectId: t.projectId?._id || t.projectId || "",
       requirement: t.requirement || t.recentRequirement || "",
       type: t.type || t.requirementType || "NEW",
       requirementRole: t.requirementRole || "DEVELOPER",
@@ -1844,32 +1827,39 @@ await api.post("/tasks", formData, {
   // ✅ SEARCH FUNCTIONALITY
   // ============================================
 
-  const handleSearch = (value) => {
-  setSearchTerm(value);
+  const handleSearch = (term) => {
+    setSearchTerm(term);
 
-  if (!value.trim()) {
-    setFilteredTasks(tasks);
-    return;
-  }
+    const safeTasks = Array.isArray(tasks) ? tasks : [];
 
-  const lower = value.toLowerCase();
+    if (!term || term.trim() === "") {
+      setFilteredTasks(safeTasks);
+    } else {
+      const searchLower = term.toLowerCase().trim();
 
-  const filtered = tasks.filter((t) => {
-    const projectName = t?.project?.name?.toLowerCase() || "";
-    const requirement = t?.requirement?.toLowerCase() || "";
-    const status = t?.status?.toLowerCase() || "";
-    const createdBy = t?.createdByName?.toLowerCase() || "";
+      const filtered = safeTasks.filter((task) => {
+        if (!task) return false;
 
-    return (
-      projectName.includes(lower) ||
-      requirement.includes(lower) ||
-      status.includes(lower) ||
-      createdBy.includes(lower)
-    );
-  });
+        const requirement = (task.requirement || task.recentRequirement || task.title || "").toLowerCase();
+        const project = (task.projectId?.name || task.project || "").toLowerCase();
+        const status = (task.status || "").toLowerCase();
+        const createdBy = (task.createdByUserId?.fullName || "").toLowerCase();
+        const role = (task.requirementRole || "").toLowerCase();
+        const priority = (task.clientPriority || "").toLowerCase();
 
-  setFilteredTasks(filtered);
-};
+        return (
+          requirement.includes(searchLower) ||
+          project.includes(searchLower) ||
+          status.includes(searchLower) ||
+          createdBy.includes(searchLower) ||
+          role.includes(searchLower) ||
+          priority.includes(searchLower)
+        );
+      });
+
+      setFilteredTasks(filtered);
+    }
+  };
 
   // ============================================
   // ✅ EXPORT FUNCTIONS
@@ -3083,7 +3073,6 @@ await api.post("/tasks", formData, {
                             <th>Est. Hours</th>
                             <th>Priority</th>
                             <th>Created By</th>
-                            <th>Attachment</th>
                             <th>Action</th>
                           </tr>
                         </thead>
@@ -3094,7 +3083,7 @@ await api.post("/tasks", formData, {
                                 const userRole = user?.role;
                                 const createdByRole = task?.createdByRole;
                                 const createdById = task?.createdByUserId?._id || task?.createdByUserId;
-                                const userId = String(user?._id || user?.id);
+                                const userId = user?._id || user?.id;
 
                                 if (userRole === "admin") return false;
                                 if (userRole === "employee") {
@@ -3496,19 +3485,6 @@ await api.post("/tasks", formData, {
                         readOnly
                       />
                     </label>
-                    <label>
-  Attachment (Optional)
-  <input
-    type="file"
-    accept="image/*,.pdf,.doc,.docx"
-    onChange={(e) =>
-      setTaskForm({
-        ...taskForm,
-        attachment: e.target.files[0] || null
-      })
-    }
-  />
-</label>
 
                     <label className="full-row">
                       Notes
@@ -3617,9 +3593,10 @@ await api.post("/tasks", formData, {
                           <th>Discussed</th>
                           <th>Est. Hrs</th>
                           <th>Client Priority</th>
+                          <th>Given By</th>
                           <th>Created By</th>
-                          <th>Attachment</th>
-                          </tr>
+                          <th>Actions</th>
+                        </tr>
                       </thead>
                       <tbody>
   {Array.isArray(filteredTasks) &&
@@ -3627,40 +3604,45 @@ await api.post("/tasks", formData, {
       if (!t) return null;
 
       const meta = priorityColors[t?.clientPriority] || null;
-      
-     const canEdit = (() => {
-  const userRole = user?.role;
-  const createdByRole = t?.createdByRole;
-  const createdById = String(t?.createdByUserId?._id || t?.createdByUserId);
-  const userId = String(user?._id || user?.id);
+      const givenBy =
+        (t?.givenBy || t?.prioritySource || "")
+          .replace(/_/g, " ")
+          .toLowerCase()
+          .replace(/\b\w/g, (c) => c.toUpperCase()) || "-";
 
-  if (userRole === "admin") return false;
+      const canEdit = (() => {
+        const userRole = user?.role;
+        const createdByRole = t?.createdByRole;
+        const createdById = t?.createdByUserId?._id || t?.createdByUserId;
+        const userId = user?._id || user?.id;
 
-  if (userRole === "employee") {
-    return createdById === userId;
-  }
-
-  if (userRole === "manager" && createdByRole === "employee") {
-    return true;
-  }
-
-  if (userRole === "manager" && createdByRole === "manager") {
-    return createdById === userId;
-  }
-
-  return false;
-})();
+        if (userRole === "admin") return false;
+        if (userRole === "employee") {
+          return createdByRole === "employee" && createdById === userId;
+        }
+        if (userRole === "manager" && createdByRole === "employee") {
+          return true;
+        }
+        if (userRole === "manager" && createdByRole === "manager") {
+          return createdById === userId;
+        }
+        return false;
+      })();
 
       // Get project name safely
-      let projectName = t?.project?.name || "-";
-      
+      let projectName = '-';
+      if (t?.projectId) {
+        if (typeof t.projectId === 'object') {
+          projectName = t.projectId.name || '-';
+        } else if (typeof t.projectId === 'string') {
+          projectName = t.projectId; // This will show ID, but better than empty
+        }
+      } else if (t?.projectName) {
+        projectName = t.projectName;
+      }
 
       // Get created by name safely
-      let createdByName =
-  t?.createdByUserId?.fullName ||
-  t?.createdByName ||
-  t?.createdBy ||
-  "System";
+      let createdByName = 'System';
       if (t?.createdByUserId) {
         if (typeof t.createdByUserId === 'object') {
           createdByName = t.createdByUserId.fullName || 'Unknown';
@@ -3673,29 +3655,18 @@ await api.post("/tasks", formData, {
 
       return (
         <tr key={t?._id || `task-${index}`}>
-          <td>
-  <span
-    onClick={() => startEditTask(t)}
-    style={{
-      color: "#1890ff",
-      cursor: "pointer",
-      fontWeight: "600"
-    }}
-  >
-    {index + 1}
-  </span>
-</td>
+          <td>{index + 1}</td>
           <td>
             <strong>{projectName}</strong>
           </td>
           <td style={{ maxWidth: 260, whiteSpace: "pre-wrap" }}>
-            {t?.requirement || "-"}
+            {t?.requirement || t?.recentRequirement || t?.title || '-'}
           </td>
-          <td>{t?.type || "NEW"}</td>
+          <td>{t?.type || t?.requirementType || "NEW"}</td>
           <td>{t?.status || '-'}</td>
           <td>{t?.scope || "-"}</td>
           <td>{t?.discussedDate || "-"}</td>
-          <td>{Number(t?.estHours || 0)}</td>
+          <td>{Number(t?.estHours || t?.estimateHours || 0)}</td>
           <td>
             {meta ? (
               <span
@@ -3715,24 +3686,8 @@ await api.post("/tasks", formData, {
               t?.clientPriority || "-"
             )}
           </td>
-          
+          <td>{givenBy}</td>
           <td>{createdByName}</td>
-
-          <td style={{ textAlign: "center" }}>
-  {t?.attachment ? (
-    <a
-      href={`${API_BASE_URL}${t.attachment}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      title="View / Download Attachment"
-      style={{ fontSize: "18px", textDecoration: "none" }}
-    >
-      📎
-    </a>
-  ) : (
-    "-"
-  )}
-</td>
           <td style={{ textAlign: "center" }}>
             {canEdit && (
               <button
@@ -4615,13 +4570,6 @@ await api.post("/tasks", formData, {
               align-items: flex-start;
             }
           }
-            .attachment-preview {
-  display: none;
-}
-
-td:hover .attachment-preview {
-  display: block;
-}
         `}
       </style>
     </div>
